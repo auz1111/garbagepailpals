@@ -11,7 +11,9 @@ const envSchema = z.object({
     .default("dev-refresh-secret-please-replace-this-in-env"),
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("30d"),
-  WEB_ORIGIN: z.string().url().default("http://localhost:5173")
+  WEB_ORIGIN: z.string().url().default("http://localhost:5173"),
+  DEV_FAKE_ENTITLEMENT: z.enum(["true", "false"]).default("true"),
+  SCHEDULER_LOOKAHEAD_DAYS: z.coerce.number().int().min(1).max(31).default(14)
 });
 
 export const env = envSchema.parse(process.env);

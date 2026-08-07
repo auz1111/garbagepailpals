@@ -9,6 +9,8 @@
     "JWT_REFRESH_TTL": "30d",
     "DATABASE_URL": "postgresql://postgres:password@your-server.postgres.database.azure.com:5432/garbage_pail_pals?schema=public&sslmode=require",
     "DIRECT_URL": "postgresql://postgres:password@your-server.postgres.database.azure.com:5432/garbage_pail_pals?schema=public&sslmode=require",
-    "WEB_ORIGIN": "http://localhost:5173"
+    "WEB_ORIGIN": "http://localhost:5173",
+    "DEV_FAKE_ENTITLEMENT": "true",
+    "SCHEDULER_LOOKAHEAD_DAYS": "14"
   }
 }
