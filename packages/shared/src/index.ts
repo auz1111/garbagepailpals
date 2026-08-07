@@ -211,6 +211,33 @@ export const adminDashboardMetricsSchema = z.object({
   })
 });
 
+export const adminRuntimeMetricsSchema = z.object({
+  runtime: z.object({
+    startedAt: z.string().datetime(),
+    uptimeSeconds: z.number().int().nonnegative()
+  }),
+  authRateLimits: z.object({
+    windowMs: z.number().int().positive(),
+    register: z.object({
+      allowed: z.number().int().nonnegative(),
+      blocked: z.number().int().nonnegative()
+    }),
+    login: z.object({
+      allowed: z.number().int().nonnegative(),
+      blocked: z.number().int().nonnegative()
+    }),
+    refresh: z.object({
+      allowed: z.number().int().nonnegative(),
+      blocked: z.number().int().nonnegative()
+    })
+  }),
+  notifications: z.object({
+    provider: z.enum(["mock", "resend"]),
+    maxRetries: z.number().int().min(0),
+    retryBaseDelayMs: z.number().int().positive()
+  })
+});
+
 export type Role = z.infer<typeof roleSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -239,3 +266,4 @@ export type OperatorJobClaimResponse = z.infer<typeof operatorJobClaimResponseSc
 export type OperatorJobStatusUpdate = z.infer<typeof operatorJobStatusUpdateSchema>;
 export type OperatorJobStatusResponse = z.infer<typeof operatorJobStatusResponseSchema>;
 export type AdminDashboardMetrics = z.infer<typeof adminDashboardMetricsSchema>;
+export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;

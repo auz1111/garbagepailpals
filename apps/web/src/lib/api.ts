@@ -1,4 +1,5 @@
 import type {
+  AdminRuntimeMetrics,
   AdminDashboardMetrics,
   AuthResponse,
   LoginInput,
@@ -122,6 +123,10 @@ export function updateOperatorJobStatus(
 
 export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDashboardMetrics> {
   return request<undefined, AdminDashboardMetrics>("/admin/dashboard", "GET", undefined, accessToken);
+}
+
+export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntimeMetrics> {
+  return request<undefined, AdminRuntimeMetrics>("/admin/ops/runtime-metrics", "GET", undefined, accessToken);
 }
 
 export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {

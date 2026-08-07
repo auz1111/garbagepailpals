@@ -26,6 +26,7 @@ import {
   updateOperatorJobStatusHandler
 } from "./routes/operatorJobs";
 import { adminDashboardMetricsHandler } from "./routes/adminDashboard";
+import { adminRuntimeMetricsHandler } from "./routes/adminOps";
 
 app.http("health", {
   route: "health",
@@ -88,6 +89,13 @@ app.http("admin-dashboard", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminDashboardMetricsHandler
+});
+
+app.http("admin-runtime-metrics", {
+  route: "admin/ops/runtime-metrics",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminRuntimeMetricsHandler
 });
 
 app.http("service-area-check", {

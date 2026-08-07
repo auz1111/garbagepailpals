@@ -14,6 +14,7 @@ import {
 import { env } from "../lib/env";
 import { handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { authRateLimiter, getClientIp } from "../lib/rateLimiter";
+import { recordAuthRateLimit } from "../lib/runtimeMetrics";
 
 function unauthorized(message: string): HttpResponseInit {
   return jsonResponse(401, { message });
@@ -53,8 +54,11 @@ function enforceRateLimit(request: HttpRequest, scope: "register" | "login" | "r
   );
 
   if (!result.allowed) {
+    recordAuthRateLimit(scope, false);
     return tooManyRequests(result.retryAfterSeconds);
   }
+
+  recordAuthRateLimit(scope, true);
 
   return null;
 }

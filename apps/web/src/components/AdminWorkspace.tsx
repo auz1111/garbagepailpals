@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CurrentUser } from "@gpp/shared";
-import { getAdminDashboardMetrics } from "../lib/api";
+import { getAdminDashboardMetrics, getAdminRuntimeMetrics } from "../lib/api";
 
 type AdminWorkspaceProps = {
   user: CurrentUser;
@@ -17,7 +17,13 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     queryFn: async () => getAdminDashboardMetrics(accessToken)
   });
 
+  const runtimeMetricsQuery = useQuery({
+    queryKey: ["admin-runtime-metrics"],
+    queryFn: async () => getAdminRuntimeMetrics(accessToken)
+  });
+
   const metrics = metricsQuery.data;
+  const runtimeMetrics = runtimeMetricsQuery.data;
 
   return (
     <section className="card role-shell customer-workspace">
@@ -77,6 +83,43 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       )}
 
       {metricsQuery.error ? <p className="error">{getErrorMessage(metricsQuery.error)}</p> : null}
+
+      {runtimeMetrics ? (
+        <div className="panel-grid" style={{ marginTop: "1rem" }}>
+          <article className="panel">
+            <h3>Runtime</h3>
+            <ul className="meta-list compact">
+              <li>Started: {new Date(runtimeMetrics.runtime.startedAt).toLocaleString()}</li>
+              <li>Uptime: {runtimeMetrics.runtime.uptimeSeconds}s</li>
+              <li>Notification provider: {runtimeMetrics.notifications.provider}</li>
+            </ul>
+          </article>
+
+          <article className="panel">
+            <h3>Auth Throttle (process lifetime)</h3>
+            <ul className="meta-list compact">
+              <li>Window: {runtimeMetrics.authRateLimits.windowMs}ms</li>
+              <li>Register allowed/blocked: {runtimeMetrics.authRateLimits.register.allowed}/{runtimeMetrics.authRateLimits.register.blocked}</li>
+              <li>Login allowed/blocked: {runtimeMetrics.authRateLimits.login.allowed}/{runtimeMetrics.authRateLimits.login.blocked}</li>
+              <li>Refresh allowed/blocked: {runtimeMetrics.authRateLimits.refresh.allowed}/{runtimeMetrics.authRateLimits.refresh.blocked}</li>
+            </ul>
+          </article>
+
+          <article className="panel">
+            <h3>Notification Retry Config</h3>
+            <ul className="meta-list compact">
+              <li>Max retries: {runtimeMetrics.notifications.maxRetries}</li>
+              <li>Base retry delay: {runtimeMetrics.notifications.retryBaseDelayMs}ms</li>
+            </ul>
+          </article>
+        </div>
+      ) : (
+        <p className="subtext" style={{ marginTop: "1rem" }}>
+          {runtimeMetricsQuery.isLoading ? "Loading runtime metrics..." : "Runtime metrics unavailable."}
+        </p>
+      )}
+
+      {runtimeMetricsQuery.error ? <p className="error">{getErrorMessage(runtimeMetricsQuery.error)}</p> : null}
     </section>
   );
 }
