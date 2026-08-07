@@ -17,6 +17,10 @@
     "PAYPAL_CLIENT_ID": "",
     "PAYPAL_CLIENT_SECRET": "",
     "PAYPAL_WEBHOOK_ID": "",
-    "PAYPAL_ENV": "sandbox"
+    "PAYPAL_ENV": "sandbox",
+    "NOTIFICATION_PROVIDER": "mock",
+    "NOTIFICATION_FROM_EMAIL": "noreply@garbagepailpals.local",
+    "NOTIFICATION_ESCALATION_EMAIL": "",
+    "RESEND_API_KEY": ""
   }
 }

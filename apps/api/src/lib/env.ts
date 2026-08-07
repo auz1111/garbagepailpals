@@ -19,7 +19,11 @@ const envSchema = z.object({
   PAYPAL_CLIENT_ID: z.string().optional(),
   PAYPAL_CLIENT_SECRET: z.string().optional(),
   PAYPAL_WEBHOOK_ID: z.string().optional(),
-  PAYPAL_ENV: z.enum(["sandbox", "live"]).default("sandbox")
+  PAYPAL_ENV: z.enum(["sandbox", "live"]).default("sandbox"),
+  NOTIFICATION_PROVIDER: z.enum(["mock", "resend"]).default("mock"),
+  NOTIFICATION_FROM_EMAIL: z.string().email().default("noreply@garbagepailpals.local"),
+  NOTIFICATION_ESCALATION_EMAIL: z.string().email().optional(),
+  RESEND_API_KEY: z.string().optional()
 });
 
 export const env = envSchema.parse(process.env);
