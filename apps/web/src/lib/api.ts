@@ -1,7 +1,13 @@
 import type {
+  AdminIncidentAssignRequest,
+  AdminIncidentAssignResponse,
   AdminIncidentAcknowledgeRequest,
   AdminIncidentAcknowledgeResponse,
   AdminIncidentFeed,
+  AdminIncidentReopenRequest,
+  AdminIncidentReopenResponse,
+  AdminIncidentResolveRequest,
+  AdminIncidentResolveResponse,
   AdminRuntimeMetrics,
   AdminDashboardMetrics,
   AuthResponse,
@@ -79,6 +85,14 @@ type ServiceJobsResponse = {
   jobs: ServiceJob[];
 };
 
+export type AdminIncidentFilter = {
+  state?: "OPEN" | "ACKNOWLEDGED" | "RESOLVED";
+  source?: "JOB" | "NOTIFICATION" | "WEBHOOK";
+  severity?: "WARN" | "CRITICAL";
+  // "__unassigned" filters incidents with no ownerUserId.
+  ownerUserId?: string;
+};
+
 export function register(input: RegisterInput): Promise<AuthResponse> {
   return request<RegisterInput, AuthResponse>("/auth/register", "POST", input);
 }
@@ -132,8 +146,24 @@ export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntim
   return request<undefined, AdminRuntimeMetrics>("/admin/ops/runtime-metrics", "GET", undefined, accessToken);
 }
 
-export function getAdminIncidents(accessToken: string): Promise<AdminIncidentFeed> {
-  return request<undefined, AdminIncidentFeed>("/admin/ops/incidents", "GET", undefined, accessToken);
+export function getAdminIncidents(accessToken: string, filter?: AdminIncidentFilter): Promise<AdminIncidentFeed> {
+  const params = new URLSearchParams();
+  if (filter?.state) {
+    params.set("state", filter.state);
+  }
+  if (filter?.source) {
+    params.set("source", filter.source);
+  }
+  if (filter?.severity) {
+    params.set("severity", filter.severity);
+  }
+  if (filter?.ownerUserId) {
+    params.set("ownerUserId", filter.ownerUserId);
+  }
+
+  const query = params.toString();
+  const path = query ? `/admin/ops/incidents?${query}` : "/admin/ops/incidents";
+  return request<undefined, AdminIncidentFeed>(path, "GET", undefined, accessToken);
 }
 
 export function acknowledgeAdminIncident(
@@ -143,6 +173,45 @@ export function acknowledgeAdminIncident(
 ): Promise<AdminIncidentAcknowledgeResponse> {
   return request<AdminIncidentAcknowledgeRequest, AdminIncidentAcknowledgeResponse>(
     `/admin/ops/incidents/${incidentId}/acknowledge`,
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function assignAdminIncident(
+  incidentId: string,
+  input: AdminIncidentAssignRequest,
+  accessToken: string
+): Promise<AdminIncidentAssignResponse> {
+  return request<AdminIncidentAssignRequest, AdminIncidentAssignResponse>(
+    `/admin/ops/incidents/${incidentId}/assign`,
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function resolveAdminIncident(
+  incidentId: string,
+  input: AdminIncidentResolveRequest,
+  accessToken: string
+): Promise<AdminIncidentResolveResponse> {
+  return request<AdminIncidentResolveRequest, AdminIncidentResolveResponse>(
+    `/admin/ops/incidents/${incidentId}/resolve`,
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function reopenAdminIncident(
+  incidentId: string,
+  input: AdminIncidentReopenRequest,
+  accessToken: string
+): Promise<AdminIncidentReopenResponse> {
+  return request<AdminIncidentReopenRequest, AdminIncidentReopenResponse>(
+    `/admin/ops/incidents/${incidentId}/reopen`,
     "POST",
     input,
     accessToken

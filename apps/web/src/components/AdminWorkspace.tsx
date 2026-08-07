@@ -1,10 +1,14 @@
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CurrentUser } from "@gpp/shared";
+import type { AdminIncident, CurrentUser } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
+  assignAdminIncident,
   getAdminDashboardMetrics,
   getAdminIncidents,
-  getAdminRuntimeMetrics
+  getAdminRuntimeMetrics,
+  reopenAdminIncident,
+  resolveAdminIncident
 } from "../lib/api";
 
 type AdminWorkspaceProps = {
@@ -18,6 +22,10 @@ function getErrorMessage(error: unknown): string {
 
 export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.Element {
   const queryClient = useQueryClient();
+  const [stateFilter, setStateFilter] = useState<"ALL" | "OPEN" | "ACKNOWLEDGED" | "RESOLVED">("ALL");
+  const [sourceFilter, setSourceFilter] = useState<"ALL" | "JOB" | "NOTIFICATION" | "WEBHOOK">("ALL");
+  const [severityFilter, setSeverityFilter] = useState<"ALL" | "WARN" | "CRITICAL">("ALL");
+  const [ownerFilter, setOwnerFilter] = useState<"ALL" | "MINE" | "UNASSIGNED">("ALL");
 
   const metricsQuery = useQuery({
     queryKey: ["admin-metrics"],
@@ -30,8 +38,19 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
   });
 
   const incidentsQuery = useQuery({
-    queryKey: ["admin-incidents"],
-    queryFn: async () => getAdminIncidents(accessToken)
+    queryKey: ["admin-incidents", stateFilter, sourceFilter, severityFilter, ownerFilter, user.id],
+    queryFn: async () =>
+      getAdminIncidents(accessToken, {
+        state: stateFilter === "ALL" ? undefined : stateFilter,
+        source: sourceFilter === "ALL" ? undefined : sourceFilter,
+        severity: severityFilter === "ALL" ? undefined : severityFilter,
+        ownerUserId:
+          ownerFilter === "MINE"
+            ? user.id
+            : ownerFilter === "UNASSIGNED"
+              ? "__unassigned"
+              : undefined
+      })
   });
 
   const metrics = metricsQuery.data;
@@ -44,6 +63,69 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       await queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
     }
   });
+
+  const assignMutation = useMutation({
+    mutationFn: async (incidentId: string) => assignAdminIncident(incidentId, { ownerUserId: user.id }, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
+    }
+  });
+
+  const resolveMutation = useMutation({
+    mutationFn: async (incidentId: string) => resolveAdminIncident(incidentId, {}, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
+    }
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: async (incidentId: string) => reopenAdminIncident(incidentId, {}, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
+    }
+  });
+
+  const incidentStats = useMemo(() => {
+    const list = incidents?.incidents ?? [];
+    return {
+      open: list.filter((item) => item.state === "OPEN").length,
+      acknowledged: list.filter((item) => item.state === "ACKNOWLEDGED").length,
+      resolved: list.filter((item) => item.state === "RESOLVED").length,
+      breached: list.filter((item) => item.breachedSla).length
+    };
+  }, [incidents]);
+
+  const orderedIncidents = useMemo(() => {
+    const list = [...(incidents?.incidents ?? [])];
+
+    const stateWeight = (state: AdminIncident["state"]): number => {
+      if (state === "OPEN") {
+        return 0;
+      }
+
+      if (state === "ACKNOWLEDGED") {
+        return 1;
+      }
+
+      return 2;
+    };
+
+    const severityWeight = (severity: AdminIncident["severity"]): number => {
+      return severity === "CRITICAL" ? 0 : 1;
+    };
+
+    return list.sort((a, b) => {
+      if (stateWeight(a.state) !== stateWeight(b.state)) {
+        return stateWeight(a.state) - stateWeight(b.state);
+      }
+
+      if (severityWeight(a.severity) !== severityWeight(b.severity)) {
+        return severityWeight(a.severity) - severityWeight(b.severity);
+      }
+
+      return new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
+    });
+  }, [incidents]);
 
   return (
     <section className="card role-shell customer-workspace">
@@ -143,38 +225,122 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
 
       <section style={{ marginTop: "1rem" }}>
         <h3>Incident Feed</h3>
+        <div className="panel" style={{ marginBottom: "0.75rem" }}>
+          <div className="button-row" style={{ marginBottom: "0.75rem" }}>
+            <span>Open: {incidentStats.open}</span>
+            <span>Acknowledged: {incidentStats.acknowledged}</span>
+            <span>Resolved: {incidentStats.resolved}</span>
+            <span>Breached SLA: {incidentStats.breached}</span>
+          </div>
+
+          <div className="panel-grid">
+            <label>
+              State
+              <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value as typeof stateFilter)}>
+                <option value="ALL">All</option>
+                <option value="OPEN">Open</option>
+                <option value="ACKNOWLEDGED">Acknowledged</option>
+                <option value="RESOLVED">Resolved</option>
+              </select>
+            </label>
+
+            <label>
+              Source
+              <select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value as typeof sourceFilter)}>
+                <option value="ALL">All</option>
+                <option value="JOB">Job</option>
+                <option value="NOTIFICATION">Notification</option>
+                <option value="WEBHOOK">Webhook</option>
+              </select>
+            </label>
+
+            <label>
+              Severity
+              <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as typeof severityFilter)}>
+                <option value="ALL">All</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="WARN">Warn</option>
+              </select>
+            </label>
+
+            <label>
+              Owner
+              <select value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value as typeof ownerFilter)}>
+                <option value="ALL">All</option>
+                <option value="MINE">Mine</option>
+                <option value="UNASSIGNED">Unassigned</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
         {!incidents ? (
           <p className="subtext">{incidentsQuery.isLoading ? "Loading incidents..." : "No incidents loaded."}</p>
         ) : incidents.incidents.length === 0 ? (
           <p className="subtext">No incidents detected in the current lookback windows.</p>
         ) : (
           <div className="panel-grid">
-            {incidents.incidents.slice(0, 12).map((incident) => (
+            {orderedIncidents.slice(0, 12).map((incident) => (
               <article className="panel" key={incident.id}>
                 <h3>
-                  {incident.severity} - {incident.source}
+                  {incident.severity} - {incident.source} - {incident.state}
                 </h3>
                 <ul className="meta-list compact">
                   <li>{incident.title}</li>
                   <li>{incident.detail}</li>
                   <li>Occurred: {new Date(incident.occurredAt).toLocaleString()}</li>
+                  <li>State updated: {new Date(incident.stateUpdatedAt).toLocaleString()}</li>
+                  <li>Open minutes: {incident.openMinutes}</li>
+                  <li>SLA breached: {incident.breachedSla ? "Yes" : "No"}</li>
                   <li>
                     {incident.entityType}: {incident.entityId}
                   </li>
+                  <li>Owner: {incident.ownerUserId ?? "Unassigned"}</li>
                   <li>
                     Acknowledged: {incident.acknowledgedAt ? `${new Date(incident.acknowledgedAt).toLocaleString()} by ${incident.acknowledgedByUserId ?? "unknown"}` : "No"}
                   </li>
+                  <li>
+                    Resolved: {incident.resolvedAt ? `${new Date(incident.resolvedAt).toLocaleString()} by ${incident.resolvedByUserId ?? "unknown"}` : "No"}
+                  </li>
                 </ul>
 
-                {!incident.acknowledgedAt ? (
+                <div className="button-row">
+                  {!incident.acknowledgedAt ? (
+                    <button
+                      type="button"
+                      onClick={() => acknowledgeMutation.mutate(incident.id)}
+                      disabled={acknowledgeMutation.isPending}
+                    >
+                      {acknowledgeMutation.isPending ? "Acknowledging..." : "Acknowledge"}
+                    </button>
+                  ) : null}
+
                   <button
                     type="button"
-                    onClick={() => acknowledgeMutation.mutate(incident.id)}
-                    disabled={acknowledgeMutation.isPending}
+                    onClick={() => assignMutation.mutate(incident.id)}
+                    disabled={assignMutation.isPending}
                   >
-                    {acknowledgeMutation.isPending ? "Acknowledging..." : "Acknowledge"}
+                    {assignMutation.isPending ? "Assigning..." : "Assign to me"}
                   </button>
-                ) : null}
+
+                  {incident.state !== "RESOLVED" ? (
+                    <button
+                      type="button"
+                      onClick={() => resolveMutation.mutate(incident.id)}
+                      disabled={resolveMutation.isPending}
+                    >
+                      {resolveMutation.isPending ? "Resolving..." : "Resolve"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => reopenMutation.mutate(incident.id)}
+                      disabled={reopenMutation.isPending}
+                    >
+                      {reopenMutation.isPending ? "Reopening..." : "Reopen"}
+                    </button>
+                  )}
+                </div>
               </article>
             ))}
           </div>
@@ -183,6 +349,9 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
 
       {incidentsQuery.error ? <p className="error">{getErrorMessage(incidentsQuery.error)}</p> : null}
       {acknowledgeMutation.error ? <p className="error">{getErrorMessage(acknowledgeMutation.error)}</p> : null}
+      {assignMutation.error ? <p className="error">{getErrorMessage(assignMutation.error)}</p> : null}
+      {resolveMutation.error ? <p className="error">{getErrorMessage(resolveMutation.error)}</p> : null}
+      {reopenMutation.error ? <p className="error">{getErrorMessage(reopenMutation.error)}</p> : null}
     </section>
   );
 }

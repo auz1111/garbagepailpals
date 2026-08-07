@@ -28,7 +28,10 @@ import {
 import { adminDashboardMetricsHandler } from "./routes/adminDashboard";
 import {
   adminAcknowledgeIncidentHandler,
+  adminAssignIncidentHandler,
   adminIncidentsHandler,
+  adminReopenIncidentHandler,
+  adminResolveIncidentHandler,
   adminRuntimeMetricsHandler
 } from "./routes/adminOps";
 
@@ -114,6 +117,27 @@ app.http("admin-incidents-acknowledge", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAcknowledgeIncidentHandler
+});
+
+app.http("admin-incidents-assign", {
+  route: "admin/ops/incidents/{incidentId}/assign",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminAssignIncidentHandler
+});
+
+app.http("admin-incidents-resolve", {
+  route: "admin/ops/incidents/{incidentId}/resolve",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminResolveIncidentHandler
+});
+
+app.http("admin-incidents-reopen", {
+  route: "admin/ops/incidents/{incidentId}/reopen",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminReopenIncidentHandler
 });
 
 app.http("service-area-check", {

@@ -85,4 +85,67 @@ describe("buildAdminIncidentFeed", () => {
     expect(feed.incidents[0]?.acknowledgedByUserId).toBe("admin_1");
     expect(feed.incidents[0]?.acknowledgedAt).toBe("2026-08-07T01:00:00.000Z");
   });
+
+  it("projects lifecycle state transitions and ownership", () => {
+    const feed = buildAdminIncidentFeed({
+      now: new Date("2026-08-07T02:00:00.000Z"),
+      failedJobs: [
+        {
+          id: "job_1",
+          failureReason: "Blocked",
+          updatedAt: new Date("2026-08-07T00:00:00.000Z")
+        }
+      ],
+      failedNotifications: [],
+      staleWebhooks: [],
+      lifecycleEvents: [
+        {
+          incidentId: "job:job_1",
+          action: "incident.assigned",
+          actorUserId: "admin_1",
+          metadata: { ownerUserId: "admin_2" },
+          createdAt: new Date("2026-08-07T00:30:00.000Z")
+        },
+        {
+          incidentId: "job:job_1",
+          action: "incident.acknowledged",
+          actorUserId: "admin_2",
+          metadata: {},
+          createdAt: new Date("2026-08-07T01:00:00.000Z")
+        },
+        {
+          incidentId: "job:job_1",
+          action: "incident.resolved",
+          actorUserId: "admin_3",
+          metadata: {},
+          createdAt: new Date("2026-08-07T01:30:00.000Z")
+        }
+      ]
+    });
+
+    expect(feed.incidents[0]?.state).toBe("RESOLVED");
+    expect(feed.incidents[0]?.ownerUserId).toBe("admin_2");
+    expect(feed.incidents[0]?.resolvedByUserId).toBe("admin_3");
+    expect(feed.incidents[0]?.breachedSla).toBe(false);
+  });
+
+  it("computes SLA breach for open incidents and supports state filtering", () => {
+    const feed = buildAdminIncidentFeed({
+      now: new Date("2026-08-07T00:20:00.000Z"),
+      failedJobs: [
+        {
+          id: "job_open",
+          failureReason: "Open issue",
+          updatedAt: new Date("2026-08-07T00:00:00.000Z")
+        }
+      ],
+      failedNotifications: [],
+      staleWebhooks: [],
+      filter: { state: "OPEN" }
+    });
+
+    expect(feed.incidents.length).toBe(1);
+    expect(feed.incidents[0]?.breachedSla).toBe(true);
+    expect(feed.incidents[0]?.openMinutes).toBe(20);
+  });
 });

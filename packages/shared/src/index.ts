@@ -242,13 +242,20 @@ export const adminIncidentSchema = z.object({
   id: z.string(),
   source: z.enum(["JOB", "NOTIFICATION", "WEBHOOK"]),
   severity: z.enum(["WARN", "CRITICAL"]),
+  state: z.enum(["OPEN", "ACKNOWLEDGED", "RESOLVED"]),
   title: z.string().min(1),
   detail: z.string().min(1),
   occurredAt: z.string().datetime(),
+  stateUpdatedAt: z.string().datetime(),
   entityType: z.string().min(1),
   entityId: z.string().min(1),
+  ownerUserId: z.string().nullable(),
+  openMinutes: z.number().int().nonnegative(),
+  breachedSla: z.boolean(),
   acknowledgedAt: z.string().datetime().nullable(),
-  acknowledgedByUserId: z.string().nullable()
+  acknowledgedByUserId: z.string().nullable(),
+  resolvedAt: z.string().datetime().nullable(),
+  resolvedByUserId: z.string().nullable()
 });
 
 export const adminIncidentFeedSchema = z.object({
@@ -265,6 +272,40 @@ export const adminIncidentAcknowledgeResponseSchema = z.object({
   acknowledged: z.literal(true),
   acknowledgedAt: z.string().datetime(),
   acknowledgedByUserId: z.string().min(1)
+});
+
+export const adminIncidentAssignRequestSchema = z.object({
+  ownerUserId: z.string().min(1).optional(),
+  note: z.string().min(1).max(400).optional()
+});
+
+export const adminIncidentAssignResponseSchema = z.object({
+  incidentId: z.string().min(1),
+  ownerUserId: z.string().min(1),
+  assignedAt: z.string().datetime(),
+  assignedByUserId: z.string().min(1)
+});
+
+export const adminIncidentResolveRequestSchema = z.object({
+  note: z.string().min(1).max(400).optional()
+});
+
+export const adminIncidentResolveResponseSchema = z.object({
+  incidentId: z.string().min(1),
+  resolved: z.literal(true),
+  resolvedAt: z.string().datetime(),
+  resolvedByUserId: z.string().min(1)
+});
+
+export const adminIncidentReopenRequestSchema = z.object({
+  note: z.string().min(1).max(400).optional()
+});
+
+export const adminIncidentReopenResponseSchema = z.object({
+  incidentId: z.string().min(1),
+  reopened: z.literal(true),
+  reopenedAt: z.string().datetime(),
+  reopenedByUserId: z.string().min(1)
 });
 
 export type Role = z.infer<typeof roleSchema>;
@@ -300,3 +341,9 @@ export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;
 export type AdminIncidentAcknowledgeRequest = z.infer<typeof adminIncidentAcknowledgeRequestSchema>;
 export type AdminIncidentAcknowledgeResponse = z.infer<typeof adminIncidentAcknowledgeResponseSchema>;
+export type AdminIncidentAssignRequest = z.infer<typeof adminIncidentAssignRequestSchema>;
+export type AdminIncidentAssignResponse = z.infer<typeof adminIncidentAssignResponseSchema>;
+export type AdminIncidentResolveRequest = z.infer<typeof adminIncidentResolveRequestSchema>;
+export type AdminIncidentResolveResponse = z.infer<typeof adminIncidentResolveResponseSchema>;
+export type AdminIncidentReopenRequest = z.infer<typeof adminIncidentReopenRequestSchema>;
+export type AdminIncidentReopenResponse = z.infer<typeof adminIncidentReopenResponseSchema>;
