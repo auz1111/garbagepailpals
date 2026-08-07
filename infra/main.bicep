@@ -181,6 +181,9 @@ module staticWebApp './modules/staticwebapp.bicep' = {
     staticWebAppName: staticWebAppName
     backendFunctionAppName: functionAppName
   }
+  dependsOn: [
+    functionApp
+  ]
 }
 
 output staticWebAppHostname string = staticWebApp.outputs.defaultHostname
