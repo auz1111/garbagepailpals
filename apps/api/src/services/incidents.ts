@@ -22,6 +22,12 @@ export type WebhookIncidentInput = {
   createdAt: Date;
 };
 
+export type IncidentAcknowledgementInput = {
+  incidentId: string;
+  actorUserId: string | null;
+  createdAt: Date;
+};
+
 function formatMetadataError(metadata: unknown): string {
   if (typeof metadata === "object" && metadata !== null && "error" in metadata) {
     const value = (metadata as { error?: unknown }).error;
@@ -37,48 +43,69 @@ export function buildAdminIncidentFeed(args: {
   failedJobs: JobIncidentInput[];
   failedNotifications: NotificationIncidentInput[];
   staleWebhooks: WebhookIncidentInput[];
+  acknowledgements?: IncidentAcknowledgementInput[];
   now?: Date;
   maxItems?: number;
 }): AdminIncidentFeed {
+  const acknowledgementMap = new Map<string, IncidentAcknowledgementInput>();
+  for (const item of args.acknowledgements ?? []) {
+    const existing = acknowledgementMap.get(item.incidentId);
+    if (!existing || existing.createdAt < item.createdAt) {
+      acknowledgementMap.set(item.incidentId, item);
+    }
+  }
+
   const incidents: AdminIncident[] = [];
 
   for (const job of args.failedJobs) {
+    const incidentId = `job:${job.id}`;
+    const acknowledged = acknowledgementMap.get(incidentId);
     incidents.push({
-      id: `job:${job.id}`,
+      id: incidentId,
       source: "JOB",
       severity: "CRITICAL",
       title: "Service job failed",
       detail: job.failureReason?.trim() || "Job marked as failed without a specific reason",
       occurredAt: job.updatedAt.toISOString(),
       entityType: "ServiceJob",
-      entityId: job.id
+      entityId: job.id,
+      acknowledgedAt: acknowledged?.createdAt.toISOString() ?? null,
+      acknowledgedByUserId: acknowledged?.actorUserId ?? null
     });
   }
 
   for (const item of args.failedNotifications) {
+    const incidentId = `notification:${item.id}`;
+    const acknowledged = acknowledgementMap.get(incidentId);
     const isOverdue = item.action.includes("overdue");
     incidents.push({
-      id: `notification:${item.id}`,
+      id: incidentId,
       source: "NOTIFICATION",
       severity: "WARN",
       title: isOverdue ? "Overdue alert delivery failed" : "Pickup reminder delivery failed",
       detail: formatMetadataError(item.metadata),
       occurredAt: item.createdAt.toISOString(),
       entityType: item.entityType,
-      entityId: item.entityId
+      entityId: item.entityId,
+      acknowledgedAt: acknowledged?.createdAt.toISOString() ?? null,
+      acknowledgedByUserId: acknowledged?.actorUserId ?? null
     });
   }
 
   for (const webhook of args.staleWebhooks) {
+    const incidentId = `webhook:${webhook.id}`;
+    const acknowledged = acknowledgementMap.get(incidentId);
     incidents.push({
-      id: `webhook:${webhook.id}`,
+      id: incidentId,
       source: "WEBHOOK",
       severity: "WARN",
       title: `Unprocessed ${webhook.provider} webhook event`,
       detail: `Event ${webhook.externalEventId} has not been marked processed.`,
       occurredAt: webhook.createdAt.toISOString(),
       entityType: "WebhookEvent",
-      entityId: webhook.id
+      entityId: webhook.id,
+      acknowledgedAt: acknowledged?.createdAt.toISOString() ?? null,
+      acknowledgedByUserId: acknowledged?.actorUserId ?? null
     });
   }
 

@@ -61,4 +61,28 @@ describe("buildAdminIncidentFeed", () => {
     expect(feed.incidents[0]?.entityId).toBe("job_new");
     expect(feed.incidents[1]?.entityId).toBe("job_old");
   });
+
+  it("attaches acknowledgement metadata to matching incident ids", () => {
+    const feed = buildAdminIncidentFeed({
+      failedJobs: [
+        {
+          id: "job_1",
+          failureReason: "Blocked alley",
+          updatedAt: new Date("2026-08-07T00:00:00.000Z")
+        }
+      ],
+      failedNotifications: [],
+      staleWebhooks: [],
+      acknowledgements: [
+        {
+          incidentId: "job:job_1",
+          actorUserId: "admin_1",
+          createdAt: new Date("2026-08-07T01:00:00.000Z")
+        }
+      ]
+    });
+
+    expect(feed.incidents[0]?.acknowledgedByUserId).toBe("admin_1");
+    expect(feed.incidents[0]?.acknowledgedAt).toBe("2026-08-07T01:00:00.000Z");
+  });
 });

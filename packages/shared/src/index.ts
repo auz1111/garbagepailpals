@@ -246,12 +246,25 @@ export const adminIncidentSchema = z.object({
   detail: z.string().min(1),
   occurredAt: z.string().datetime(),
   entityType: z.string().min(1),
-  entityId: z.string().min(1)
+  entityId: z.string().min(1),
+  acknowledgedAt: z.string().datetime().nullable(),
+  acknowledgedByUserId: z.string().nullable()
 });
 
 export const adminIncidentFeedSchema = z.object({
   generatedAt: z.string().datetime(),
   incidents: z.array(adminIncidentSchema)
+});
+
+export const adminIncidentAcknowledgeRequestSchema = z.object({
+  note: z.string().min(1).max(400).optional()
+});
+
+export const adminIncidentAcknowledgeResponseSchema = z.object({
+  incidentId: z.string().min(1),
+  acknowledged: z.literal(true),
+  acknowledgedAt: z.string().datetime(),
+  acknowledgedByUserId: z.string().min(1)
 });
 
 export type Role = z.infer<typeof roleSchema>;
@@ -285,3 +298,5 @@ export type AdminDashboardMetrics = z.infer<typeof adminDashboardMetricsSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
 export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;
+export type AdminIncidentAcknowledgeRequest = z.infer<typeof adminIncidentAcknowledgeRequestSchema>;
+export type AdminIncidentAcknowledgeResponse = z.infer<typeof adminIncidentAcknowledgeResponseSchema>;

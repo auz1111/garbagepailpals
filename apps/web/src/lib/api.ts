@@ -1,4 +1,6 @@
 import type {
+  AdminIncidentAcknowledgeRequest,
+  AdminIncidentAcknowledgeResponse,
   AdminIncidentFeed,
   AdminRuntimeMetrics,
   AdminDashboardMetrics,
@@ -132,6 +134,19 @@ export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntim
 
 export function getAdminIncidents(accessToken: string): Promise<AdminIncidentFeed> {
   return request<undefined, AdminIncidentFeed>("/admin/ops/incidents", "GET", undefined, accessToken);
+}
+
+export function acknowledgeAdminIncident(
+  incidentId: string,
+  input: AdminIncidentAcknowledgeRequest,
+  accessToken: string
+): Promise<AdminIncidentAcknowledgeResponse> {
+  return request<AdminIncidentAcknowledgeRequest, AdminIncidentAcknowledgeResponse>(
+    `/admin/ops/incidents/${incidentId}/acknowledge`,
+    "POST",
+    input,
+    accessToken
+  );
 }
 
 export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {

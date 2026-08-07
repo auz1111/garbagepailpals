@@ -1,6 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CurrentUser } from "@gpp/shared";
-import { getAdminDashboardMetrics, getAdminIncidents, getAdminRuntimeMetrics } from "../lib/api";
+import {
+  acknowledgeAdminIncident,
+  getAdminDashboardMetrics,
+  getAdminIncidents,
+  getAdminRuntimeMetrics
+} from "../lib/api";
 
 type AdminWorkspaceProps = {
   user: CurrentUser;
@@ -12,6 +17,8 @@ function getErrorMessage(error: unknown): string {
 }
 
 export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.Element {
+  const queryClient = useQueryClient();
+
   const metricsQuery = useQuery({
     queryKey: ["admin-metrics"],
     queryFn: async () => getAdminDashboardMetrics(accessToken)
@@ -30,6 +37,13 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
   const metrics = metricsQuery.data;
   const runtimeMetrics = runtimeMetricsQuery.data;
   const incidents = incidentsQuery.data;
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: async (incidentId: string) => acknowledgeAdminIncident(incidentId, {}, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-incidents"] });
+    }
+  });
 
   return (
     <section className="card role-shell customer-workspace">
@@ -147,7 +161,20 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
                   <li>
                     {incident.entityType}: {incident.entityId}
                   </li>
+                  <li>
+                    Acknowledged: {incident.acknowledgedAt ? `${new Date(incident.acknowledgedAt).toLocaleString()} by ${incident.acknowledgedByUserId ?? "unknown"}` : "No"}
+                  </li>
                 </ul>
+
+                {!incident.acknowledgedAt ? (
+                  <button
+                    type="button"
+                    onClick={() => acknowledgeMutation.mutate(incident.id)}
+                    disabled={acknowledgeMutation.isPending}
+                  >
+                    {acknowledgeMutation.isPending ? "Acknowledging..." : "Acknowledge"}
+                  </button>
+                ) : null}
               </article>
             ))}
           </div>
@@ -155,6 +182,7 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       </section>
 
       {incidentsQuery.error ? <p className="error">{getErrorMessage(incidentsQuery.error)}</p> : null}
+      {acknowledgeMutation.error ? <p className="error">{getErrorMessage(acknowledgeMutation.error)}</p> : null}
     </section>
   );
 }

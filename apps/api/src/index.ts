@@ -26,7 +26,11 @@ import {
   updateOperatorJobStatusHandler
 } from "./routes/operatorJobs";
 import { adminDashboardMetricsHandler } from "./routes/adminDashboard";
-import { adminIncidentsHandler, adminRuntimeMetricsHandler } from "./routes/adminOps";
+import {
+  adminAcknowledgeIncidentHandler,
+  adminIncidentsHandler,
+  adminRuntimeMetricsHandler
+} from "./routes/adminOps";
 
 app.http("health", {
   route: "health",
@@ -103,6 +107,13 @@ app.http("admin-incidents", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminIncidentsHandler
+});
+
+app.http("admin-incidents-acknowledge", {
+  route: "admin/ops/incidents/{incidentId}/acknowledge",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminAcknowledgeIncidentHandler
 });
 
 app.http("service-area-check", {
