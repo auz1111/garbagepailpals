@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import type { CurrentUser } from "@gpp/shared";
-import { getAdminDashboardMetrics, getAdminRuntimeMetrics } from "../lib/api";
+import { getAdminDashboardMetrics, getAdminIncidents, getAdminRuntimeMetrics } from "../lib/api";
 
 type AdminWorkspaceProps = {
   user: CurrentUser;
@@ -22,8 +22,14 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     queryFn: async () => getAdminRuntimeMetrics(accessToken)
   });
 
+  const incidentsQuery = useQuery({
+    queryKey: ["admin-incidents"],
+    queryFn: async () => getAdminIncidents(accessToken)
+  });
+
   const metrics = metricsQuery.data;
   const runtimeMetrics = runtimeMetricsQuery.data;
+  const incidents = incidentsQuery.data;
 
   return (
     <section className="card role-shell customer-workspace">
@@ -120,6 +126,35 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       )}
 
       {runtimeMetricsQuery.error ? <p className="error">{getErrorMessage(runtimeMetricsQuery.error)}</p> : null}
+
+      <section style={{ marginTop: "1rem" }}>
+        <h3>Incident Feed</h3>
+        {!incidents ? (
+          <p className="subtext">{incidentsQuery.isLoading ? "Loading incidents..." : "No incidents loaded."}</p>
+        ) : incidents.incidents.length === 0 ? (
+          <p className="subtext">No incidents detected in the current lookback windows.</p>
+        ) : (
+          <div className="panel-grid">
+            {incidents.incidents.slice(0, 12).map((incident) => (
+              <article className="panel" key={incident.id}>
+                <h3>
+                  {incident.severity} - {incident.source}
+                </h3>
+                <ul className="meta-list compact">
+                  <li>{incident.title}</li>
+                  <li>{incident.detail}</li>
+                  <li>Occurred: {new Date(incident.occurredAt).toLocaleString()}</li>
+                  <li>
+                    {incident.entityType}: {incident.entityId}
+                  </li>
+                </ul>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {incidentsQuery.error ? <p className="error">{getErrorMessage(incidentsQuery.error)}</p> : null}
     </section>
   );
 }

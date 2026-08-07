@@ -238,6 +238,22 @@ export const adminRuntimeMetricsSchema = z.object({
   })
 });
 
+export const adminIncidentSchema = z.object({
+  id: z.string(),
+  source: z.enum(["JOB", "NOTIFICATION", "WEBHOOK"]),
+  severity: z.enum(["WARN", "CRITICAL"]),
+  title: z.string().min(1),
+  detail: z.string().min(1),
+  occurredAt: z.string().datetime(),
+  entityType: z.string().min(1),
+  entityId: z.string().min(1)
+});
+
+export const adminIncidentFeedSchema = z.object({
+  generatedAt: z.string().datetime(),
+  incidents: z.array(adminIncidentSchema)
+});
+
 export type Role = z.infer<typeof roleSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -267,3 +283,5 @@ export type OperatorJobStatusUpdate = z.infer<typeof operatorJobStatusUpdateSche
 export type OperatorJobStatusResponse = z.infer<typeof operatorJobStatusResponseSchema>;
 export type AdminDashboardMetrics = z.infer<typeof adminDashboardMetricsSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
+export type AdminIncident = z.infer<typeof adminIncidentSchema>;
+export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;

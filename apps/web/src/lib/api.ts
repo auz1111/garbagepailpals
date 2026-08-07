@@ -1,4 +1,5 @@
 import type {
+  AdminIncidentFeed,
   AdminRuntimeMetrics,
   AdminDashboardMetrics,
   AuthResponse,
@@ -127,6 +128,10 @@ export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDash
 
 export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntimeMetrics> {
   return request<undefined, AdminRuntimeMetrics>("/admin/ops/runtime-metrics", "GET", undefined, accessToken);
+}
+
+export function getAdminIncidents(accessToken: string): Promise<AdminIncidentFeed> {
+  return request<undefined, AdminIncidentFeed>("/admin/ops/incidents", "GET", undefined, accessToken);
 }
 
 export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {
