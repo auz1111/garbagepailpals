@@ -11,7 +11,9 @@ import {
   issueSessionTokens,
   rotateRefreshToken
 } from "../lib/auth";
+import { env } from "../lib/env";
 import { handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
+import { authRateLimiter, getClientIp } from "../lib/rateLimiter";
 
 function unauthorized(message: string): HttpResponseInit {
   return jsonResponse(401, { message });
@@ -21,6 +23,42 @@ function conflict(message: string): HttpResponseInit {
   return jsonResponse(409, { message });
 }
 
+function tooManyRequests(retryAfterSeconds: number): HttpResponseInit {
+  const response = jsonResponse(429, {
+    message: "Too many requests. Please try again later.",
+    retryAfterSeconds
+  });
+
+  return {
+    ...response,
+    headers: {
+      ...(response.headers ?? {}),
+      "Retry-After": String(retryAfterSeconds)
+    }
+  };
+}
+
+function enforceRateLimit(request: HttpRequest, scope: "register" | "login" | "refresh"): HttpResponseInit | null {
+  const ip = getClientIp(request.headers);
+  const maxAttemptsByScope = {
+    register: env.AUTH_RATE_LIMIT_REGISTER_MAX_ATTEMPTS,
+    login: env.AUTH_RATE_LIMIT_LOGIN_MAX_ATTEMPTS,
+    refresh: env.AUTH_RATE_LIMIT_REFRESH_MAX_ATTEMPTS
+  };
+
+  const result = authRateLimiter.consume(
+    `${scope}:${ip}`,
+    maxAttemptsByScope[scope],
+    env.AUTH_RATE_LIMIT_WINDOW_MS
+  );
+
+  if (!result.allowed) {
+    return tooManyRequests(result.retryAfterSeconds);
+  }
+
+  return null;
+}
+
 export async function registerHandler(
   request: HttpRequest,
   context: InvocationContext
@@ -28,6 +66,14 @@ export async function registerHandler(
   const optionsResponse = handleOptions(request);
   if (optionsResponse) {
     return optionsResponse;
+  }
+
+  const rateLimitResponse = enforceRateLimit(request, "register");
+  if (rateLimitResponse) {
+    context.warn("Rate limit exceeded on register endpoint", {
+      ip: getClientIp(request.headers)
+    });
+    return rateLimitResponse;
   }
 
   return withErrorBoundary(context, async () => {
@@ -59,6 +105,14 @@ export async function loginHandler(
     return optionsResponse;
   }
 
+  const rateLimitResponse = enforceRateLimit(request, "login");
+  if (rateLimitResponse) {
+    context.warn("Rate limit exceeded on login endpoint", {
+      ip: getClientIp(request.headers)
+    });
+    return rateLimitResponse;
+  }
+
   return withErrorBoundary(context, async () => {
     try {
       const input = await parseJson(request, loginSchema);
@@ -86,6 +140,14 @@ export async function refreshHandler(
   const optionsResponse = handleOptions(request);
   if (optionsResponse) {
     return optionsResponse;
+  }
+
+  const rateLimitResponse = enforceRateLimit(request, "refresh");
+  if (rateLimitResponse) {
+    context.warn("Rate limit exceeded on refresh endpoint", {
+      ip: getClientIp(request.headers)
+    });
+    return rateLimitResponse;
   }
 
   return withErrorBoundary(context, async () => {
