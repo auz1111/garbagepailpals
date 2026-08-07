@@ -1,6 +1,11 @@
 import type {
+  AdminDashboardMetrics,
   AuthResponse,
   LoginInput,
+  OperatorJobClaimResponse,
+  OperatorJobStatusResponse,
+  OperatorJobStatusUpdate,
+  OperatorQueueResponse,
   PayPalCreateSubscriptionRequest,
   PayPalCreateSubscriptionResponse,
   MeResponse,
@@ -43,7 +48,7 @@ async function request<TBody, TResponse>(
       "Content-Type": "application/json",
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
     },
-    body: method === "POST" && body ? JSON.stringify(body) : undefined
+    body: (method === "POST" || method === "PATCH" || method === "PUT") && body ? JSON.stringify(body) : undefined
   });
 
   if (!response.ok) {
@@ -92,6 +97,31 @@ export function getOperatorRoute(accessToken: string): Promise<ProtectedMessage>
 
 export function getAdminRoute(accessToken: string): Promise<ProtectedMessage> {
   return request<undefined, ProtectedMessage>("/admin/dashboard", "GET", undefined, accessToken);
+}
+
+export function getOperatorQueue(accessToken: string): Promise<OperatorQueueResponse> {
+  return request<undefined, OperatorQueueResponse>("/operator/jobs", "GET", undefined, accessToken);
+}
+
+export function claimOperatorJob(jobId: string, accessToken: string): Promise<OperatorJobClaimResponse> {
+  return request<undefined, OperatorJobClaimResponse>(`/operator/jobs/${jobId}/claim`, "POST", undefined, accessToken);
+}
+
+export function updateOperatorJobStatus(
+  jobId: string,
+  input: OperatorJobStatusUpdate,
+  accessToken: string
+): Promise<OperatorJobStatusResponse> {
+  return request<OperatorJobStatusUpdate, OperatorJobStatusResponse>(
+    `/operator/jobs/${jobId}/status`,
+    "PATCH",
+    input,
+    accessToken
+  );
+}
+
+export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDashboardMetrics> {
+  return request<undefined, AdminDashboardMetrics>("/admin/dashboard", "GET", undefined, accessToken);
 }
 
 export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {

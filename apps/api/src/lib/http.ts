@@ -8,7 +8,7 @@ export function jsonResponse(status: number, body: unknown): HttpResponseInit {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": process.env.WEB_ORIGIN ?? "http://localhost:5173",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+      "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS"
     },
     jsonBody: body
   };

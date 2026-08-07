@@ -189,6 +189,16 @@ button[type="submit"] {
   cursor: pointer;
 }
 
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #0f172a;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 select {
   border: 1px solid #888;
   border-radius: 10px;

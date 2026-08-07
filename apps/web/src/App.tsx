@@ -11,10 +11,11 @@ import {
   type Role,
   type RegisterInput
 } from "@gpp/shared";
-import { getAdminRoute, getMe, getOperatorRoute, login, refresh, register } from "./lib/api";
+import { getMe, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { RoleShell } from "./components/RoleShell";
 import { CustomerWorkspace } from "./components/CustomerWorkspace";
+import { OperatorWorkspace } from "./components/OperatorWorkspace";
+import { AdminWorkspace } from "./components/AdminWorkspace";
 
 type AuthMode = "LOGIN" | "REGISTER";
 const REFRESH_TOKEN_KEY = "gpp.refreshToken";
@@ -24,8 +25,6 @@ export function App() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
-  const [operatorMessage, setOperatorMessage] = useState<string | null>(null);
-  const [adminMessage, setAdminMessage] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const registerForm = useForm<RegisterInput>({
@@ -84,8 +83,6 @@ export function App() {
   useEffect(() => {
     const loadProtectedData = async () => {
       if (!accessToken || !user) {
-        setOperatorMessage(null);
-        setAdminMessage(null);
         return;
       }
 
@@ -96,29 +93,6 @@ export function App() {
         setAccessToken(null);
         setUser(null);
         localStorage.removeItem(REFRESH_TOKEN_KEY);
-        return;
-      }
-
-      if (user.role === "OPERATOR" || user.role === "ADMIN") {
-        try {
-          const operator = await getOperatorRoute(accessToken);
-          setOperatorMessage(operator.message);
-        } catch {
-          setOperatorMessage("Operator endpoint unavailable");
-        }
-      } else {
-        setOperatorMessage(null);
-      }
-
-      if (user.role === "ADMIN") {
-        try {
-          const admin = await getAdminRoute(accessToken);
-          setAdminMessage(admin.message);
-        } catch {
-          setAdminMessage("Admin endpoint unavailable");
-        }
-      } else {
-        setAdminMessage(null);
       }
     };
 
@@ -130,8 +104,6 @@ export function App() {
   function logout() {
     setAccessToken(null);
     setUser(null);
-    setOperatorMessage(null);
-    setAdminMessage(null);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     navigate("/auth");
   }
@@ -238,14 +210,7 @@ export function App() {
             <Route
               path="/operator"
               element={
-                user ? (
-                  <RoleShell
-                    title="Operator Route Shell"
-                    expectedRole="OPERATOR"
-                    user={user}
-                    apiMessage={operatorMessage}
-                  />
-                ) : null
+                user && accessToken ? <OperatorWorkspace user={user} accessToken={accessToken} /> : null
               }
             />
           </Route>
@@ -254,9 +219,7 @@ export function App() {
             <Route
               path="/admin"
               element={
-                user ? (
-                  <RoleShell title="Admin Console Shell" expectedRole="ADMIN" user={user} apiMessage={adminMessage} />
-                ) : null
+                user && accessToken ? <AdminWorkspace user={user} accessToken={accessToken} /> : null
               }
             />
           </Route>

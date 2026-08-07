@@ -1,7 +1,7 @@
 import { app } from "@azure/functions";
 import { healthHandler } from "./routes/health";
 import { loginHandler, refreshHandler, registerHandler } from "./routes/auth";
-import { adminRouteHandler, meHandler, operatorRouteHandler } from "./routes/protected";
+import { meHandler } from "./routes/protected";
 import { serviceAreaCheckHandler } from "./routes/domain/serviceAreas";
 import {
   createAddressHandler,
@@ -20,6 +20,12 @@ import {
   createStripePortalHandler
 } from "./routes/payments";
 import { paypalWebhookHandler, stripeWebhookHandler } from "./routes/webhooks";
+import {
+  claimOperatorJobHandler,
+  operatorQueueHandler,
+  updateOperatorJobStatusHandler
+} from "./routes/operatorJobs";
+import { adminDashboardMetricsHandler } from "./routes/adminDashboard";
 
 app.http("health", {
   route: "health",
@@ -60,14 +66,28 @@ app.http("operator-jobs", {
   route: "operator/jobs",
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
-  handler: operatorRouteHandler
+  handler: operatorQueueHandler
+});
+
+app.http("operator-jobs-claim", {
+  route: "operator/jobs/{jobId}/claim",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: claimOperatorJobHandler
+});
+
+app.http("operator-jobs-status", {
+  route: "operator/jobs/{jobId}/status",
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: updateOperatorJobStatusHandler
 });
 
 app.http("admin-dashboard", {
   route: "admin/dashboard",
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
-  handler: adminRouteHandler
+  handler: adminDashboardMetricsHandler
 });
 
 app.http("service-area-check", {

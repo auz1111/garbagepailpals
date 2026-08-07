@@ -141,6 +141,70 @@ export const paypalCreateSubscriptionResponseSchema = z.object({
   subscriptionId: z.string()
 });
 
+export const operatorQueueJobSchema = z.object({
+  id: z.string(),
+  serviceAddressId: z.string(),
+  subscriptionId: z.string(),
+  scheduledDate: z.string(),
+  type: z.enum(["CURB_OUT", "CURB_IN"]),
+  status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"]),
+  assignedOperatorId: z.string().nullable(),
+  customerName: z.string(),
+  addressLine1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  accessNotes: z.string(),
+  gateCode: z.string().nullable()
+});
+
+export const operatorQueueResponseSchema = z.object({
+  jobs: z.array(operatorQueueJobSchema)
+});
+
+export const operatorJobClaimResponseSchema = z.object({
+  jobId: z.string(),
+  assignedOperatorId: z.string(),
+  status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"])
+});
+
+export const operatorJobStatusUpdateSchema = z.object({
+  status: z.enum(["COMPLETED", "SKIPPED", "FAILED"]),
+  photoBlobPath: z.string().min(1).max(500).optional(),
+  failureReason: z.string().min(1).max(500).optional()
+});
+
+export const operatorJobStatusResponseSchema = z.object({
+  jobId: z.string(),
+  status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"]),
+  completedAt: z.string().nullable(),
+  failureReason: z.string().nullable(),
+  photoBlobPath: z.string().nullable()
+});
+
+export const adminDashboardMetricsSchema = z.object({
+  users: z.object({
+    total: z.number().int().nonnegative(),
+    customers: z.number().int().nonnegative(),
+    operators: z.number().int().nonnegative(),
+    admins: z.number().int().nonnegative()
+  }),
+  service: z.object({
+    addresses: z.number().int().nonnegative(),
+    activeSubscriptions: z.number().int().nonnegative(),
+    activeEntitlements: z.number().int().nonnegative()
+  }),
+  jobs: z.object({
+    scheduledNext7Days: z.number().int().nonnegative(),
+    completedLast7Days: z.number().int().nonnegative(),
+    failedLast7Days: z.number().int().nonnegative()
+  }),
+  webhooks: z.object({
+    stripeLast24h: z.number().int().nonnegative(),
+    paypalLast24h: z.number().int().nonnegative()
+  })
+});
+
 export type Role = z.infer<typeof roleSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -163,3 +227,9 @@ export type StripePortalRequest = z.infer<typeof stripePortalRequestSchema>;
 export type StripePortalResponse = z.infer<typeof stripePortalResponseSchema>;
 export type PayPalCreateSubscriptionRequest = z.infer<typeof paypalCreateSubscriptionRequestSchema>;
 export type PayPalCreateSubscriptionResponse = z.infer<typeof paypalCreateSubscriptionResponseSchema>;
+export type OperatorQueueJob = z.infer<typeof operatorQueueJobSchema>;
+export type OperatorQueueResponse = z.infer<typeof operatorQueueResponseSchema>;
+export type OperatorJobClaimResponse = z.infer<typeof operatorJobClaimResponseSchema>;
+export type OperatorJobStatusUpdate = z.infer<typeof operatorJobStatusUpdateSchema>;
+export type OperatorJobStatusResponse = z.infer<typeof operatorJobStatusResponseSchema>;
+export type AdminDashboardMetrics = z.infer<typeof adminDashboardMetricsSchema>;
