@@ -1,0 +1,126 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: garbagepailpals
+  AZURE_REGION: westus2
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Ensure resource group exists
+        run: az group create --name $RESOURCE_GROUP --location $AZURE_REGION
+
+      - name: Deploy Bicep
+        shell: bash
+        env:
+          POSTGRES_ADMIN_PASSWORD_DEV: ${{ secrets.POSTGRES_ADMIN_PASSWORD_DEV }}
+          POSTGRES_ADMIN_PASSWORD_PROD: ${{ secrets.POSTGRES_ADMIN_PASSWORD_PROD }}
+        run: |
+          if [[ "${{ github.event.inputs.environment || 'prod' }}" == "dev" ]]; then
+            az deployment group create \
+              --resource-group $RESOURCE_GROUP \
+              --template-file infra/main.bicep \
+              --parameters infra/dev.bicepparam
+          else
+            az deployment group create \
+              --resource-group $RESOURCE_GROUP \
+              --template-file infra/main.bicep \
+              --parameters infra/prod.bicepparam
+          fi
+
+  deploy-api:
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build API
+        run: pnpm --filter @gpp/api build
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy Function App
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ github.event.inputs.environment == 'dev' && 'func-gpp-dev' || 'func-gpp-prod' }}
+          package: apps/api
+
+  deploy-web:
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Web
+        run: pnpm --filter @gpp/web build
+
+      - name: Deploy Static Web App artifact
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          action: upload
+          app_location: apps/web
+          output_location: dist
