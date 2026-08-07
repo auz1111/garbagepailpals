@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "JWT_ACCESS_SECRET": "replace-with-long-random-value",
+    "JWT_REFRESH_SECRET": "replace-with-long-random-value",
+    "JWT_ACCESS_TTL": "15m",
+    "JWT_REFRESH_TTL": "30d",
+    "DATABASE_URL": "postgresql://postgres:password@your-server.postgres.database.azure.com:5432/garbage_pail_pals?schema=public&sslmode=require",
+    "DIRECT_URL": "postgresql://postgres:password@your-server.postgres.database.azure.com:5432/garbage_pail_pals?schema=public&sslmode=require",
+    "WEB_ORIGIN": "http://localhost:5173"
+  }
+}
