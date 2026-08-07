@@ -16,8 +16,8 @@ resource functionPlan 'Microsoft.Web/serverfarms@2020-10-01' = {
   location: location
   kind: 'linux'
   sku: {
-    tier: 'FlexConsumption'
-    name: 'FC1'
+    tier: 'ElasticPremium'
+    name: 'EP1'
   }
   properties: {
     reserved: true

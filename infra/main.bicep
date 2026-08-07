@@ -85,7 +85,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = if (postgresNetwo
             {
               name: 'functionsDelegation'
               properties: {
-                serviceName: 'Microsoft.App/environments'
+                serviceName: 'Microsoft.Web/serverFarms'
               }
             }
           ]
