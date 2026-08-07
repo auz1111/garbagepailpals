@@ -111,6 +111,36 @@ export const serviceJobsResponseSchema = z.object({
   jobs: z.array(serviceJobSchema)
 });
 
+export const stripeCheckoutRequestSchema = z.object({
+  planCode: z.string().min(1),
+  successUrl: z.string().url(),
+  cancelUrl: z.string().url()
+});
+
+export const stripeCheckoutResponseSchema = z.object({
+  checkoutUrl: z.string().url(),
+  sessionId: z.string()
+});
+
+export const stripePortalRequestSchema = z.object({
+  returnUrl: z.string().url()
+});
+
+export const stripePortalResponseSchema = z.object({
+  portalUrl: z.string().url()
+});
+
+export const paypalCreateSubscriptionRequestSchema = z.object({
+  planCode: z.string().min(1),
+  returnUrl: z.string().url(),
+  cancelUrl: z.string().url()
+});
+
+export const paypalCreateSubscriptionResponseSchema = z.object({
+  approvalUrl: z.string().url(),
+  subscriptionId: z.string()
+});
+
 export type Role = z.infer<typeof roleSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
@@ -127,3 +157,9 @@ export type ServiceSchedule = z.infer<typeof serviceScheduleSchema>;
 export type ServiceHoldInput = z.infer<typeof serviceHoldInputSchema>;
 export type ServiceHold = z.infer<typeof serviceHoldSchema>;
 export type ServiceJob = z.infer<typeof serviceJobSchema>;
+export type StripeCheckoutRequest = z.infer<typeof stripeCheckoutRequestSchema>;
+export type StripeCheckoutResponse = z.infer<typeof stripeCheckoutResponseSchema>;
+export type StripePortalRequest = z.infer<typeof stripePortalRequestSchema>;
+export type StripePortalResponse = z.infer<typeof stripePortalResponseSchema>;
+export type PayPalCreateSubscriptionRequest = z.infer<typeof paypalCreateSubscriptionRequestSchema>;
+export type PayPalCreateSubscriptionResponse = z.infer<typeof paypalCreateSubscriptionResponseSchema>;

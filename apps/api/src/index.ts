@@ -14,6 +14,12 @@ import {
 import { historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
 import { nightlySchedulerHandler } from "./timers/nightlyScheduler";
 import { reminderSweepHandler } from "./timers/reminders";
+import {
+  createPayPalSubscriptionHandler,
+  createStripeCheckoutHandler,
+  createStripePortalHandler
+} from "./routes/payments";
+import { paypalWebhookHandler, stripeWebhookHandler } from "./routes/webhooks";
 
 app.http("health", {
   route: "health",
@@ -125,6 +131,41 @@ app.http("jobs-history", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: historyJobsHandler
+});
+
+app.http("stripe-checkout", {
+  route: "payments/stripe/checkout-session",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: createStripeCheckoutHandler
+});
+
+app.http("stripe-portal", {
+  route: "payments/stripe/customer-portal",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: createStripePortalHandler
+});
+
+app.http("paypal-subscription", {
+  route: "payments/paypal/subscriptions",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: createPayPalSubscriptionHandler
+});
+
+app.http("webhooks-stripe", {
+  route: "webhooks/stripe",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: stripeWebhookHandler
+});
+
+app.http("webhooks-paypal", {
+  route: "webhooks/paypal",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: paypalWebhookHandler
 });
 
 app.timer("nightly-job-generation", {
