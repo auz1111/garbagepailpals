@@ -20,6 +20,7 @@ resource functionPlan 'Microsoft.Web/serverfarms@2020-10-01' = {
     name: 'EP1'
   }
   properties: {
+    maximumElasticWorkerCount: 20
     reserved: true
   }
 }
