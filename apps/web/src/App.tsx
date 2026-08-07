@@ -14,6 +14,7 @@ import {
 import { getAdminRoute, getMe, getOperatorRoute, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { RoleShell } from "./components/RoleShell";
+import { CustomerWorkspace } from "./components/CustomerWorkspace";
 
 type AuthMode = "LOGIN" | "REGISTER";
 const REFRESH_TOKEN_KEY = "gpp.refreshToken";
@@ -226,14 +227,7 @@ export function App() {
             <Route
               path="/customer"
               element={
-                user ? (
-                  <RoleShell
-                    title="Customer Dashboard Shell"
-                    expectedRole="CUSTOMER"
-                    user={user}
-                    apiMessage="Customer route rendered"
-                  />
-                ) : null
+                user && accessToken ? <CustomerWorkspace user={user} accessToken={accessToken} /> : null
               }
             />
           </Route>

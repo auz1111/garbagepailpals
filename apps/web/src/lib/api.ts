@@ -1,17 +1,39 @@
 import type {
   AuthResponse,
   LoginInput,
+  PayPalCreateSubscriptionRequest,
+  PayPalCreateSubscriptionResponse,
   MeResponse,
   ProtectedMessage,
   RefreshInput,
-  RegisterInput
+  RegisterInput,
+  ServiceAddress,
+  ServiceAddressInput,
+  ServiceAreaCheckResponse,
+  ServiceJob,
+  ServiceSchedule,
+  ServiceScheduleInput,
+  StripeCheckoutRequest,
+  StripeCheckoutResponse,
+  StripePortalRequest,
+  StripePortalResponse
 } from "@gpp/shared";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7071/api";
 
+export class ApiError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 async function request<TBody, TResponse>(
   path: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "PATCH" | "PUT",
   body?: TBody,
   accessToken?: string
 ): Promise<TResponse> {
@@ -26,11 +48,27 @@ async function request<TBody, TResponse>(
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { message?: string };
-    throw new Error(payload.message ?? "Request failed");
+    throw new ApiError(response.status, payload.message ?? "Request failed");
   }
 
   return (await response.json()) as TResponse;
 }
+
+type ServiceAddressListResponse = {
+  addresses: ServiceAddress[];
+};
+
+type ServiceAddressResponse = {
+  address: ServiceAddress;
+};
+
+type ServiceScheduleResponse = {
+  schedule: ServiceSchedule;
+};
+
+type ServiceJobsResponse = {
+  jobs: ServiceJob[];
+};
 
 export function register(input: RegisterInput): Promise<AuthResponse> {
   return request<RegisterInput, AuthResponse>("/auth/register", "POST", input);
@@ -54,4 +92,74 @@ export function getOperatorRoute(accessToken: string): Promise<ProtectedMessage>
 
 export function getAdminRoute(accessToken: string): Promise<ProtectedMessage> {
   return request<undefined, ProtectedMessage>("/admin/dashboard", "GET", undefined, accessToken);
+}
+
+export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {
+  const params = new URLSearchParams({ postalCode });
+  return request<undefined, ServiceAreaCheckResponse>(`/service-areas/check?${params.toString()}`, "GET");
+}
+
+export function listAddresses(accessToken: string): Promise<ServiceAddressListResponse> {
+  return request<undefined, ServiceAddressListResponse>("/addresses", "GET", undefined, accessToken);
+}
+
+export function createAddress(input: ServiceAddressInput, accessToken: string): Promise<ServiceAddressResponse> {
+  return request<ServiceAddressInput, ServiceAddressResponse>("/addresses", "POST", input, accessToken);
+}
+
+export function upsertAddressSchedule(
+  addressId: string,
+  input: ServiceScheduleInput,
+  accessToken: string
+): Promise<ServiceScheduleResponse> {
+  return request<ServiceScheduleInput, ServiceScheduleResponse>(
+    `/addresses/${addressId}/schedule`,
+    "PUT",
+    input,
+    accessToken
+  );
+}
+
+export function listUpcomingJobs(accessToken: string): Promise<ServiceJobsResponse> {
+  return request<undefined, ServiceJobsResponse>("/jobs/upcoming", "GET", undefined, accessToken);
+}
+
+export function listHistoryJobs(accessToken: string): Promise<ServiceJobsResponse> {
+  return request<undefined, ServiceJobsResponse>("/jobs/history", "GET", undefined, accessToken);
+}
+
+export function createStripeCheckout(
+  input: StripeCheckoutRequest,
+  accessToken: string
+): Promise<StripeCheckoutResponse> {
+  return request<StripeCheckoutRequest, StripeCheckoutResponse>(
+    "/payments/stripe/checkout-session",
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function createStripePortal(
+  input: StripePortalRequest,
+  accessToken: string
+): Promise<StripePortalResponse> {
+  return request<StripePortalRequest, StripePortalResponse>(
+    "/payments/stripe/customer-portal",
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function createPayPalSubscription(
+  input: PayPalCreateSubscriptionRequest,
+  accessToken: string
+): Promise<PayPalCreateSubscriptionResponse> {
+  return request<PayPalCreateSubscriptionRequest, PayPalCreateSubscriptionResponse>(
+    "/payments/paypal/subscriptions",
+    "POST",
+    input,
+    accessToken
+  );
 }
