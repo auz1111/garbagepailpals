@@ -65,14 +65,16 @@ export async function issueSessionTokens(user: AuthUser): Promise<{
   const accessToken = await signAccessToken({
     sub: user.id,
     role: user.role,
-    email: user.email
+    email: user.email,
+    name: user.name
   });
 
   const rawRefreshToken = generateOpaqueToken();
   const refreshTokenJwt = await signRefreshToken({
     sub: user.id,
     role: user.role,
-    email: user.email
+    email: user.email,
+    name: user.name
   });
 
   const combinedRefreshToken = `${refreshTokenJwt}::${rawRefreshToken}`;

@@ -29,8 +29,22 @@ export const authResponseSchema = z.object({
   })
 });
 
+export const currentUserSchema = authResponseSchema.shape.user;
+
+export const meResponseSchema = z.object({
+  user: currentUserSchema
+});
+
+export const protectedMessageSchema = z.object({
+  message: z.string(),
+  user: currentUserSchema
+});
+
 export type Role = z.infer<typeof roleSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type AuthResponse = z.infer<typeof authResponseSchema>;
+export type CurrentUser = z.infer<typeof currentUserSchema>;
+export type MeResponse = z.infer<typeof meResponseSchema>;
+export type ProtectedMessage = z.infer<typeof protectedMessageSchema>;

@@ -10,6 +10,7 @@ export type AuthTokenPayload = JWTPayload & {
   sub: string;
   role: "CUSTOMER" | "OPERATOR" | "ADMIN";
   email: string;
+  name: string;
 };
 
 export async function signAccessToken(payload: AuthTokenPayload): Promise<string> {
@@ -20,7 +21,9 @@ export async function signAccessToken(payload: AuthTokenPayload): Promise<string
     .sign(accessSecret);
 }
 
-export async function signRefreshToken(payload: Pick<AuthTokenPayload, "sub" | "role" | "email">): Promise<string> {
+export async function signRefreshToken(
+  payload: Pick<AuthTokenPayload, "sub" | "role" | "email" | "name">
+): Promise<string> {
   return new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
