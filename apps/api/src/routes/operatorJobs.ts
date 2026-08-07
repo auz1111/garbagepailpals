@@ -48,7 +48,7 @@ export async function operatorQueueHandler(
         });
 
         const response = operatorQueueResponseSchema.parse({
-          jobs: jobs.map((job) => ({
+          jobs: jobs.map((job: any) => ({
             id: job.id,
             serviceAddressId: job.serviceAddressId,
             subscriptionId: job.subscriptionId,

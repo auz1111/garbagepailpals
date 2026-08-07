@@ -181,7 +181,7 @@ export async function adminIncidentsHandler(
             failedNotifications,
             staleWebhooks,
             filter,
-            lifecycleEvents: lifecycleEvents.map((item) => ({
+            lifecycleEvents: lifecycleEvents.map((item: any) => ({
               incidentId: item.entityId,
               action: item.action as
                 | "incident.acknowledged"

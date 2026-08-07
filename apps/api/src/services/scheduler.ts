@@ -171,7 +171,7 @@ export async function runNightlyJobGeneration(now = new Date()): Promise<{ creat
     }
 
     const applicableHolidays = holidays.filter(
-      (holiday) => holiday.municipality.toLowerCase() === subscription.serviceAddress.city.toLowerCase()
+      (holiday: any) => holiday.municipality.toLowerCase() === subscription.serviceAddress.city.toLowerCase()
     );
 
     const jobs = calculateJobsForAddress(

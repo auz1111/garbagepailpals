@@ -319,7 +319,7 @@ export async function listHoldsHandler(
         });
 
         return jsonResponse(200, {
-          holds: holds.map((hold) =>
+          holds: holds.map((hold: any) =>
             serviceHoldSchema.parse({
               id: hold.id,
               serviceAddressId: hold.serviceAddressId,

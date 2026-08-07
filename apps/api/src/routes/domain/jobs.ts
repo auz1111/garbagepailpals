@@ -32,7 +32,7 @@ export async function upcomingJobsHandler(
         });
 
         const response = serviceJobsResponseSchema.parse({
-          jobs: jobs.map((job) => ({
+          jobs: jobs.map((job: any) => ({
             id: job.id,
             serviceAddressId: job.serviceAddressId,
             subscriptionId: job.subscriptionId,
@@ -79,7 +79,7 @@ export async function historyJobsHandler(
         });
 
         const response = serviceJobsResponseSchema.parse({
-          jobs: jobs.map((job) => ({
+          jobs: jobs.map((job: any) => ({
             id: job.id,
             serviceAddressId: job.serviceAddressId,
             subscriptionId: job.subscriptionId,
