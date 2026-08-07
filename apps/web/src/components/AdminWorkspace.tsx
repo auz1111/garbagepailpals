@@ -63,6 +63,16 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
               <li>PayPal events: {metrics.webhooks.paypalLast24h}</li>
             </ul>
           </article>
+
+          <article className="panel">
+            <h3>Notifications (24h)</h3>
+            <ul className="meta-list compact">
+              <li>Reminders sent: {metrics.notifications.remindersSentLast24h}</li>
+              <li>Reminders failed: {metrics.notifications.remindersFailedLast24h}</li>
+              <li>Overdue sent: {metrics.notifications.overdueSentLast24h}</li>
+              <li>Overdue failed: {metrics.notifications.overdueFailedLast24h}</li>
+            </ul>
+          </article>
         </div>
       )}
 

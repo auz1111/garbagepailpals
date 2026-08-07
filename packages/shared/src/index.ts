@@ -202,6 +202,12 @@ export const adminDashboardMetricsSchema = z.object({
   webhooks: z.object({
     stripeLast24h: z.number().int().nonnegative(),
     paypalLast24h: z.number().int().nonnegative()
+  }),
+  notifications: z.object({
+    remindersSentLast24h: z.number().int().nonnegative(),
+    remindersFailedLast24h: z.number().int().nonnegative(),
+    overdueSentLast24h: z.number().int().nonnegative(),
+    overdueFailedLast24h: z.number().int().nonnegative()
   })
 });
 

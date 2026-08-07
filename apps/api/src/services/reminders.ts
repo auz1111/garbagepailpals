@@ -120,6 +120,7 @@ export async function runReminderAndEscalationSweep(now = new Date()): Promise<{
         metadata: {
           provider: result.provider,
           messageId: result.messageId ?? null,
+          attempts: result.attempts ?? null,
           sent: result.sent
         }
       });
@@ -172,6 +173,7 @@ export async function runReminderAndEscalationSweep(now = new Date()): Promise<{
         metadata: {
           provider: result.provider,
           messageId: result.messageId ?? null,
+          attempts: result.attempts ?? null,
           sent: result.sent,
           hoursOverdue
         }

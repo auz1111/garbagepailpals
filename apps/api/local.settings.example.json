@@ -21,6 +21,8 @@
     "NOTIFICATION_PROVIDER": "mock",
     "NOTIFICATION_FROM_EMAIL": "noreply@garbagepailpals.local",
     "NOTIFICATION_ESCALATION_EMAIL": "",
-    "RESEND_API_KEY": ""
+    "RESEND_API_KEY": "",
+    "NOTIFICATION_MAX_RETRIES": "2",
+    "NOTIFICATION_RETRY_BASE_DELAY_MS": "300"
   }
 }

@@ -33,7 +33,11 @@ export async function adminDashboardMetricsHandler(
           completedLast7Days,
           failedLast7Days,
           stripeLast24h,
-          paypalLast24h
+          paypalLast24h,
+          remindersSentLast24h,
+          remindersFailedLast24h,
+          overdueSentLast24h,
+          overdueFailedLast24h
         ] = await Promise.all([
           prisma.user.count(),
           prisma.user.count({ where: { role: "CUSTOMER" } }),
@@ -71,6 +75,30 @@ export async function adminDashboardMetricsHandler(
               provider: "paypal",
               createdAt: { gte: dayAgo }
             }
+          }),
+          prisma.auditLog.count({
+            where: {
+              action: "notification.reminder.sent",
+              createdAt: { gte: dayAgo }
+            }
+          }),
+          prisma.auditLog.count({
+            where: {
+              action: "notification.reminder.failed",
+              createdAt: { gte: dayAgo }
+            }
+          }),
+          prisma.auditLog.count({
+            where: {
+              action: "notification.overdue.sent",
+              createdAt: { gte: dayAgo }
+            }
+          }),
+          prisma.auditLog.count({
+            where: {
+              action: "notification.overdue.failed",
+              createdAt: { gte: dayAgo }
+            }
           })
         ]);
 
@@ -94,6 +122,12 @@ export async function adminDashboardMetricsHandler(
           webhooks: {
             stripeLast24h,
             paypalLast24h
+          },
+          notifications: {
+            remindersSentLast24h,
+            remindersFailedLast24h,
+            overdueSentLast24h,
+            overdueFailedLast24h
           }
         });
 
