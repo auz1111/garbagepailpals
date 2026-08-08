@@ -48,6 +48,10 @@ var baseAppSettings = [
     value: '~24'
   }
   {
+    name: 'AzureWebJobsFeatureFlags'
+    value: 'EnableWorkerIndexing'
+  }
+  {
     name: 'WEBSITE_RUN_FROM_PACKAGE'
     value: '1'
   }
