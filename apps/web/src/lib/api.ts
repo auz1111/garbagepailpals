@@ -34,7 +34,7 @@ import type {
   StripePortalResponse
 } from "@gpp/shared";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:7071/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:7071/api" : "/api");
 
 export class ApiError extends Error {
   status: number;
