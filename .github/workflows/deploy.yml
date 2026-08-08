@@ -82,7 +82,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build API
-        run: pnpm --filter @gpp/api build
+        run: pnpm --filter @gpp/api... build
 
       - name: Prepare API deploy bundle
         run: pnpm --filter @gpp/api deploy --legacy --prod .deploy/api

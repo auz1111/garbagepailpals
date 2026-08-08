@@ -3,6 +3,8 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": ".",
+    "declaration": true,
+    "declarationMap": true,
     "types": ["node"]
   },
   "include": ["src", "prisma/seed.ts"]
