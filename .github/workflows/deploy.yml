@@ -90,6 +90,15 @@ jobs:
       - name: Generate Prisma client for deploy bundle
         run: pnpm dlx prisma@5.22.0 generate --schema .deploy/api/node_modules/@gpp/db/prisma/schema.prisma
 
+      - name: Flatten API bundle symlinks
+        shell: bash
+        run: |
+          rm -rf .deploy/api-flat
+          mkdir -p .deploy/api-flat
+          rsync -aL .deploy/api/ .deploy/api-flat/
+          rm -rf .deploy/api
+          mv .deploy/api-flat .deploy/api
+
       - name: Azure login
         uses: azure/login@v2
         with:
