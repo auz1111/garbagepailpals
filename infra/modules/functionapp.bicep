@@ -45,7 +45,7 @@ var baseAppSettings = [
   }
   {
     name: 'WEBSITE_NODE_DEFAULT_VERSION'
-    value: '~24'
+    value: '~22'
   }
   {
     name: 'AzureWebJobsFeatureFlags'
@@ -121,7 +121,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
     httpsOnly: true
     clientAffinityEnabled: false
     siteConfig: {
-      linuxFxVersion: 'NODE|24'
+      linuxFxVersion: 'NODE|22'
       appSettings: concat(baseAppSettings, optionalAppSettings)
       ftpsState: 'Disabled'
       vnetRouteAllEnabled: functionSubnetId != ''
