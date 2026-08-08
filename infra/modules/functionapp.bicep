@@ -36,8 +36,16 @@ var functionPlanProperties = cheapMode
 
 var baseAppSettings = [
   {
+    name: 'FUNCTIONS_EXTENSION_VERSION'
+    value: '~4'
+  }
+  {
     name: 'FUNCTIONS_WORKER_RUNTIME'
     value: 'node'
+  }
+  {
+    name: 'WEBSITE_NODE_DEFAULT_VERSION'
+    value: '~24'
   }
   {
     name: 'WEBSITE_RUN_FROM_PACKAGE'
@@ -109,7 +117,7 @@ resource functionApp 'Microsoft.Web/sites@2024-04-01' = {
     httpsOnly: true
     clientAffinityEnabled: false
     siteConfig: {
-      linuxFxVersion: 'NODE|20'
+      linuxFxVersion: 'NODE|24'
       appSettings: concat(baseAppSettings, optionalAppSettings)
       ftpsState: 'Disabled'
       vnetRouteAllEnabled: functionSubnetId != ''
