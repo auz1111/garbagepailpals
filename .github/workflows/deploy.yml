@@ -84,20 +84,33 @@ jobs:
       - name: Build API
         run: pnpm --filter @gpp/api... build
 
-      - name: Prepare API deploy bundle
-        run: pnpm --filter @gpp/api deploy --legacy --prod .deploy/api
-
-      - name: Generate Prisma client for deploy bundle
-        run: pnpm dlx prisma@5.22.0 generate --schema .deploy/api/node_modules/@gpp/db/prisma/schema.prisma
-
-      - name: Flatten API bundle symlinks
+      - name: Prepare standalone API deploy bundle
         shell: bash
         run: |
-          rm -rf .deploy/api-flat
-          mkdir -p .deploy/api-flat
-          rsync -aL .deploy/api/ .deploy/api-flat/
           rm -rf .deploy/api
-          mv .deploy/api-flat .deploy/api
+          mkdir -p .deploy/api/dist .deploy/api/prisma
+          cp apps/api/host.json .deploy/api/host.json
+          cp apps/api/dist/index.cjs .deploy/api/dist/index.cjs
+          cp packages/db/prisma/schema.prisma .deploy/api/prisma/schema.prisma
+          cat > .deploy/api/package.json <<'JSON'
+          {
+            "name": "gpp-api-deploy",
+            "private": true,
+            "main": "dist/index.cjs",
+            "dependencies": {
+              "@azure/functions": "^4.16.2",
+              "@prisma/client": "^5.22.0"
+            }
+          }
+          JSON
+
+      - name: Install standalone API runtime deps
+        working-directory: .deploy/api
+        run: npm install --omit=dev
+
+      - name: Generate Prisma client for standalone bundle
+        working-directory: .deploy/api
+        run: npx prisma@5.22.0 generate --schema prisma/schema.prisma
 
       - name: Azure login
         uses: azure/login@v2
