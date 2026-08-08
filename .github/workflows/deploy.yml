@@ -84,6 +84,9 @@ jobs:
       - name: Build API
         run: pnpm --filter @gpp/api build
 
+      - name: Prepare API deploy bundle
+        run: pnpm --filter @gpp/api deploy --prod .deploy/api
+
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -99,7 +102,7 @@ jobs:
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ github.event.inputs.environment == 'dev' && 'func-gpp-dev' || 'func-gpp-prod' }}
-          package: apps/api
+          package: .deploy/api
 
   deploy-web:
     needs: deploy-infra
