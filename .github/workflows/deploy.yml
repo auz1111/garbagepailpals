@@ -87,6 +87,9 @@ jobs:
       - name: Prepare API deploy bundle
         run: pnpm --filter @gpp/api deploy --legacy --prod .deploy/api
 
+      - name: Generate Prisma client for deploy bundle
+        run: pnpm dlx prisma@5.22.0 generate --schema .deploy/api/node_modules/@gpp/db/prisma/schema.prisma
+
       - name: Azure login
         uses: azure/login@v2
         with:
@@ -125,7 +128,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build Web
-        run: pnpm --filter @gpp/web build
+        run: pnpm --filter @gpp/web... build
 
       - name: Deploy Static Web App artifact
         uses: Azure/static-web-apps-deploy@v1
