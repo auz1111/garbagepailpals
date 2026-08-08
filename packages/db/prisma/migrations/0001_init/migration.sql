@@ -1,6 +1,3 @@
-﻿
-> @gpp/db@0.1.0 prisma C:\Users\Auz\Documents\My Web Sites\garbagepailpals.com\packages\db
-> prisma "migrate" "diff" "--from-empty" "--to-schema-datamodel" "prisma/schema.prisma" "--script"
 
 -- CreateEnum
 CREATE TYPE "UserRole" AS ENUM ('CUSTOMER', 'OPERATOR', 'ADMIN');

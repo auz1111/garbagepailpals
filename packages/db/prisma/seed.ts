@@ -19,16 +19,18 @@ async function seed() {
     prisma.holidayCalendar.deleteMany()
   ]);
 
-  const passwordHash = await bcrypt.hash("Password123!", 12);
+  const adminEmail = "auz@garbagepailpals.com";
+  const adminPassword = "garbagepailpals11";
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
 
   const [admin, operator, customer1, customer2] = await Promise.all([
     prisma.user.create({
       data: {
-        email: "admin@garbagepailpals.com",
-        name: "Admin User",
+        email: adminEmail,
+        name: "Auz Admin",
         phone: "+15035550100",
         role: "ADMIN",
-        authProviderId: "local-admin",
+        authProviderId: "local-auz",
         passwordHash
       }
     }),
