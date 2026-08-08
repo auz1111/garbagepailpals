@@ -51,11 +51,13 @@ jobs:
         run: |
           if [[ "${{ github.event.inputs.environment || 'prod' }}" == "dev" ]]; then
             az deployment group create \
+              --name main-${{ github.run_id }}-${{ github.run_attempt }} \
               --resource-group $RESOURCE_GROUP \
               --template-file infra/main.bicep \
               --parameters infra/dev.bicepparam
           else
             az deployment group create \
+              --name main-${{ github.run_id }}-${{ github.run_attempt }} \
               --resource-group $RESOURCE_GROUP \
               --template-file infra/main.bicep \
               --parameters infra/prod.bicepparam
