@@ -17,6 +17,9 @@ param delegatedSubnetId string = ''
 @description('Private DNS zone resource ID. Required when networkMode is Private.')
 param privateDnsZoneId string = ''
 
+@description('Optional firewall rules to create when networkMode is Public. Each item should include name, startIpAddress, and endIpAddress.')
+param publicFirewallRules array = []
+
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: serverName
   location: location
@@ -63,6 +66,15 @@ resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallR
     endIpAddress: '0.0.0.0'
   }
 }
+
+resource customPublicFirewallRules 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = [for rule in publicFirewallRules: if (networkMode == 'Public') {
+  name: rule.name
+  parent: postgresServer
+  properties: {
+    startIpAddress: rule.startIpAddress
+    endIpAddress: rule.endIpAddress
+  }
+}]
 
 output postgresServerId string = postgresServer.id
 output postgresFqdn string = postgresServer.properties.fullyQualifiedDomainName

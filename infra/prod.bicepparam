@@ -3,6 +3,7 @@ using './main.bicep'
 param environment = 'prod'
 param location = 'westus2'
 param namePrefix = 'gpp'
+param cheapMode = true
 param postgresAdminLogin = 'gppadmin'
 param postgresAdminPassword = readEnvironmentVariable('POSTGRES_ADMIN_PASSWORD_PROD', 'replace-before-deploy')
 param postgresNetworkMode = 'Private'

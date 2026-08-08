@@ -1,7 +1,7 @@
 param location string
 param storageAccountName string
 param containerName string
-param principalId string
+param principalId string = ''
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
@@ -24,7 +24,7 @@ resource servicePhotosContainer 'Microsoft.Storage/storageAccounts/blobServices/
   }
 }
 
-resource blobDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource blobDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(principalId)) {
   name: guid(storageAccount.id, principalId, 'Storage Blob Data Contributor')
   scope: storageAccount
   properties: {

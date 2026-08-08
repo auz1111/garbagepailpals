@@ -17,6 +17,9 @@ param location string = 'westus2'
 @description('Base name prefix used for resource naming.')
 param namePrefix string = 'gpp'
 
+@description('Enable the lowest-cost hosting shape: Functions Consumption plus public PostgreSQL networking.')
+param cheapMode bool = false
+
 @description('PostgreSQL administrator login name.')
 param postgresAdminLogin string
 
@@ -30,6 +33,9 @@ param postgresAdminPassword string
   'Private'
 ])
 param postgresNetworkMode string = 'Private'
+
+@description('Optional PostgreSQL firewall rules to create when public networking is enabled.')
+param publicDatabaseFirewallRules array = []
 
 @description('CIDR for virtual network.')
 param vnetAddressPrefix string = '10.30.0.0/16'
@@ -50,10 +56,11 @@ var logWorkspaceName = 'log-gpp-${environment}'
 var appInsightsName = 'appi-gpp-${environment}'
 var userAssignedIdentityName = 'id-gpp-${environment}'
 var vnetName = 'vnet-${suffix}'
+var effectivePostgresNetworkMode = cheapMode ? 'Public' : postgresNetworkMode
 var postgresSubnetResourceId = resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, 'snet-postgres')
 var functionSubnetResourceId = resourceId('Microsoft.Network/virtualNetworks/subnets', vnetName, 'snet-functions')
 
-resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = if (postgresNetworkMode == 'Private') {
+resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = if (effectivePostgresNetworkMode == 'Private') {
   name: vnetName
   location: location
   properties: {
@@ -95,12 +102,12 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = if (postgresNetwo
   }
 }
 
-resource privateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (postgresNetworkMode == 'Private') {
+resource privateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = if (effectivePostgresNetworkMode == 'Private') {
   name: 'privatelink.postgres.database.azure.com'
   location: 'global'
 }
 
-resource privateDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (postgresNetworkMode == 'Private') {
+resource privateDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = if (effectivePostgresNetworkMode == 'Private') {
   name: 'link-${suffix}'
   parent: privateDnsZone
   location: 'global'
@@ -112,7 +119,7 @@ resource privateDnsVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLin
   }
 }
 
-module observability './modules/observability.bicep' = {
+module observability './modules/observability.bicep' = if (!cheapMode) {
   params: {
     location: location
     logWorkspaceName: logWorkspaceName
@@ -120,18 +127,18 @@ module observability './modules/observability.bicep' = {
   }
 }
 
-module identity './modules/identity.bicep' = {
+module identity './modules/identity.bicep' = if (!cheapMode) {
   params: {
     location: location
     identityName: userAssignedIdentityName
   }
 }
 
-module keyVault './modules/keyvault.bicep' = {
+module keyVault './modules/keyvault.bicep' = if (!cheapMode) {
   params: {
     location: location
     keyVaultName: keyVaultName
-    principalId: identity.outputs.principalId
+    principalId: identity!.outputs.principalId
   }
 }
 
@@ -140,7 +147,7 @@ module storage './modules/storage.bicep' = {
     location: location
     storageAccountName: storageAccountName
     containerName: 'service-photos'
-    principalId: identity.outputs.principalId
+    principalId: cheapMode ? '' : identity!.outputs.principalId
   }
 }
 
@@ -151,9 +158,10 @@ module database './modules/database.bicep' = {
     databaseName: 'garbage_pail_pals'
     adminLogin: postgresAdminLogin
     adminPassword: postgresAdminPassword
-    networkMode: postgresNetworkMode
-    delegatedSubnetId: postgresNetworkMode == 'Private' ? postgresSubnetResourceId : ''
-    privateDnsZoneId: postgresNetworkMode == 'Private' ? privateDnsZone.id : ''
+    networkMode: effectivePostgresNetworkMode
+    delegatedSubnetId: effectivePostgresNetworkMode == 'Private' ? postgresSubnetResourceId : ''
+    privateDnsZoneId: effectivePostgresNetworkMode == 'Private' ? privateDnsZone.id : ''
+    publicFirewallRules: effectivePostgresNetworkMode == 'Public' ? publicDatabaseFirewallRules : []
   }
   dependsOn: [
     privateDnsVnetLink
@@ -165,13 +173,16 @@ module functionApp './modules/functionapp.bicep' = {
     location: location
     functionAppName: functionAppName
     planName: 'plan-${suffix}'
+    cheapMode: cheapMode
     storageAccountName: storageAccountName
-    identityResourceId: identity.outputs.resourceId
-    appInsightsConnectionString: observability.outputs.appInsightsConnectionString
+    identityResourceId: cheapMode ? '' : identity!.outputs.resourceId
+    appInsightsConnectionString: cheapMode ? '' : observability!.outputs.appInsightsConnectionString
     postgresFqdn: database.outputs.postgresFqdn
     postgresDatabaseName: 'garbage_pail_pals'
-    keyVaultUri: keyVault.outputs.vaultUri
-    functionSubnetId: postgresNetworkMode == 'Private' ? functionSubnetResourceId : ''
+    postgresAdminLogin: postgresAdminLogin
+    postgresAdminPassword: postgresAdminPassword
+    keyVaultUri: cheapMode ? '' : keyVault!.outputs.vaultUri
+    functionSubnetId: effectivePostgresNetworkMode == 'Private' ? functionSubnetResourceId : ''
   }
 }
 
