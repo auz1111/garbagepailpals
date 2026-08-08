@@ -27,8 +27,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build shared package for workspace exports
-        run: pnpm --filter @gpp/shared build
+      - name: Build workspace packages for exports
+        run: |
+          pnpm --filter @gpp/db build
+          pnpm --filter @gpp/shared build
 
       - name: Typecheck
         run: pnpm typecheck
