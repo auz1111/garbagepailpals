@@ -1,0 +1,943 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "languageVersion": "2.0",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "7209572430330526013"
+    }
+  },
+  "parameters": {
+    "environment": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "prod"
+      ],
+      "metadata": {
+        "description": "Deployment environment name."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westus2",
+      "allowedValues": [
+        "westus2",
+        "westus3"
+      ],
+      "metadata": {
+        "description": "Azure region for all resources. Set to westus2 by default, switch to westus3 if capacity constraints occur."
+      }
+    },
+    "namePrefix": {
+      "type": "string",
+      "defaultValue": "gpp",
+      "metadata": {
+        "description": "Base name prefix used for resource naming."
+      }
+    },
+    "cheapMode": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Enable the lowest-cost hosting shape: Functions Consumption plus public PostgreSQL networking."
+      }
+    },
+    "postgresAdminLogin": {
+      "type": "string",
+      "metadata": {
+        "description": "PostgreSQL administrator login name."
+      }
+    },
+    "postgresAdminPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL administrator password."
+      }
+    },
+    "postgresNetworkMode": {
+      "type": "string",
+      "defaultValue": "Private",
+      "allowedValues": [
+        "Public",
+        "Private"
+      ],
+      "metadata": {
+        "description": "Whether PostgreSQL should use public access with firewall or private VNet mode."
+      }
+    },
+    "publicDatabaseFirewallRules": {
+      "type": "array",
+      "defaultValue": [],
+      "metadata": {
+        "description": "Optional PostgreSQL firewall rules to create when public networking is enabled."
+      }
+    },
+    "vnetAddressPrefix": {
+      "type": "string",
+      "defaultValue": "10.30.0.0/16",
+      "metadata": {
+        "description": "CIDR for virtual network."
+      }
+    },
+    "postgresSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.30.1.0/24",
+      "metadata": {
+        "description": "CIDR for PostgreSQL delegated subnet."
+      }
+    },
+    "functionSubnetPrefix": {
+      "type": "string",
+      "defaultValue": "10.30.2.0/24",
+      "metadata": {
+        "description": "CIDR for Function App integration subnet."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[format('{0}-{1}', parameters('namePrefix'), parameters('environment'))]",
+    "storageAccountName": "[toLower(format('stgpp{0}', parameters('environment')))]",
+    "postgresServerName": "[format('psql-gpp-{0}', parameters('environment'))]",
+    "functionAppName": "[format('func-gpp-{0}', parameters('environment'))]",
+    "staticWebAppName": "[format('swa-gpp-{0}', parameters('environment'))]",
+    "keyVaultName": "[format('kv-gpp-{0}', parameters('environment'))]",
+    "logWorkspaceName": "[format('log-gpp-{0}', parameters('environment'))]",
+    "appInsightsName": "[format('appi-gpp-{0}', parameters('environment'))]",
+    "userAssignedIdentityName": "[format('id-gpp-{0}', parameters('environment'))]",
+    "vnetName": "[format('vnet-{0}', variables('suffix'))]",
+    "effectivePostgresNetworkMode": "[if(parameters('cheapMode'), 'Public', parameters('postgresNetworkMode'))]",
+    "postgresSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-postgres')]",
+    "functionSubnetResourceId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'snet-functions')]"
+  },
+  "resources": {
+    "vnet": {
+      "condition": "[equals(variables('effectivePostgresNetworkMode'), 'Private')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2024-05-01",
+      "name": "[variables('vnetName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetAddressPrefix')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "snet-postgres",
+            "properties": {
+              "addressPrefix": "[parameters('postgresSubnetPrefix')]",
+              "delegations": [
+                {
+                  "name": "postgresDelegation",
+                  "properties": {
+                    "serviceName": "Microsoft.DBforPostgreSQL/flexibleServers"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "snet-functions",
+            "properties": {
+              "addressPrefix": "[parameters('functionSubnetPrefix')]",
+              "delegations": [
+                {
+                  "name": "functionsDelegation",
+                  "properties": {
+                    "serviceName": "Microsoft.Web/serverFarms"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "privateDnsZone": {
+      "condition": "[equals(variables('effectivePostgresNetworkMode'), 'Private')]",
+      "type": "Microsoft.Network/privateDnsZones",
+      "apiVersion": "2024-06-01",
+      "name": "privatelink.postgres.database.azure.com",
+      "location": "global"
+    },
+    "privateDnsVnetLink": {
+      "condition": "[equals(variables('effectivePostgresNetworkMode'), 'Private')]",
+      "type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks",
+      "apiVersion": "2024-06-01",
+      "name": "[format('{0}/{1}', 'privatelink.postgres.database.azure.com', format('link-{0}', variables('suffix')))]",
+      "location": "global",
+      "properties": {
+        "registrationEnabled": false,
+        "virtualNetwork": {
+          "id": "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]"
+        }
+      },
+      "dependsOn": [
+        "privateDnsZone",
+        "vnet"
+      ]
+    },
+    "observability": {
+      "condition": "[not(parameters('cheapMode'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('observability-{0}', uniqueString('observability', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "logWorkspaceName": {
+            "value": "[variables('logWorkspaceName')]"
+          },
+          "appInsightsName": {
+            "value": "[variables('appInsightsName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "9918356972627708946"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "logWorkspaceName": {
+              "type": "string"
+            },
+            "appInsightsName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[parameters('logWorkspaceName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": 30
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[parameters('appInsightsName')]",
+              "location": "[parameters('location')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logWorkspaceName'))]",
+                "IngestionMode": "LogAnalytics"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logWorkspaceName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appInsightsConnectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', parameters('appInsightsName')), '2020-02-02').ConnectionString]"
+            },
+            "logWorkspaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', parameters('logWorkspaceName'))]"
+            }
+          }
+        }
+      }
+    },
+    "identity": {
+      "condition": "[not(parameters('cheapMode'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('identity-{0}', uniqueString('identity', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "identityName": {
+            "value": "[variables('userAssignedIdentityName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "12040694391072365190"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "identityName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2023-01-31",
+              "name": "[parameters('identityName')]",
+              "location": "[parameters('location')]"
+            }
+          ],
+          "outputs": {
+            "principalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName')), '2023-01-31').principalId]"
+            },
+            "resourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('identityName'))]"
+            }
+          }
+        }
+      }
+    },
+    "keyVault": {
+      "condition": "[not(parameters('cheapMode'))]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('keyVault-{0}', uniqueString('keyVault', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "keyVaultName": {
+            "value": "[variables('keyVaultName')]"
+          },
+          "principalId": {
+            "value": "[reference('identity').outputs.principalId.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "11292014024551125903"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[parameters('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "enableRbacAuthorization": true,
+                "tenantId": "[tenant().tenantId]",
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "enabledForDeployment": false,
+                "enabledForTemplateDeployment": false,
+                "enabledForDiskEncryption": false,
+                "softDeleteRetentionInDays": 90,
+                "enableSoftDelete": true,
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), parameters('principalId'), 'Key Vault Secrets User')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "vaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), '2023-07-01').vaultUri]"
+            },
+            "keyVaultName": {
+              "type": "string",
+              "value": "[parameters('keyVaultName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "identity"
+      ]
+    },
+    "storage": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('storage-{0}', uniqueString('storage', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "storageAccountName": {
+            "value": "[variables('storageAccountName')]"
+          },
+          "containerName": {
+            "value": "service-photos"
+          },
+          "principalId": "[if(parameters('cheapMode'), createObject('value', ''), createObject('value', reference('identity').outputs.principalId.value))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "4088096914900888847"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "containerName": {
+              "type": "string"
+            },
+            "principalId": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[parameters('storageAccountName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "supportsHttpsTrafficOnly": true
+              }
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}/default/{1}', parameters('storageAccountName'), parameters('containerName'))]",
+              "properties": {
+                "publicAccess": "None"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            },
+            {
+              "condition": "[not(empty(parameters('principalId')))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), parameters('principalId'), 'Storage Blob Data Contributor')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+                "principalId": "[parameters('principalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "storageAccountName": {
+              "type": "string",
+              "value": "[parameters('storageAccountName')]"
+            },
+            "servicePhotosContainerName": {
+              "type": "string",
+              "value": "[format('{0}/default/{1}', parameters('storageAccountName'), parameters('containerName'))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "identity"
+      ]
+    },
+    "database": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('database-{0}', uniqueString('database', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "serverName": {
+            "value": "[variables('postgresServerName')]"
+          },
+          "databaseName": {
+            "value": "garbage_pail_pals"
+          },
+          "adminLogin": {
+            "value": "[parameters('postgresAdminLogin')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          },
+          "networkMode": {
+            "value": "[variables('effectivePostgresNetworkMode')]"
+          },
+          "delegatedSubnetId": "[if(equals(variables('effectivePostgresNetworkMode'), 'Private'), createObject('value', variables('postgresSubnetResourceId')), createObject('value', ''))]",
+          "privateDnsZoneId": "[if(equals(variables('effectivePostgresNetworkMode'), 'Private'), createObject('value', resourceId('Microsoft.Network/privateDnsZones', 'privatelink.postgres.database.azure.com')), createObject('value', ''))]",
+          "publicFirewallRules": "[if(equals(variables('effectivePostgresNetworkMode'), 'Public'), createObject('value', parameters('publicDatabaseFirewallRules')), createObject('value', createArray()))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "400610271388618611"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "serverName": {
+              "type": "string"
+            },
+            "databaseName": {
+              "type": "string"
+            },
+            "adminLogin": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            },
+            "networkMode": {
+              "type": "string",
+              "allowedValues": [
+                "Public",
+                "Private"
+              ]
+            },
+            "delegatedSubnetId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Delegated subnet resource ID. Required when networkMode is Private."
+              }
+            },
+            "privateDnsZoneId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Private DNS zone resource ID. Required when networkMode is Private."
+              }
+            },
+            "publicFirewallRules": {
+              "type": "array",
+              "defaultValue": [],
+              "metadata": {
+                "description": "Optional firewall rules to create when networkMode is Public. Each item should include name, startIpAddress, and endIpAddress."
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2024-08-01",
+              "name": "[parameters('serverName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard_B1ms",
+                "tier": "Burstable"
+              },
+              "properties": {
+                "administratorLogin": "[parameters('adminLogin')]",
+                "administratorLoginPassword": "[parameters('adminPassword')]",
+                "version": "16",
+                "availabilityZone": "1",
+                "backup": {
+                  "backupRetentionDays": 7,
+                  "geoRedundantBackup": "Disabled"
+                },
+                "storage": {
+                  "storageSizeGB": 32,
+                  "autoGrow": "Enabled",
+                  "tier": "P4"
+                },
+                "network": {
+                  "delegatedSubnetResourceId": "[if(equals(parameters('networkMode'), 'Private'), parameters('delegatedSubnetId'), null())]",
+                  "privateDnsZoneArmResourceId": "[if(equals(parameters('networkMode'), 'Private'), parameters('privateDnsZoneId'), null())]",
+                  "publicNetworkAccess": "[if(equals(parameters('networkMode'), 'Private'), 'Disabled', 'Enabled')]"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]",
+              "properties": {
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "condition": "[equals(parameters('networkMode'), 'Public')]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "customPublicFirewallRules",
+                "count": "[length(parameters('publicFirewallRules'))]"
+              },
+              "condition": "[equals(parameters('networkMode'), 'Public')]",
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2024-08-01",
+              "name": "[format('{0}/{1}', parameters('serverName'), parameters('publicFirewallRules')[copyIndex()].name)]",
+              "properties": {
+                "startIpAddress": "[parameters('publicFirewallRules')[copyIndex()].startIpAddress]",
+                "endIpAddress": "[parameters('publicFirewallRules')[copyIndex()].endIpAddress]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "postgresServerId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+            },
+            "postgresFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2024-08-01').fullyQualifiedDomainName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "privateDnsVnetLink",
+        "privateDnsZone"
+      ]
+    },
+    "functionApp": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('functionApp-{0}', uniqueString('functionApp', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "functionAppName": {
+            "value": "[variables('functionAppName')]"
+          },
+          "planName": {
+            "value": "[format('plan-{0}', variables('suffix'))]"
+          },
+          "cheapMode": {
+            "value": "[parameters('cheapMode')]"
+          },
+          "storageAccountName": {
+            "value": "[variables('storageAccountName')]"
+          },
+          "identityResourceId": "[if(parameters('cheapMode'), createObject('value', ''), createObject('value', reference('identity').outputs.resourceId.value))]",
+          "appInsightsConnectionString": "[if(parameters('cheapMode'), createObject('value', ''), createObject('value', reference('observability').outputs.appInsightsConnectionString.value))]",
+          "postgresFqdn": {
+            "value": "[reference('database').outputs.postgresFqdn.value]"
+          },
+          "postgresDatabaseName": {
+            "value": "garbage_pail_pals"
+          },
+          "postgresAdminLogin": {
+            "value": "[parameters('postgresAdminLogin')]"
+          },
+          "postgresAdminPassword": {
+            "value": "[parameters('postgresAdminPassword')]"
+          },
+          "keyVaultUri": "[if(parameters('cheapMode'), createObject('value', ''), createObject('value', reference('keyVault').outputs.vaultUri.value))]",
+          "functionSubnetId": "[if(equals(variables('effectivePostgresNetworkMode'), 'Private'), createObject('value', variables('functionSubnetResourceId')), createObject('value', ''))]"
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "4014598847528161784"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "functionAppName": {
+              "type": "string"
+            },
+            "planName": {
+              "type": "string"
+            },
+            "cheapMode": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "identityResourceId": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "appInsightsConnectionString": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "postgresFqdn": {
+              "type": "string"
+            },
+            "postgresDatabaseName": {
+              "type": "string"
+            },
+            "postgresAdminLogin": {
+              "type": "string"
+            },
+            "postgresAdminPassword": {
+              "type": "securestring"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "functionSubnetId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Optional subnet ID for VNet integration."
+              }
+            }
+          },
+          "variables": {
+            "functionPlanSku": "[if(parameters('cheapMode'), createObject('tier', 'Dynamic', 'name', 'Y1'), createObject('tier', 'ElasticPremium', 'name', 'EP1'))]",
+            "functionPlanProperties": "[if(parameters('cheapMode'), createObject('reserved', true()), createObject('maximumElasticWorkerCount', 20, 'reserved', true()))]",
+            "optionalAppSettings": "[concat(if(empty(parameters('appInsightsConnectionString')), createArray(), createArray(createObject('name', 'APPINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')))), if(empty(parameters('keyVaultUri')), createArray(), createArray(createObject('name', 'KEY_VAULT_URI', 'value', parameters('keyVaultUri')))))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2020-10-01",
+              "name": "[parameters('planName')]",
+              "location": "[parameters('location')]",
+              "kind": "[if(parameters('cheapMode'), 'functionapp', 'linux')]",
+              "sku": "[variables('functionPlanSku')]",
+              "properties": "[variables('functionPlanProperties')]"
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2024-04-01",
+              "name": "[parameters('functionAppName')]",
+              "location": "[parameters('location')]",
+              "kind": "functionapp,linux",
+              "identity": "[if(empty(parameters('identityResourceId')), null(), createObject('type', 'UserAssigned', 'userAssignedIdentities', createObject(format('{0}', parameters('identityResourceId')), createObject())))]",
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]",
+                "httpsOnly": true,
+                "clientAffinityEnabled": false,
+                "siteConfig": {
+                  "linuxFxVersion": "NODE|22",
+                  "appSettings": "[concat(createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'node'), createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~22'), createObject('name', 'AzureWebJobsFeatureFlags', 'value', 'EnableWorkerIndexing'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1'), createObject('name', 'POSTGRES_HOST', 'value', parameters('postgresFqdn')), createObject('name', 'POSTGRES_DB', 'value', parameters('postgresDatabaseName')), createObject('name', 'DATABASE_URL', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'), parameters('postgresDatabaseName'))), createObject('name', 'DIRECT_URL', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'), parameters('postgresDatabaseName'))), createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value))), variables('optionalAppSettings'))]",
+                  "ftpsState": "Disabled",
+                  "vnetRouteAllEnabled": "[not(equals(parameters('functionSubnetId'), ''))]"
+                },
+                "virtualNetworkSubnetId": "[if(not(equals(parameters('functionSubnetId'), '')), parameters('functionSubnetId'), null())]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', parameters('planName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "functionAppResourceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/sites', parameters('functionAppName'))]"
+            },
+            "functionAppName": {
+              "type": "string",
+              "value": "[parameters('functionAppName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "database",
+        "identity",
+        "keyVault",
+        "observability"
+      ]
+    },
+    "staticWebApp": {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "[format('staticWebApp-{0}', uniqueString('staticWebApp', deployment().name))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "staticWebAppName": {
+            "value": "[variables('staticWebAppName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "17089348102308055956"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "staticWebAppName": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/staticSites",
+              "apiVersion": "2023-12-01",
+              "name": "[parameters('staticWebAppName')]",
+              "location": "[parameters('location')]",
+              "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+              },
+              "properties": {
+                "allowConfigFileUpdates": true,
+                "stagingEnvironmentPolicy": "Enabled"
+              }
+            }
+          ],
+          "outputs": {
+            "defaultHostname": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/staticSites', parameters('staticWebAppName')), '2023-12-01').defaultHostname]"
+            },
+            "staticWebAppName": {
+              "type": "string",
+              "value": "[parameters('staticWebAppName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "functionApp"
+      ]
+    }
+  },
+  "outputs": {
+    "staticWebAppHostname": {
+      "type": "string",
+      "value": "[reference('staticWebApp').outputs.defaultHostname.value]"
+    },
+    "functionAppName": {
+      "type": "string",
+      "value": "[reference('functionApp').outputs.functionAppName.value]"
+    },
+    "postgresFqdn": {
+      "type": "string",
+      "value": "[reference('database').outputs.postgresFqdn.value]"
+    }
+  }
+}
