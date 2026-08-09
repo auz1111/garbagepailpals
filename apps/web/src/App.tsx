@@ -160,7 +160,7 @@ export function App() {
                   />
                   <p className="subtext">
                     Garbage Pail Pals rolls your bins to the curb and back — right on schedule.
-                    Residents, operators, and admins share one tidy dashboard so nothing slips.
+                    Residents and operators stay in sync on one tidy dashboard so nothing slips.
                   </p>
                   <div className="landing-actions">
                     <button type="button" className="cta-primary" onClick={() => navigate(primaryActionPath)}>
@@ -204,9 +204,9 @@ export function App() {
                 <section id="features" className="landing-band">
                   <div className="landing-band-header center">
                     <p className="eyebrow">Features</p>
-                    <h3>Built for everyone in the pickup loop.</h3>
+                    <h3>Built for both sides of the curb.</h3>
                     <p className="subtext">
-                      One platform, three tidy experiences — no phone tag, no missed cans.
+                      One platform, two tidy experiences — no phone tag, no missed cans.
                     </p>
                   </div>
                   <div className="landing-grid">
@@ -221,9 +221,9 @@ export function App() {
                       <p>Claim upcoming jobs, update outcomes, and keep route progress crystal clear.</p>
                     </article>
                     <article className="landing-card">
-                      <div className="card-icon" aria-hidden="true">📊</div>
-                      <h4>For Admins</h4>
-                      <p>Track incidents, runtime health, and service metrics from one control panel.</p>
+                      <div className="card-icon" aria-hidden="true">🔔</div>
+                      <h4>Always in the loop</h4>
+                      <p>Automatic reminders and real-time job status keep everyone on the same page.</p>
                     </article>
                   </div>
                 </section>
@@ -290,11 +290,11 @@ export function App() {
                     <article className="landing-card">
                       <h4>Pro Ops</h4>
                       <p className="price">$89<span>/month</span></p>
-                      <p>For property managers who need operator workflows and reporting.</p>
+                      <p>For property managers juggling multiple addresses and operator scheduling.</p>
                       <ul className="plan-features">
                         <li>Multiple addresses</li>
                         <li>Operator job assignment</li>
-                        <li>Admin reporting dashboards</li>
+                        <li>Service reports &amp; history</li>
                       </ul>
                       <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
                         Go Pro Ops

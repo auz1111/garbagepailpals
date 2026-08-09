@@ -271,21 +271,7 @@ a {
 
 .landing-hero h2 .accent {
   color: var(--teal);
-  position: relative;
   white-space: nowrap;
-}
-
-.landing-hero h2 .accent::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0.06em;
-  height: 0.14em;
-  background: var(--gold);
-  border-radius: 999px;
-  z-index: -1;
-  opacity: 0.85;
 }
 
 .landing-hero .subtext {
