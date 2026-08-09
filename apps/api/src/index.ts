@@ -92,49 +92,49 @@ app.http("operator-jobs-status", {
 });
 
 app.http("admin-dashboard", {
-  route: "admin/dashboard",
+  route: "ops-admin/dashboard",
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminDashboardMetricsHandler
 });
 
 app.http("admin-runtime-metrics", {
-  route: "admin/ops/runtime-metrics",
+  route: "ops-admin/runtime-metrics",
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminRuntimeMetricsHandler
 });
 
 app.http("admin-incidents", {
-  route: "admin/ops/incidents",
+  route: "ops-admin/incidents",
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminIncidentsHandler
 });
 
 app.http("admin-incidents-acknowledge", {
-  route: "admin/ops/incidents/{incidentId}/acknowledge",
+  route: "ops-admin/incidents/{incidentId}/acknowledge",
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAcknowledgeIncidentHandler
 });
 
 app.http("admin-incidents-assign", {
-  route: "admin/ops/incidents/{incidentId}/assign",
+  route: "ops-admin/incidents/{incidentId}/assign",
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAssignIncidentHandler
 });
 
 app.http("admin-incidents-resolve", {
-  route: "admin/ops/incidents/{incidentId}/resolve",
+  route: "ops-admin/incidents/{incidentId}/resolve",
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminResolveIncidentHandler
 });
 
 app.http("admin-incidents-reopen", {
-  route: "admin/ops/incidents/{incidentId}/reopen",
+  route: "ops-admin/incidents/{incidentId}/reopen",
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminReopenIncidentHandler

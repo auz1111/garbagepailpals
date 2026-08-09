@@ -114,7 +114,7 @@ export function getOperatorRoute(accessToken: string): Promise<ProtectedMessage>
 }
 
 export function getAdminRoute(accessToken: string): Promise<ProtectedMessage> {
-  return request<undefined, ProtectedMessage>("/admin/dashboard", "GET", undefined, accessToken);
+  return request<undefined, ProtectedMessage>("/ops-admin/dashboard", "GET", undefined, accessToken);
 }
 
 export function getOperatorQueue(accessToken: string): Promise<OperatorQueueResponse> {
@@ -139,11 +139,11 @@ export function updateOperatorJobStatus(
 }
 
 export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDashboardMetrics> {
-  return request<undefined, AdminDashboardMetrics>("/admin/dashboard", "GET", undefined, accessToken);
+  return request<undefined, AdminDashboardMetrics>("/ops-admin/dashboard", "GET", undefined, accessToken);
 }
 
 export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntimeMetrics> {
-  return request<undefined, AdminRuntimeMetrics>("/admin/ops/runtime-metrics", "GET", undefined, accessToken);
+  return request<undefined, AdminRuntimeMetrics>("/ops-admin/runtime-metrics", "GET", undefined, accessToken);
 }
 
 export function getAdminIncidents(accessToken: string, filter?: AdminIncidentFilter): Promise<AdminIncidentFeed> {
@@ -162,7 +162,7 @@ export function getAdminIncidents(accessToken: string, filter?: AdminIncidentFil
   }
 
   const query = params.toString();
-  const path = query ? `/admin/ops/incidents?${query}` : "/admin/ops/incidents";
+  const path = query ? `/ops-admin/incidents?${query}` : "/ops-admin/incidents";
   return request<undefined, AdminIncidentFeed>(path, "GET", undefined, accessToken);
 }
 
@@ -172,7 +172,7 @@ export function acknowledgeAdminIncident(
   accessToken: string
 ): Promise<AdminIncidentAcknowledgeResponse> {
   return request<AdminIncidentAcknowledgeRequest, AdminIncidentAcknowledgeResponse>(
-    `/admin/ops/incidents/${incidentId}/acknowledge`,
+    `/ops-admin/incidents/${incidentId}/acknowledge`,
     "POST",
     input,
     accessToken
@@ -185,7 +185,7 @@ export function assignAdminIncident(
   accessToken: string
 ): Promise<AdminIncidentAssignResponse> {
   return request<AdminIncidentAssignRequest, AdminIncidentAssignResponse>(
-    `/admin/ops/incidents/${incidentId}/assign`,
+    `/ops-admin/incidents/${incidentId}/assign`,
     "POST",
     input,
     accessToken
@@ -198,7 +198,7 @@ export function resolveAdminIncident(
   accessToken: string
 ): Promise<AdminIncidentResolveResponse> {
   return request<AdminIncidentResolveRequest, AdminIncidentResolveResponse>(
-    `/admin/ops/incidents/${incidentId}/resolve`,
+    `/ops-admin/incidents/${incidentId}/resolve`,
     "POST",
     input,
     accessToken
@@ -211,7 +211,7 @@ export function reopenAdminIncident(
   accessToken: string
 ): Promise<AdminIncidentReopenResponse> {
   return request<AdminIncidentReopenRequest, AdminIncidentReopenResponse>(
-    `/admin/ops/incidents/${incidentId}/reopen`,
+    `/ops-admin/incidents/${incidentId}/reopen`,
     "POST",
     input,
     accessToken
