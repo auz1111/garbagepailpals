@@ -1,6 +1,7 @@
 /* ==========================================================================
    Garbage Pail Pals — design system
-   Inspired by canmonkey.com: near-black on white, coral accent,
+   Brand: teal (#055a5f) + marigold (#f7a81b), from the running-can mascot.
+   Layout inspired by canmonkey.com: near-black headlines on white,
    Inter + Fragment Mono, big radii, pill buttons, airy whitespace.
    ========================================================================== */
 
@@ -8,25 +9,28 @@
   /* Palette */
   --ink: #0a0d15;
   --ink-soft: #1e293b;
-  --slate: #535867;
-  --slate-2: #64748b;
+  --slate: #4d5b5b;
+  --slate-2: #64757a;
   --muted: #94a3b8;
-  --line: #e6e9f0;
-  --line-2: #cbd5e1;
+  --line: #e4ecec;
+  --line-2: #c6d6d5;
   --surface: #ffffff;
-  --surface-2: #f6f8fc;
-  --surface-3: #eef2f9;
+  --surface-2: #f3f9f8;
+  --surface-3: #e9f2f1;
 
-  /* Brand — coral */
-  --coral: #ff573b;
-  --coral-2: #ff7f65;
-  --coral-3: #ff9f7d;
-  --coral-ink: #b3311d;
-  --coral-wash: #fff1ec;
+  /* Brand — teal (from mascot body) */
+  --teal: #055a5f;
+  --teal-2: #0a7479;
+  --teal-deep: #043e42;
+  --teal-ink: #044247;
+  --teal-wash: #e4f1f1;
 
-  /* Accent — sky */
-  --sky: #49a6ff;
-  --sky-ink: #17508c;
+  /* Accent — marigold (from mascot lid/arms) */
+  --gold: #f7a81b;
+  --gold-2: #ffc04d;
+  --gold-3: #ffcf78;
+  --gold-ink: #b5750a;
+  --gold-wash: #fff4df;
 
   /* Feedback */
   --ok: #057a55;
@@ -42,10 +46,10 @@
   --r-lg: 24px;
   --r-xl: 32px;
   --pill: 999px;
-  --shadow-sm: 0 2px 8px rgba(10, 13, 21, 0.05);
-  --shadow-md: 0 12px 30px rgba(10, 13, 21, 0.08);
-  --shadow-lg: 0 28px 60px rgba(10, 13, 21, 0.14);
-  --shadow-coral: 0 14px 30px rgba(255, 87, 59, 0.28);
+  --shadow-sm: 0 2px 8px rgba(4, 62, 66, 0.06);
+  --shadow-md: 0 12px 30px rgba(4, 62, 66, 0.1);
+  --shadow-lg: 0 28px 60px rgba(4, 62, 66, 0.16);
+  --shadow-gold: 0 14px 28px rgba(247, 168, 27, 0.4);
 
   --maxw: 1120px;
 
@@ -152,13 +156,15 @@ a {
   letter-spacing: -0.03em;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
   white-space: nowrap;
+  color: var(--teal);
 }
 
-.topbar h1::before {
-  content: "🗑️";
-  font-size: 1.35rem;
+.brand-logo {
+  height: 38px;
+  width: auto;
+  display: block;
 }
 
 .nav-links {
@@ -224,7 +230,7 @@ a {
   font-weight: 400;
   letter-spacing: 0.14em;
   font-size: 0.72rem;
-  color: var(--coral);
+  color: var(--teal);
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -234,7 +240,7 @@ a {
   content: "";
   width: 22px;
   height: 1px;
-  background: var(--coral);
+  background: var(--gold);
 }
 
 /* Hero -------------------------------------------------------------------- */
@@ -245,8 +251,8 @@ a {
   text-align: center;
   padding: clamp(3.5rem, 9vw, 7rem) clamp(1rem, 5vw, 2rem) clamp(3rem, 7vw, 5.5rem);
   background:
-    radial-gradient(60% 60% at 50% -10%, rgba(255, 127, 101, 0.16) 0%, transparent 60%),
-    radial-gradient(50% 50% at 90% 20%, rgba(73, 166, 255, 0.1) 0%, transparent 60%),
+    radial-gradient(60% 60% at 50% -10%, rgba(247, 168, 27, 0.18) 0%, transparent 60%),
+    radial-gradient(52% 52% at 88% 18%, rgba(5, 90, 95, 0.12) 0%, transparent 62%),
     var(--surface);
 }
 
@@ -264,7 +270,22 @@ a {
 }
 
 .landing-hero h2 .accent {
-  color: var(--coral);
+  color: var(--teal);
+  position: relative;
+  white-space: nowrap;
+}
+
+.landing-hero h2 .accent::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.06em;
+  height: 0.14em;
+  background: var(--gold);
+  border-radius: 999px;
+  z-index: -1;
+  opacity: 0.85;
 }
 
 .landing-hero .subtext {
@@ -294,14 +315,14 @@ a {
 }
 
 .cta-primary {
-  color: #fff;
-  background: linear-gradient(120deg, var(--coral), var(--coral-2));
-  box-shadow: var(--shadow-coral);
+  color: var(--teal-deep);
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  box-shadow: var(--shadow-gold);
 }
 
 .cta-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 20px 40px rgba(255, 87, 59, 0.36);
+  box-shadow: 0 20px 40px rgba(247, 168, 27, 0.5);
 }
 
 .cta-secondary {
@@ -313,6 +334,31 @@ a {
 .cta-secondary:hover {
   border-color: var(--ink);
   transform: translateY(-2px);
+}
+
+.hero-logo {
+  display: block;
+  width: clamp(190px, 30vw, 300px);
+  height: auto;
+  margin: 1.4rem auto 1.6rem;
+  filter: drop-shadow(0 22px 30px rgba(4, 62, 66, 0.18));
+  animation: hero-float 5s ease-in-out infinite;
+}
+
+@keyframes hero-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(1deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-logo {
+    animation: none;
+  }
 }
 
 .landing-jump-links {
@@ -336,8 +382,8 @@ a {
 }
 
 .landing-jump-links a:hover {
-  border-color: var(--coral);
-  color: var(--coral-ink);
+  border-color: var(--teal);
+  color: var(--teal);
 }
 
 /* Trust bar --------------------------------------------------------------- */
@@ -430,7 +476,7 @@ a {
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: var(--coral-wash);
+  background: var(--teal-wash);
   font-size: 1.5rem;
   margin-bottom: 1rem;
 }
@@ -464,7 +510,7 @@ a {
 .step-num {
   font-family: "Fragment Mono", ui-monospace, monospace;
   font-size: 0.9rem;
-  color: var(--coral);
+  color: var(--gold-ink);
   font-weight: 400;
   margin-bottom: 0.9rem;
 }
@@ -476,7 +522,7 @@ a {
 /* Pricing ----------------------------------------------------------------- */
 
 .landing-card-highlight {
-  border: 1.5px solid var(--coral);
+  border: 1.5px solid var(--gold);
   box-shadow: var(--shadow-md);
   position: relative;
 }
@@ -486,8 +532,8 @@ a {
   position: absolute;
   top: -0.75rem;
   left: 1.6rem;
-  background: var(--coral);
-  color: #fff;
+  background: var(--gold);
+  color: var(--teal-deep);
   font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.06em;
@@ -531,7 +577,7 @@ a {
   position: absolute;
   left: 0;
   top: 0;
-  color: var(--coral);
+  color: var(--teal-2);
   font-weight: 900;
 }
 
@@ -556,10 +602,10 @@ a {
 }
 
 .landing-card-highlight .plan-cta {
-  background: linear-gradient(120deg, var(--coral), var(--coral-2));
-  color: #fff;
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  color: var(--teal-deep);
   border-color: transparent;
-  box-shadow: var(--shadow-coral);
+  box-shadow: var(--shadow-gold);
 }
 
 /* Testimonial ------------------------------------------------------------- */
@@ -582,7 +628,7 @@ a {
 }
 
 .testimonial .stars {
-  color: var(--coral);
+  color: var(--gold);
   font-size: 1.1rem;
   letter-spacing: 0.15em;
   margin-bottom: 1.2rem;
@@ -607,7 +653,9 @@ a {
 
 .landing-band-contact {
   max-width: none;
-  background: var(--ink);
+  background:
+    radial-gradient(70% 90% at 50% -10%, rgba(247, 168, 27, 0.16) 0%, transparent 60%),
+    var(--teal-deep);
   color: #fff;
   text-align: center;
 }
@@ -618,12 +666,12 @@ a {
 }
 
 .landing-band-contact .eyebrow {
-  color: var(--coral-3);
+  color: var(--gold-3);
   justify-content: center;
 }
 
 .landing-band-contact .eyebrow::before {
-  background: var(--coral-3);
+  background: var(--gold-3);
 }
 
 .landing-band-contact h3 {
@@ -679,10 +727,12 @@ a {
   gap: 0.5rem;
   font-weight: 900;
   letter-spacing: -0.02em;
+  color: var(--teal);
 }
 
-.site-footer .brand::before {
-  content: "🗑️";
+.site-footer .brand img {
+  height: 30px;
+  width: auto;
 }
 
 .site-footer small {
@@ -786,20 +836,20 @@ select {
 input:focus,
 select:focus {
   outline: none;
-  border-color: var(--coral);
-  box-shadow: 0 0 0 3px rgba(255, 87, 59, 0.15);
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px rgba(5, 90, 95, 0.18);
 }
 
 button[type="submit"] {
   border: 0;
   border-radius: var(--pill);
   padding: 0.8rem;
-  font-weight: 700;
+  font-weight: 800;
   font-size: 1rem;
   cursor: pointer;
-  background: linear-gradient(120deg, var(--coral), var(--coral-2));
-  color: #fff;
-  box-shadow: var(--shadow-coral);
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  color: var(--teal-deep);
+  box-shadow: var(--shadow-gold);
   transition: transform 0.12s ease, box-shadow 0.15s ease;
 }
 
@@ -891,7 +941,7 @@ button[type="submit"]:disabled {
 .link-button {
   border: 0;
   background: transparent;
-  color: var(--coral-ink);
+  color: var(--teal);
   text-align: left;
   padding: 0;
   cursor: pointer;

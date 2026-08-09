@@ -125,7 +125,10 @@ export function App() {
     <main className="page">
       <section className="app-shell">
         <header className="topbar">
-          <h1>Garbage Pail Pals</h1>
+          <h1>
+            <img className="brand-logo" src="/logo-96.png" width={96} height={96} alt="Garbage Pail Pals logo" />
+            Garbage Pail Pals
+          </h1>
           <nav className="nav-links">
             <Link to="/">Home</Link>
             <Link to="/auth">Auth</Link>
@@ -148,6 +151,13 @@ export function App() {
                   <h2>
                     Never think about <span className="accent">trash day</span> again.
                   </h2>
+                  <img
+                    className="hero-logo"
+                    src="/logo-hero.png"
+                    width={520}
+                    height={520}
+                    alt="Garbage Pail Pals mascot — a smiling trash can rolling to the curb"
+                  />
                   <p className="subtext">
                     Garbage Pail Pals rolls your bins to the curb and back — right on schedule.
                     Residents, operators, and admins share one tidy dashboard so nothing slips.
@@ -326,7 +336,10 @@ export function App() {
                 <footer className="site-footer">
                   <div className="site-footer-inner">
                     <div>
-                      <div className="brand">Garbage Pail Pals</div>
+                      <div className="brand">
+                        <img src="/logo-96.png" width={96} height={96} alt="" aria-hidden="true" />
+                        Garbage Pail Pals
+                      </div>
                       <small>Can-to-curb service, minus the scramble.</small>
                     </div>
                     <nav aria-label="Footer">
