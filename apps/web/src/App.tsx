@@ -108,6 +108,8 @@ export function App() {
     navigate("/auth");
   }
 
+  const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
+
   if (isBootstrapping) {
     return (
       <main className="page">
@@ -125,6 +127,8 @@ export function App() {
         <header className="topbar">
           <h1>Garbage Pail Pals</h1>
           <nav className="nav-links">
+            <Link to="/">Home</Link>
+            <Link to="/auth">Auth</Link>
             <Link to="/customer">Customer</Link>
             <Link to="/operator">Operator</Link>
             <Link to="/admin">Admin</Link>
@@ -135,10 +139,101 @@ export function App() {
         </header>
 
         <Routes>
-          <Route path="/" element={<Navigate to={user ? defaultRouteForRole(user.role) : "/auth"} replace />} />
+          <Route
+            path="/"
+            element={
+              <section className="landing">
+                <div className="landing-hero" id="top">
+                  <p className="eyebrow">Neighborhood curbside coordination</p>
+                  <h2>Garbage day, minus the scramble.</h2>
+                  <p className="subtext">
+                    One place for residents, operators, and admins to keep pickups on schedule and visible.
+                  </p>
+                  <div className="landing-actions">
+                    <button type="button" className="cta-primary" onClick={() => navigate(primaryActionPath)}>
+                      {isAuthenticated ? "Go to dashboard" : "Sign in"}
+                    </button>
+                    {!isAuthenticated ? (
+                      <button type="button" className="cta-secondary" onClick={() => navigate("/auth")}>
+                        Create account
+                      </button>
+                    ) : null}
+                  </div>
+                  <nav className="landing-jump-links" aria-label="Homepage sections">
+                    <a href="#features">Features</a>
+                    <a href="#pricing">Pricing</a>
+                    <a href="#contact">Contact</a>
+                  </nav>
+                </div>
+
+                <section id="features" className="landing-band">
+                  <div className="landing-band-header">
+                    <p className="eyebrow">Features</p>
+                    <h3>Built for everyone in the pickup loop.</h3>
+                  </div>
+                  <div className="landing-grid">
+                    <article className="landing-card">
+                      <h4>For Customers</h4>
+                      <p>Manage addresses, schedules, holds, and billing without calling support.</p>
+                    </article>
+                    <article className="landing-card">
+                      <h4>For Operators</h4>
+                      <p>Claim upcoming jobs, update outcomes, and keep route progress clean.</p>
+                    </article>
+                    <article className="landing-card">
+                      <h4>For Admins</h4>
+                      <p>See incidents, runtime health, and service metrics in one control panel.</p>
+                    </article>
+                  </div>
+                </section>
+
+                <section id="pricing" className="landing-band">
+                  <div className="landing-band-header">
+                    <p className="eyebrow">Pricing</p>
+                    <h3>Simple plans with no mystery fees.</h3>
+                  </div>
+                  <div className="landing-grid">
+                    <article className="landing-card">
+                      <h4>Starter</h4>
+                      <p className="price">$19<span>/month</span></p>
+                      <p>Perfect for single-address households that want reliable reminders.</p>
+                    </article>
+                    <article className="landing-card landing-card-highlight">
+                      <h4>Neighborhood</h4>
+                      <p className="price">$39<span>/month</span></p>
+                      <p>Great for larger households and frequent service changes.</p>
+                    </article>
+                    <article className="landing-card">
+                      <h4>Pro Ops</h4>
+                      <p className="price">$89<span>/month</span></p>
+                      <p>Includes operator workflow support and admin reporting dashboards.</p>
+                    </article>
+                  </div>
+                </section>
+
+                <section id="contact" className="landing-band landing-band-contact">
+                  <div className="landing-band-header">
+                    <p className="eyebrow">Contact</p>
+                    <h3>Ready to make pickup day predictable?</h3>
+                    <p className="subtext">
+                      Start with an account and switch to your role dashboard in seconds.
+                    </p>
+                  </div>
+                  <div className="landing-actions">
+                    <button type="button" className="cta-primary" onClick={() => navigate("/auth")}>
+                      Get started
+                    </button>
+                    <a className="cta-link" href="#top">
+                      Back to top
+                    </a>
+                  </div>
+                </section>
+              </section>
+            }
+          />
           <Route
             path="/auth"
-            element={
+            element={isAuthenticated && user ? <Navigate to={defaultRouteForRole(user.role)} replace /> : (
               <section className="card">
                 <p className="subtext">Phase 3 auth + role shells.</p>
                 <div className="tabs">
@@ -190,7 +285,7 @@ export function App() {
                   </form>
                 )}
               </section>
-            }
+            )}
           />
 
           <Route

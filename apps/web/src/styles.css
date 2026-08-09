@@ -1,7 +1,10 @@
 :root {
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: "Avenir Next", "Gill Sans", "Trebuchet MS", sans-serif;
   color: #1a1a1a;
-  background: radial-gradient(circle at top left, #fff8e7, #eaf9ff 60%, #d6f0ff);
+  background:
+    radial-gradient(1300px 720px at 8% -10%, #fff2cc 0%, transparent 60%),
+    radial-gradient(1100px 650px at 95% 0%, #d8f4ff 0%, transparent 56%),
+    linear-gradient(180deg, #f8fbff 0%, #f2f8ff 100%);
 }
 
 * {
@@ -11,6 +14,10 @@
 body {
   margin: 0;
   min-height: 100vh;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 .page {
@@ -33,6 +40,150 @@ body {
   width: min(960px, 100%);
   display: grid;
   gap: 1rem;
+}
+
+.landing {
+  display: grid;
+  gap: 1rem;
+}
+
+.landing-hero {
+  border: 2px solid #111;
+  border-radius: 20px;
+  padding: 1.5rem;
+  background: linear-gradient(130deg, #ffffffde 0%, #f6fcffde 70%, #eef8ffde 100%);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.12);
+}
+
+.landing-hero h2 {
+  margin: 0.25rem 0 0.55rem;
+  font-size: clamp(1.5rem, 3.8vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.landing-jump-links {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.landing-jump-links a {
+  text-decoration: none;
+  color: #0f172a;
+  font-weight: 700;
+  border: 1px solid #b9c7dc;
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  background: #ffffff;
+}
+
+.landing-jump-links a:hover {
+  border-color: #4a74b5;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  color: #2563eb;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 1rem;
+}
+
+.cta-primary,
+.cta-secondary {
+  border-radius: 999px;
+  padding: 0.6rem 1rem;
+  font-weight: 800;
+  border: 1px solid #111;
+  cursor: pointer;
+}
+
+.cta-primary {
+  color: #fff;
+  background: linear-gradient(120deg, #0070f3, #005bc4);
+}
+
+.cta-secondary {
+  color: #0f172a;
+  background: #fff;
+}
+
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.landing-band {
+  border: 1px solid #d6deeb;
+  border-radius: 18px;
+  padding: 1.1rem;
+  background: #ffffffd7;
+}
+
+.landing-band-header h3 {
+  margin: 0.15rem 0 0.35rem;
+}
+
+.landing-card h4 {
+  margin-top: 0;
+  margin-bottom: 0.35rem;
+  font-size: 1.05rem;
+}
+
+.landing-card-highlight {
+  border: 1px solid #4f80d8;
+  box-shadow: 0 10px 24px rgba(79, 128, 216, 0.16);
+}
+
+.price {
+  margin: 0 0 0.45rem;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #0f172a;
+}
+
+.price span {
+  font-size: 0.9rem;
+  color: #475569;
+  font-weight: 700;
+}
+
+.landing-band-contact {
+  background: linear-gradient(160deg, #ffffffde 0%, #eef6ffde 100%);
+}
+
+.cta-link {
+  align-self: center;
+  color: #1e3a8a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cta-link:hover {
+  text-decoration: underline;
+}
+
+.landing-card {
+  border: 1px solid #cdd5e1;
+  border-radius: 14px;
+  padding: 1rem;
+  background: #ffffffea;
+}
+
+.landing-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.35rem;
 }
 
 .topbar {
@@ -217,6 +368,10 @@ select {
 
 @media (max-width: 860px) {
   .panel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-grid {
     grid-template-columns: 1fr;
   }
 }
