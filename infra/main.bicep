@@ -190,7 +190,6 @@ module staticWebApp './modules/staticwebapp.bicep' = {
   params: {
     location: location
     staticWebAppName: staticWebAppName
-    backendFunctionAppName: functionAppName
   }
   dependsOn: [
     functionApp

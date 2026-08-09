@@ -1,6 +1,5 @@
 param location string
 param staticWebAppName string
-param backendFunctionAppName string
 
 resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
   name: staticWebAppName
@@ -12,15 +11,6 @@ resource staticWebApp 'Microsoft.Web/staticSites@2023-12-01' = {
   properties: {
     allowConfigFileUpdates: true
     stagingEnvironmentPolicy: 'Enabled'
-  }
-}
-
-resource backendLink 'Microsoft.Web/staticSites/linkedBackends@2023-12-01' = {
-  name: 'functions-backend'
-  parent: staticWebApp
-  properties: {
-    backendResourceId: resourceId('Microsoft.Web/sites', backendFunctionAppName)
-    region: location
   }
 }
 
