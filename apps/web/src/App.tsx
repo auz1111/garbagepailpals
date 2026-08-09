@@ -144,90 +144,200 @@ export function App() {
             element={
               <section className="landing">
                 <div className="landing-hero" id="top">
-                  <p className="eyebrow">Neighborhood curbside coordination</p>
-                  <h2>Garbage day, minus the scramble.</h2>
+                  <p className="eyebrow">Curbside can-to-curb service</p>
+                  <h2>
+                    Never think about <span className="accent">trash day</span> again.
+                  </h2>
                   <p className="subtext">
-                    One place for residents, operators, and admins to keep pickups on schedule and visible.
+                    Garbage Pail Pals rolls your bins to the curb and back — right on schedule.
+                    Residents, operators, and admins share one tidy dashboard so nothing slips.
                   </p>
                   <div className="landing-actions">
                     <button type="button" className="cta-primary" onClick={() => navigate(primaryActionPath)}>
-                      {isAuthenticated ? "Go to dashboard" : "Sign in"}
+                      {isAuthenticated ? "Go to dashboard" : "Start free trial"}
                     </button>
                     {!isAuthenticated ? (
                       <button type="button" className="cta-secondary" onClick={() => navigate("/auth")}>
-                        Create account
+                        Sign in
                       </button>
                     ) : null}
                   </div>
                   <nav className="landing-jump-links" aria-label="Homepage sections">
                     <a href="#features">Features</a>
+                    <a href="#how">How it works</a>
                     <a href="#pricing">Pricing</a>
                     <a href="#contact">Contact</a>
                   </nav>
                 </div>
 
+                <section className="trust-bar" aria-label="At a glance">
+                  <div className="trust-bar-inner">
+                    <div className="trust-stat">
+                      <strong>4,000+</strong>
+                      <span>Bins rolled every week</span>
+                    </div>
+                    <div className="trust-stat">
+                      <strong>99.6%</strong>
+                      <span>On-time pickups</span>
+                    </div>
+                    <div className="trust-stat">
+                      <strong>4.9★</strong>
+                      <span>Average neighbor rating</span>
+                    </div>
+                    <div className="trust-stat">
+                      <strong>0</strong>
+                      <span>Missed trash days on us</span>
+                    </div>
+                  </div>
+                </section>
+
                 <section id="features" className="landing-band">
-                  <div className="landing-band-header">
+                  <div className="landing-band-header center">
                     <p className="eyebrow">Features</p>
                     <h3>Built for everyone in the pickup loop.</h3>
+                    <p className="subtext">
+                      One platform, three tidy experiences — no phone tag, no missed cans.
+                    </p>
                   </div>
                   <div className="landing-grid">
                     <article className="landing-card">
-                      <h4>For Customers</h4>
-                      <p>Manage addresses, schedules, holds, and billing without calling support.</p>
+                      <div className="card-icon" aria-hidden="true">🏠</div>
+                      <h4>For Residents</h4>
+                      <p>Manage addresses, schedules, holds, and billing without ever calling support.</p>
                     </article>
                     <article className="landing-card">
+                      <div className="card-icon" aria-hidden="true">🚚</div>
                       <h4>For Operators</h4>
-                      <p>Claim upcoming jobs, update outcomes, and keep route progress clean.</p>
+                      <p>Claim upcoming jobs, update outcomes, and keep route progress crystal clear.</p>
                     </article>
                     <article className="landing-card">
+                      <div className="card-icon" aria-hidden="true">📊</div>
                       <h4>For Admins</h4>
-                      <p>See incidents, runtime health, and service metrics in one control panel.</p>
+                      <p>Track incidents, runtime health, and service metrics from one control panel.</p>
                     </article>
                   </div>
                 </section>
 
+                <section id="how" className="landing-band landing-band-steps">
+                  <div className="landing-band steps-inner" style={{ padding: 0 }}>
+                    <div className="landing-band-header center">
+                      <p className="eyebrow">How it works</p>
+                      <h3>Set it once. We handle the rest.</h3>
+                    </div>
+                    <div className="landing-grid">
+                      <article className="landing-card step-card">
+                        <div className="step-num">01</div>
+                        <h4>Tell us your schedule</h4>
+                        <p>Add your address and pickup days. Set holds for vacations in a tap.</p>
+                      </article>
+                      <article className="landing-card step-card">
+                        <div className="step-num">02</div>
+                        <h4>We roll your bins</h4>
+                        <p>An operator brings your cans to the curb the night before and back after pickup.</p>
+                      </article>
+                      <article className="landing-card step-card">
+                        <div className="step-num">03</div>
+                        <h4>Stay in the loop</h4>
+                        <p>Get confirmations and reminders, and see every job's status in real time.</p>
+                      </article>
+                    </div>
+                  </div>
+                </section>
+
                 <section id="pricing" className="landing-band">
-                  <div className="landing-band-header">
+                  <div className="landing-band-header center">
                     <p className="eyebrow">Pricing</p>
                     <h3>Simple plans with no mystery fees.</h3>
+                    <p className="subtext">Every plan starts with a two-week free trial. Cancel anytime.</p>
                   </div>
                   <div className="landing-grid">
                     <article className="landing-card">
                       <h4>Starter</h4>
                       <p className="price">$19<span>/month</span></p>
-                      <p>Perfect for single-address households that want reliable reminders.</p>
+                      <p>For single-address households that want reliable service and reminders.</p>
+                      <ul className="plan-features">
+                        <li>One bin, one pickup day</li>
+                        <li>Curbside roll-out &amp; return</li>
+                        <li>Text &amp; email reminders</li>
+                      </ul>
+                      <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
+                        Go Starter
+                      </button>
                     </article>
                     <article className="landing-card landing-card-highlight">
                       <h4>Neighborhood</h4>
                       <p className="price">$39<span>/month</span></p>
-                      <p>Great for larger households and frequent service changes.</p>
+                      <p>For larger households with recycling, yard waste, and frequent changes.</p>
+                      <ul className="plan-features">
+                        <li>Up to 3 bins</li>
+                        <li>Vacation holds &amp; reschedules</li>
+                        <li>Priority support</li>
+                      </ul>
+                      <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
+                        Start free trial
+                      </button>
                     </article>
                     <article className="landing-card">
                       <h4>Pro Ops</h4>
                       <p className="price">$89<span>/month</span></p>
-                      <p>Includes operator workflow support and admin reporting dashboards.</p>
+                      <p>For property managers who need operator workflows and reporting.</p>
+                      <ul className="plan-features">
+                        <li>Multiple addresses</li>
+                        <li>Operator job assignment</li>
+                        <li>Admin reporting dashboards</li>
+                      </ul>
+                      <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
+                        Go Pro Ops
+                      </button>
                     </article>
                   </div>
                 </section>
 
+                <section className="testimonial" aria-label="Customer testimonial">
+                  <div className="stars" aria-hidden="true">★★★★★</div>
+                  <blockquote>
+                    &ldquo;I genuinely forgot trash day was a chore. My cans are just always where
+                    they should be.&rdquo;
+                  </blockquote>
+                  <cite>
+                    Dana R.
+                    <span>Neighborhood plan · Maple Grove</span>
+                  </cite>
+                </section>
+
                 <section id="contact" className="landing-band landing-band-contact">
-                  <div className="landing-band-header">
+                  <div className="contact-inner">
                     <p className="eyebrow">Contact</p>
-                    <h3>Ready to make pickup day predictable?</h3>
+                    <h3>Ready to make trash day predictable?</h3>
                     <p className="subtext">
-                      Start with an account and switch to your role dashboard in seconds.
+                      Create an account and jump straight to your role dashboard in seconds.
                     </p>
-                  </div>
-                  <div className="landing-actions">
-                    <button type="button" className="cta-primary" onClick={() => navigate("/auth")}>
-                      Get started
-                    </button>
-                    <a className="cta-link" href="#top">
-                      Back to top
-                    </a>
+                    <div className="landing-actions">
+                      <button type="button" className="cta-primary" onClick={() => navigate("/auth")}>
+                        Get started free
+                      </button>
+                      <a className="cta-link" href="#top">
+                        Back to top ↑
+                      </a>
+                    </div>
                   </div>
                 </section>
+
+                <footer className="site-footer">
+                  <div className="site-footer-inner">
+                    <div>
+                      <div className="brand">Garbage Pail Pals</div>
+                      <small>Can-to-curb service, minus the scramble.</small>
+                    </div>
+                    <nav aria-label="Footer">
+                      <a href="#features">Features</a>
+                      <a href="#how">How it works</a>
+                      <a href="#pricing">Pricing</a>
+                      <Link to="/auth">Sign in</Link>
+                    </nav>
+                    <small>© {new Date().getFullYear()} Garbage Pail Pals</small>
+                  </div>
+                </footer>
               </section>
             }
           />
