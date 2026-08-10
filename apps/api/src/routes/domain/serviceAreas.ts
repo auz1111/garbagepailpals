@@ -37,8 +37,10 @@ export async function serviceAreaCheckHandler(
   });
 }
 
-// Records the postal code a signed-in user wants service in, so we can notify
-// them when we expand there. Stored on the user (User.requestedServiceArea).
+// Checks whether a signed-in user's postal code is serviced and records the
+// outcome on the user: if serviced, clears any outstanding request; if not,
+// stores the postal code (User.requestedServiceArea) so we can notify them
+// when we expand there.
 export async function requestServiceAreaHandler(
   request: HttpRequest,
   context: InvocationContext
@@ -52,12 +54,17 @@ export async function requestServiceAreaHandler(
     withAuth(async (req, _ctx, auth) => {
       const { postalCode } = await parseJson(req, serviceAreaRequestSchema);
 
+      const serviceArea = await prisma.serviceArea.findUnique({
+        where: { postalCode }
+      });
+      const eligible = Boolean(serviceArea?.isActive);
+
       await prisma.user.update({
         where: { id: auth.sub },
-        data: { requestedServiceArea: postalCode }
+        data: { requestedServiceArea: eligible ? null : postalCode }
       });
 
-      return jsonResponse(200, { postalCode, recorded: true });
+      return jsonResponse(200, { postalCode, eligible });
     })(request, context)
   );
 }

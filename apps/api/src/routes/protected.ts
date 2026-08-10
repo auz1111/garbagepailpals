@@ -1,4 +1,5 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { prisma } from "@gpp/db";
 import { meResponseSchema, protectedMessageSchema } from "@gpp/shared";
 import { handleOptions, jsonResponse, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
@@ -14,12 +15,18 @@ export async function meHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(async (_req, _ctx, auth) => {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: auth.sub },
+        select: { requestedServiceArea: true }
+      });
+
       const response = meResponseSchema.parse({
         user: {
           id: auth.sub,
           email: auth.email,
           name: auth.name,
-          role: auth.role
+          role: auth.role,
+          requestedServiceArea: dbUser?.requestedServiceArea ?? null
         }
       });
 

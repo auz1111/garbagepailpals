@@ -225,7 +225,7 @@ export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckRe
 
 type ServiceAreaRequestResponse = {
   postalCode: string;
-  recorded: boolean;
+  eligible: boolean;
 };
 
 export function requestServiceArea(

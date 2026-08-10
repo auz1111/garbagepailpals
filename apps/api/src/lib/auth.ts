@@ -14,6 +14,7 @@ type AuthUser = {
   email: string;
   name: string;
   role: Role;
+  requestedServiceArea: string | null;
 };
 
 export async function createUser(input: {
@@ -40,7 +41,13 @@ export async function createUser(input: {
     }
   });
 
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    requestedServiceArea: user.requestedServiceArea
+  };
 }
 
 export async function authenticateUser(input: { email: string; password: string }): Promise<AuthUser> {
@@ -55,7 +62,13 @@ export async function authenticateUser(input: { email: string; password: string 
     throw new Error("Invalid credentials");
   }
 
-  return { id: user.id, email: user.email, name: user.name, role: user.role };
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    requestedServiceArea: user.requestedServiceArea
+  };
 }
 
 export async function issueSessionTokens(user: AuthUser): Promise<{
@@ -124,7 +137,8 @@ export async function rotateRefreshToken(refreshToken: string): Promise<{
     id: existing.user.id,
     email: existing.user.email,
     name: existing.user.name,
-    role: existing.user.role
+    role: existing.user.role,
+    requestedServiceArea: existing.user.requestedServiceArea
   };
 
   const tokens = await issueSessionTokens(user);

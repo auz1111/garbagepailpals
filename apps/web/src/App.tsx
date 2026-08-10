@@ -55,7 +55,10 @@ export function App() {
       setAccessToken(data.accessToken);
       setUser(data.user);
       localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-      navigate(defaultRouteForRole(data.user.role));
+      // Customers with an unresolved out-of-area request go back to the gate,
+      // not the dashboard.
+      const needsServiceArea = data.user.role === "CUSTOMER" && Boolean(data.user.requestedServiceArea);
+      navigate(needsServiceArea ? "/service-area" : defaultRouteForRole(data.user.role));
     }
   });
 
@@ -120,6 +123,12 @@ export function App() {
     navigate("/auth");
   }
 
+  function setRequestedArea(value: string | null) {
+    setUser((prev) => (prev ? { ...prev, requestedServiceArea: value } : prev));
+  }
+
+  const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
+
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
 
   if (isBootstrapping) {
@@ -143,12 +152,11 @@ export function App() {
               <span className="brand-garbage">Garbage</span> <span className="brand-pail">Pail</span> <span className="brand-pals">Pals</span>
             </Link>
           </h1>
-          <nav className="nav-links">
-            <Link to="/">Home</Link>
-            <Link to="/auth">Auth</Link>
-            <Link to="/customer">Customer</Link>
-            <Link to="/operator">Operator</Link>
-            <Link to="/admin">Admin</Link>
+          <nav className="nav-links" aria-label="Primary">
+            <a href="/#features">Features</a>
+            <a href="/#how">How it works</a>
+            <a href="/#pricing">Pricing</a>
+            <a href="/#contact">Contact</a>
           </nav>
           {isAuthenticated ? (
             <button type="button" onClick={logout}>
@@ -488,12 +496,26 @@ export function App() {
           >
             <Route
               path="/service-area"
-              element={user && accessToken ? <ServiceAreaGate user={user} accessToken={accessToken} /> : null}
+              element={
+                user && accessToken ? (
+                  <ServiceAreaGate
+                    user={user}
+                    accessToken={accessToken}
+                    onRequestedAreaChange={setRequestedArea}
+                  />
+                ) : null
+              }
             />
             <Route
               path="/customer"
               element={
-                user && accessToken ? <CustomerWorkspace user={user} accessToken={accessToken} /> : null
+                user && accessToken ? (
+                  customerBlocked ? (
+                    <Navigate to="/service-area" replace />
+                  ) : (
+                    <CustomerWorkspace user={user} accessToken={accessToken} />
+                  )
+                ) : null
               }
             />
           </Route>

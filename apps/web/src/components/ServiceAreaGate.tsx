@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import type { CurrentUser } from "@gpp/shared";
-import { checkServiceArea, requestServiceArea } from "../lib/api";
+import { requestServiceArea } from "../lib/api";
 
 type ServiceAreaGateProps = {
   user: CurrentUser;
   accessToken: string;
+  onRequestedAreaChange: (value: string | null) => void;
 };
 
 type GateForm = {
@@ -15,14 +16,65 @@ type GateForm = {
 
 const VERIFIED_AREA_KEY = "gpp.serviceArea";
 
-export function ServiceAreaGate({ user, accessToken }: ServiceAreaGateProps): JSX.Element {
+export function ServiceAreaGate({
+  user,
+  accessToken,
+  onRequestedAreaChange
+}: ServiceAreaGateProps): JSX.Element {
   const navigate = useNavigate();
   const [view, setView] = useState<"CHECK" | "UNAVAILABLE">("CHECK");
   const [checkedPostal, setCheckedPostal] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A returning user with an outstanding out-of-area request is re-verified on
+  // mount (we may now serve their area) before we show anything.
+  const [booting, setBooting] = useState<boolean>(Boolean(user.requestedServiceArea));
 
   const form = useForm<GateForm>({ defaultValues: { postalCode: "" } });
+
+  // Checks the postal code, records the outcome on the user, and either sends
+  // the customer to the dashboard (serviced) or shows the unavailable message.
+  async function resolveArea(postalCode: string): Promise<void> {
+    const result = await requestServiceArea(postalCode, accessToken);
+    if (result.eligible) {
+      localStorage.setItem(VERIFIED_AREA_KEY, postalCode);
+      onRequestedAreaChange(null);
+      navigate("/customer", { replace: true });
+      return;
+    }
+
+    onRequestedAreaChange(postalCode);
+    setCheckedPostal(postalCode);
+    setView("UNAVAILABLE");
+  }
+
+  useEffect(() => {
+    const outstanding = user.requestedServiceArea;
+    if (!outstanding) {
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        await resolveArea(outstanding);
+      } catch {
+        if (!cancelled) {
+          setCheckedPostal(outstanding);
+          setView("UNAVAILABLE");
+        }
+      } finally {
+        if (!cancelled) {
+          setBooting(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function onSubmit(values: GateForm): Promise<void> {
     const postalCode = values.postalCode.trim();
@@ -34,22 +86,7 @@ export function ServiceAreaGate({ user, accessToken }: ServiceAreaGateProps): JS
     setError(null);
 
     try {
-      const result = await checkServiceArea(postalCode);
-      if (result.eligible) {
-        localStorage.setItem(VERIFIED_AREA_KEY, postalCode);
-        navigate("/customer", { replace: true });
-        return;
-      }
-
-      // Record the area they wanted so we can notify them when we expand there.
-      try {
-        await requestServiceArea(postalCode, accessToken);
-      } catch {
-        // Best-effort: still show the unavailable message even if saving fails.
-      }
-
-      setCheckedPostal(postalCode);
-      setView("UNAVAILABLE");
+      await resolveArea(postalCode);
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -59,6 +96,17 @@ export function ServiceAreaGate({ user, accessToken }: ServiceAreaGateProps): JS
     } finally {
       setPending(false);
     }
+  }
+
+  if (booting) {
+    return (
+      <section className="card service-gate">
+        <div className="gate-icon" aria-hidden="true">
+          📍
+        </div>
+        <p className="subtext">Checking your service area…</p>
+      </section>
+    );
   }
 
   if (view === "UNAVAILABLE") {

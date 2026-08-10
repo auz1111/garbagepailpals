@@ -25,7 +25,10 @@ export const authResponseSchema = z.object({
     id: z.string(),
     email: z.string().email(),
     name: z.string(),
-    role: roleSchema
+    role: roleSchema,
+    // Postal code the user requested service in when we don't operate there yet.
+    // null/absent means no outstanding out-of-area request.
+    requestedServiceArea: z.string().nullable().optional()
   })
 });
 
