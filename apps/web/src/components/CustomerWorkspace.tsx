@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Link, Navigate, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { CurrentUser, ServiceAddress, ServiceAddressInput, ServiceScheduleInput } from "@gpp/shared";
 import { addressMonthlyCents, formatUsd, monthlyTotalCents, PRICING } from "@gpp/shared";
 import {
@@ -22,6 +22,7 @@ import {
 type CustomerWorkspaceProps = {
   user: CurrentUser;
   accessToken: string;
+  refreshUser: () => Promise<void>;
 };
 
 type ServiceAreaForm = {
@@ -63,8 +64,11 @@ export const CUSTOMER_NAV = [
   { to: "/customer/history", label: "History", icon: "🕓" }
 ] as const;
 
-export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps): JSX.Element {
+export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWorkspaceProps): JSX.Element {
   const queryClient = useQueryClient();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [finalizingCheckout, setFinalizingCheckout] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   const [serviceAreaResult, setServiceAreaResult] = useState<
     { postalCode: string; eligible: boolean } | null
@@ -148,8 +152,8 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
       createStripeCheckout(
         {
           planCode: "starter-monthly",
-          successUrl: window.location.href,
-          cancelUrl: window.location.href
+          successUrl: `${window.location.origin}/customer/billing?checkout=success`,
+          cancelUrl: `${window.location.origin}/customer/billing?checkout=cancel`
         },
         accessToken
       ),
@@ -163,8 +167,8 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
       createPayPalSubscription(
         {
           planCode: "starter-monthly",
-          returnUrl: window.location.href,
-          cancelUrl: window.location.href
+          returnUrl: `${window.location.origin}/customer/billing?checkout=success`,
+          cancelUrl: `${window.location.origin}/customer/billing?checkout=cancel`
         },
         accessToken
       ),
@@ -177,7 +181,7 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
     mutationFn: async () =>
       createStripePortal(
         {
-          returnUrl: window.location.href
+          returnUrl: `${window.location.origin}/customer/billing`
         },
         accessToken
       ),
@@ -200,6 +204,47 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
   // A successful job feed means the entitlement gate let us through.
   const subscriptionActive = upcomingJobsQuery.isSuccess;
   const monthlyTotal = monthlyTotalCents(addresses);
+
+  // When Stripe/PayPal redirect back after checkout, the activation webhook is
+  // async — poll-refetch the session + queries so the UI reflects it without a
+  // manual reload, then strip the marker from the URL.
+  useEffect(() => {
+    const checkout = new URLSearchParams(location.search).get("checkout");
+    if (!checkout) {
+      return;
+    }
+    if (checkout !== "success") {
+      navigate("/customer/billing", { replace: true });
+      return;
+    }
+
+    let cancelled = false;
+    setFinalizingCheckout(true);
+    void (async () => {
+      for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
+        await refreshUser();
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] }),
+          queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] }),
+          queryClient.invalidateQueries({ queryKey: ["customer-addresses"] })
+        ]);
+        // Entitlement is active once the job feed returns successfully.
+        if (queryClient.getQueryState(["customer-jobs-upcoming"])?.status === "success") {
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      if (!cancelled) {
+        setFinalizingCheckout(false);
+        navigate("/customer/billing", { replace: true });
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   function renderAccountStatus(): JSX.Element {
     if (addressesQuery.isLoading || upcomingJobsQuery.isLoading) {
@@ -309,6 +354,10 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
             Your plan is billed monthly based on the addresses, cans, and pickup days you set up.
           </p>
         </div>
+
+        {finalizingCheckout ? (
+          <p className="notice">Finalizing your subscription — confirming payment…</p>
+        ) : null}
 
         <article className="panel">
           <h3>Your monthly estimate</h3>

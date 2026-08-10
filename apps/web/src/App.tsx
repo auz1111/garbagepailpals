@@ -128,6 +128,18 @@ export function App() {
     setUser((prev) => (prev ? { ...prev, requestedServiceArea: value } : prev));
   }
 
+  async function refreshUser() {
+    if (!accessToken) {
+      return;
+    }
+    try {
+      const me = await getMe(accessToken);
+      setUser(me.user);
+    } catch {
+      // Ignore — a transient refresh failure shouldn't disrupt the page.
+    }
+  }
+
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
   const showDashboardMenu = isAuthenticated && user?.role === "CUSTOMER" && !customerBlocked;
 
@@ -561,7 +573,7 @@ export function App() {
                   customerBlocked ? (
                     <Navigate to="/service-area" replace />
                   ) : (
-                    <CustomerWorkspace user={user} accessToken={accessToken} />
+                    <CustomerWorkspace user={user} accessToken={accessToken} refreshUser={refreshUser} />
                   )
                 ) : null
               }

@@ -124,21 +124,25 @@ model ServiceSchedule {
 }
 
 model Subscription {
-  id                  String             @id @default(cuid())
-  userId              String
-  serviceAddressId    String
-  planId              String
-  status              SubscriptionStatus
-  currentPeriodStart  DateTime
-  currentPeriodEnd    DateTime
-  cancelAtPeriodEnd   Boolean            @default(false)
-  createdAt           DateTime           @default(now())
-  updatedAt           DateTime           @updatedAt
-  user                User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  serviceAddress      ServiceAddress     @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
-  plan                Plan               @relation(fields: [planId], references: [id], onDelete: Restrict)
-  jobs                ServiceJob[]
+  id                     String             @id @default(cuid())
+  userId                 String
+  serviceAddressId       String
+  planId                 String?
+  source                 String?
+  externalSubscriptionId String?
+  amountCents            Int?
+  status                 SubscriptionStatus
+  currentPeriodStart     DateTime
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean            @default(false)
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceAddress         ServiceAddress     @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
+  plan                   Plan?              @relation(fields: [planId], references: [id], onDelete: Restrict)
+  jobs                   ServiceJob[]
 
+  @@unique([userId, serviceAddressId])
   @@index([userId])
   @@index([serviceAddressId])
   @@index([status])

@@ -1,7 +1,11 @@
 import { Buffer } from "node:buffer";
 import { env } from "../lib/env";
 import { HttpError } from "../lib/http";
-import { computeUserMonthlyCents } from "./billing";
+import {
+  activateSubscriptionsForUser,
+  computeUserMonthlyCents,
+  deactivateSubscriptionsForUser
+} from "./billing";
 import { grantEntitlement, revokeEntitlement } from "./entitlements";
 
 type PayPalWebhookEvent = {
@@ -202,6 +206,11 @@ export async function handlePayPalWebhookEvent(event: PayPalWebhookEvent): Promi
     event.event_type === "PAYMENT.SALE.COMPLETED"
   ) {
     await grantEntitlement(userId, "PAYPAL", subscriptionId, null, event);
+    await activateSubscriptionsForUser(userId, {
+      source: "PAYPAL",
+      externalSubscriptionId: subscriptionId,
+      currentPeriodEnd: null
+    });
     return;
   }
 
@@ -211,5 +220,9 @@ export async function handlePayPalWebhookEvent(event: PayPalWebhookEvent): Promi
     event.event_type === "BILLING.SUBSCRIPTION.PAYMENT.FAILED"
   ) {
     await revokeEntitlement(userId, "PAYPAL", subscriptionId, `paypal-event-${event.event_type}`);
+    await deactivateSubscriptionsForUser(
+      userId,
+      event.event_type === "BILLING.SUBSCRIPTION.PAYMENT.FAILED" ? "PAST_DUE" : "CANCELED"
+    );
   }
 }

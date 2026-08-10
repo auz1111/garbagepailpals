@@ -2,7 +2,11 @@ import Stripe from "stripe";
 import { prisma } from "@gpp/db";
 import { env } from "../lib/env";
 import { HttpError } from "../lib/http";
-import { computeUserMonthlyCents } from "./billing";
+import {
+  activateSubscriptionsForUser,
+  computeUserMonthlyCents,
+  deactivateSubscriptionsForUser
+} from "./billing";
 import { grantEntitlement, revokeEntitlement } from "./entitlements";
 
 type StripeEventLike = {
@@ -140,6 +144,11 @@ export async function handleStripeWebhookEvent(event: StripeEventLike): Promise<
     }
 
     await grantEntitlement(userId, "STRIPE", subscriptionId, null, event);
+    await activateSubscriptionsForUser(userId, {
+      source: "STRIPE",
+      externalSubscriptionId: subscriptionId,
+      currentPeriodEnd: null
+    });
     return;
   }
 
@@ -161,11 +170,18 @@ export async function handleStripeWebhookEvent(event: StripeEventLike): Promise<
         periodEnd ? new Date(periodEnd * 1000) : null,
         event
       );
+      await activateSubscriptionsForUser(userId, {
+        source: "STRIPE",
+        externalSubscriptionId: subscriptionId,
+        currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000) : null,
+        status: status === "trialing" ? "TRIALING" : "ACTIVE"
+      });
       return;
     }
 
     if (status === "past_due" || status === "canceled" || status === "unpaid") {
       await revokeEntitlement(userId, "STRIPE", subscriptionId, `stripe-status-${status}`);
+      await deactivateSubscriptionsForUser(userId, status === "past_due" ? "PAST_DUE" : "CANCELED");
     }
 
     return;
@@ -179,6 +195,7 @@ export async function handleStripeWebhookEvent(event: StripeEventLike): Promise<
     }
 
     await revokeEntitlement(userId, "STRIPE", subscriptionId, "stripe-subscription-deleted");
+    await deactivateSubscriptionsForUser(userId, "CANCELED");
     return;
   }
 
@@ -190,5 +207,6 @@ export async function handleStripeWebhookEvent(event: StripeEventLike): Promise<
     }
 
     await revokeEntitlement(userId, "STRIPE", subscriptionId, "stripe-invoice-payment-failed");
+    await deactivateSubscriptionsForUser(userId, "PAST_DUE");
   }
 }
