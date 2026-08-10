@@ -124,6 +124,62 @@ export async function createStripePortalSession(args: {
   return { portalUrl: session.url };
 }
 
+// Amend the user's existing Stripe subscription to their current computed total
+// (all active addresses), with proration — rather than creating a new one.
+export async function syncStripeSubscriptionAmount(userId: string): Promise<{ amountCents: number }> {
+  const active = await prisma.subscription.findFirst({
+    where: {
+      userId,
+      source: "STRIPE",
+      status: { in: ["ACTIVE", "TRIALING"] },
+      externalSubscriptionId: { not: null }
+    }
+  });
+  if (!active?.externalSubscriptionId) {
+    throw new HttpError(400, "No active Stripe subscription to update");
+  }
+
+  const amountCents = await computeUserMonthlyCents(userId);
+  if (amountCents <= 0) {
+    throw new HttpError(400, "Add a service address before updating your subscription");
+  }
+
+  const stripe = getStripeClient();
+  const subscription = await stripe.subscriptions.retrieve(active.externalSubscriptionId, {
+    expand: ["items.data.price"]
+  });
+
+  const item = subscription.items.data[0];
+  if (!item) {
+    throw new Error("Stripe subscription has no line items to update");
+  }
+
+  const price = item.price;
+  const productId = typeof price.product === "string" ? price.product : price.product.id;
+
+  // Ad-hoc price for the new amount, reusing the subscription's existing product.
+  const newPrice = await stripe.prices.create({
+    currency: "usd",
+    unit_amount: amountCents,
+    recurring: { interval: "month" },
+    product: productId
+  });
+
+  const updated = await stripe.subscriptions.update(active.externalSubscriptionId, {
+    items: [{ id: item.id, price: newPrice.id }],
+    proration_behavior: "create_prorations"
+  });
+
+  // Reflect coverage immediately (the subscription.updated webhook will also fire).
+  await activateSubscriptionsForUser(userId, {
+    source: "STRIPE",
+    externalSubscriptionId: active.externalSubscriptionId,
+    currentPeriodEnd: updated.current_period_end ? new Date(updated.current_period_end * 1000) : null
+  });
+
+  return { amountCents };
+}
+
 function asNumber(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }

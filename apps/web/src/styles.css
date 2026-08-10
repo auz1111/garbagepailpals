@@ -531,6 +531,35 @@ a {
   letter-spacing: -0.02em;
 }
 
+.price-total.secondary {
+  margin-top: 0.25rem;
+}
+
+.price-total.secondary strong {
+  font-size: 1rem;
+  color: var(--slate-2);
+}
+
+.coverage-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--pill);
+  vertical-align: middle;
+}
+
+.coverage-badge.covered {
+  background: var(--ok-wash);
+  color: var(--ok);
+}
+
+.coverage-badge.uncovered {
+  background: var(--warn-wash);
+  color: var(--warn-ink);
+}
+
 @media (max-width: 560px) {
   .field-row {
     grid-template-columns: 1fr;

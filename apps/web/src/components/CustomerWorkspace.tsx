@@ -12,6 +12,8 @@ import {
   createStripeCheckout,
   createStripePortal,
   generateJobs,
+  getBillingSummary,
+  updateSubscription,
   listAddresses,
   listHistoryJobs,
   listUpcomingJobs,
@@ -102,10 +104,16 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     queryFn: async () => listHistoryJobs(accessToken)
   });
 
+  const billingSummaryQuery = useQuery({
+    queryKey: ["customer-billing-summary"],
+    queryFn: async () => getBillingSummary(accessToken)
+  });
+
   const createAddressMutation = useMutation({
     mutationFn: (input: ServiceAddressInput) => createAddress(input, accessToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       addressForm.reset(defaultAddressValues);
     }
   });
@@ -115,12 +123,22 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       updateAddress(id, patch, accessToken),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
     }
   });
 
   const generateJobsMutation = useMutation({
     mutationFn: () => generateJobs(accessToken),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] });
+    }
+  });
+
+  const updateSubscriptionMutation = useMutation({
+    mutationFn: () => updateSubscription(accessToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] });
     }
@@ -226,7 +244,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] }),
           queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] }),
-          queryClient.invalidateQueries({ queryKey: ["customer-addresses"] })
+          queryClient.invalidateQueries({ queryKey: ["customer-addresses"] }),
+          queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] })
         ]);
         // Entitlement is active once the job feed returns successfully.
         if (queryClient.getQueryState(["customer-jobs-upcoming"])?.status === "success") {
@@ -345,7 +364,54 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     );
   }
 
+  function renderBillingStatus(summary: NonNullable<typeof billingSummaryQuery.data>): JSX.Element {
+    if (summary.pastDue) {
+      return (
+        <div className="account-status is-warn">
+          <span className="account-status-icon" aria-hidden="true">⚠️</span>
+          <div className="account-status-body">
+            <strong>Payment past due</strong>
+            <p className="subtext">Update your payment method to keep your pickups running.</p>
+          </div>
+        </div>
+      );
+    }
+    if (summary.active) {
+      return (
+        <div className="account-status is-ok">
+          <span className="account-status-icon" aria-hidden="true">✅</span>
+          <div className="account-status-body">
+            <strong>Subscription active — {formatUsd(summary.coveredMonthlyCents)}/mo</strong>
+            <p className="subtext">
+              Billed via {summary.source ?? "card"}
+              {summary.currentPeriodEnd
+                ? ` · renews ${new Date(summary.currentPeriodEnd).toLocaleDateString()}`
+                : ""}
+              .
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="account-status is-warn">
+        <span className="account-status-icon" aria-hidden="true">⚠️</span>
+        <div className="account-status-body">
+          <strong>No active subscription yet</strong>
+          <p className="subtext">
+            {summary.addresses.length > 0
+              ? "Activate below to start service."
+              : "Add a service address, then activate."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   function renderBilling(): JSX.Element {
+    const summary = billingSummaryQuery.data;
+    const extraCents = summary ? summary.totalMonthlyCents - summary.coveredMonthlyCents : 0;
+
     return (
       <div className="dash-page">
         <div className="dash-page-head">
@@ -359,35 +425,60 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
           <p className="notice">Finalizing your subscription — confirming payment…</p>
         ) : null}
 
+        {billingSummaryQuery.isLoading ? (
+          <div className="account-status is-info">
+            <span className="account-status-icon" aria-hidden="true">⏳</span>
+            <div className="account-status-body">
+              <strong>Loading billing status…</strong>
+            </div>
+          </div>
+        ) : summary ? (
+          renderBillingStatus(summary)
+        ) : null}
+
+        {summary && summary.active && summary.uncoveredCount > 0 ? (
+          <p className="notice">
+            {summary.uncoveredCount} address{summary.uncoveredCount === 1 ? "" : "es"} added since you
+            subscribed {summary.uncoveredCount === 1 ? "isn't" : "aren't"} on your plan yet
+            (+{formatUsd(extraCents)}/mo). Update your subscription to include{" "}
+            {summary.uncoveredCount === 1 ? "it" : "them"}.
+          </p>
+        ) : null}
+
         <article className="panel">
-          <h3>Your monthly estimate</h3>
-          {!hasAddress ? (
+          <h3>Addresses &amp; coverage</h3>
+          {!summary || summary.addresses.length === 0 ? (
             <p className="subtext">
               Add a service address to see your price. <Link to="/customer/addresses">Add an address</Link>.
             </p>
           ) : (
             <>
               <ul className="price-breakdown">
-                {addresses.map((address) => (
+                {summary.addresses.map((address) => (
                   <li key={address.id}>
                     <span className="price-breakdown-name">
                       {address.line1}, {address.city}
                     </span>
                     <span className="price-breakdown-meta">
-                      {address.canCount} cans · {address.pickupsPerWeek}×/week
+                      {address.canCount} cans · {address.pickupsPerWeek}×/week ·{" "}
+                      <span className={`coverage-badge ${address.covered ? "covered" : "uncovered"}`}>
+                        {address.covered ? "On plan" : "Not on plan"}
+                      </span>
                     </span>
-                    <span className="price-breakdown-amount">
-                      {formatUsd(addressMonthlyCents(address))}/mo
-                    </span>
+                    <span className="price-breakdown-amount">{formatUsd(address.monthlyCents)}/mo</span>
                   </li>
                 ))}
               </ul>
               <div className="price-total">
-                <span>
-                  Total · {addresses.length} address{addresses.length === 1 ? "" : "es"}
-                </span>
-                <strong>{formatUsd(monthlyTotal)}/mo</strong>
+                <span>{summary.active ? "Billed now" : "Estimated total"}</span>
+                <strong>{formatUsd(summary.active ? summary.coveredMonthlyCents : summary.totalMonthlyCents)}/mo</strong>
               </div>
+              {summary.active && summary.uncoveredCount > 0 ? (
+                <div className="price-total secondary">
+                  <span>With all addresses on plan</span>
+                  <strong>{formatUsd(summary.totalMonthlyCents)}/mo</strong>
+                </div>
+              ) : null}
             </>
           )}
           <p className="subtext">
@@ -399,29 +490,48 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         </article>
 
         <article className="panel">
-          <h3>Activate &amp; manage</h3>
+          <h3>{summary?.active ? "Manage subscription" : "Activate subscription"}</h3>
           <p className="subtext">
-            {hasAddress
-              ? `You'll be billed ${formatUsd(monthlyTotal)}/month via Stripe or PayPal — the total above.`
-              : "Start your subscription or manage payment details."}
+            {!hasAddress
+              ? "Add a service address to activate."
+              : summary?.active
+                ? summary.uncoveredCount > 0
+                  ? `Update your subscription to bill all addresses (${formatUsd(summary.totalMonthlyCents)}/mo, prorated).`
+                  : "Your plan is up to date. Manage payment details in the billing portal."
+                : `You'll be billed ${formatUsd(summary?.totalMonthlyCents ?? 0)}/month via Stripe or PayPal.`}
           </p>
           <div className="button-row">
-            <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
-              {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
-            </button>
-            <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending || !hasAddress}>
-              {paypalCheckoutMutation.isPending ? "Redirecting..." : "Pay with PayPal"}
-            </button>
-            <button type="button" onClick={() => stripePortalMutation.mutate()} disabled={stripePortalMutation.isPending}>
-              {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
-            </button>
+            {summary?.active ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => updateSubscriptionMutation.mutate()}
+                  disabled={updateSubscriptionMutation.isPending}
+                >
+                  {updateSubscriptionMutation.isPending ? "Updating…" : "Update subscription"}
+                </button>
+                <button type="button" onClick={() => stripePortalMutation.mutate()} disabled={stripePortalMutation.isPending}>
+                  {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
+                  {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
+                </button>
+                <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending || !hasAddress}>
+                  {paypalCheckoutMutation.isPending ? "Redirecting..." : "Pay with PayPal"}
+                </button>
+              </>
+            )}
           </div>
-          {!hasAddress ? (
-            <p className="notice">Add a service address before starting your subscription.</p>
-          ) : entitlementBlocked ? (
-            <p className="notice">
-              No active subscription yet. Complete checkout to start service and unlock your pickup schedule.
+          {updateSubscriptionMutation.isSuccess ? (
+            <p className="success-inline">
+              Subscription updated to {formatUsd(updateSubscriptionMutation.data.amountCents)}/mo.
             </p>
+          ) : null}
+          {updateSubscriptionMutation.isError ? (
+            <p className="error">{getErrorMessage(updateSubscriptionMutation.error)}</p>
           ) : null}
         </article>
       </div>

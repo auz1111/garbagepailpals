@@ -1,5 +1,56 @@
 import { prisma } from "@gpp/db";
-import { addressMonthlyCents, monthlyTotalCents } from "@gpp/shared";
+import { addressMonthlyCents, monthlyTotalCents, type BillingSummary } from "@gpp/shared";
+
+const ACTIVE_STATUSES = ["ACTIVE", "TRIALING"] as const;
+
+// Billing overview for a user: subscription status + per-address coverage,
+// so the UI can show whether billing is active and which addresses aren't yet
+// on the paid plan.
+export async function getBillingSummary(userId: string): Promise<BillingSummary> {
+  const [addresses, subscriptions] = await Promise.all([
+    prisma.serviceAddress.findMany({
+      where: { userId, isActive: true },
+      orderBy: { createdAt: "asc" }
+    }),
+    prisma.subscription.findMany({ where: { userId } })
+  ]);
+
+  const subByAddress = new Map(subscriptions.map((sub) => [sub.serviceAddressId, sub]));
+
+  const addressSummaries = addresses.map((address) => {
+    const sub = subByAddress.get(address.id);
+    const covered = sub ? ACTIVE_STATUSES.includes(sub.status as (typeof ACTIVE_STATUSES)[number]) : false;
+    return {
+      id: address.id,
+      line1: address.line1,
+      city: address.city,
+      canCount: address.canCount,
+      pickupsPerWeek: address.pickupsPerWeek,
+      monthlyCents: addressMonthlyCents(address),
+      covered,
+      status: sub?.status ?? null
+    };
+  });
+
+  const activeSubs = subscriptions.filter((sub) =>
+    ACTIVE_STATUSES.includes(sub.status as (typeof ACTIVE_STATUSES)[number])
+  );
+  const latestPeriodEnd = activeSubs
+    .map((sub) => sub.currentPeriodEnd.getTime())
+    .sort((a, b) => a - b)
+    .at(-1);
+
+  return {
+    active: addressSummaries.some((a) => a.covered),
+    pastDue: subscriptions.some((sub) => sub.status === "PAST_DUE"),
+    source: activeSubs[0]?.source ?? null,
+    currentPeriodEnd: latestPeriodEnd !== undefined ? new Date(latestPeriodEnd).toISOString() : null,
+    coveredMonthlyCents: addressSummaries.filter((a) => a.covered).reduce((sum, a) => sum + a.monthlyCents, 0),
+    totalMonthlyCents: addressSummaries.reduce((sum, a) => sum + a.monthlyCents, 0),
+    uncoveredCount: addressSummaries.filter((a) => !a.covered).length,
+    addresses: addressSummaries
+  };
+}
 
 // Authoritative monthly charge for a user, derived from their active service
 // addresses (cans + pickups/week). This is the single source of truth for what

@@ -13,9 +13,11 @@ import { generateJobsHandler, historyJobsHandler, upcomingJobsHandler } from "./
 import { nightlySchedulerHandler } from "./timers/nightlyScheduler";
 import { reminderSweepHandler } from "./timers/reminders";
 import {
+  billingSummaryHandler,
   createPayPalSubscriptionHandler,
   createStripeCheckoutHandler,
-  createStripePortalHandler
+  createStripePortalHandler,
+  updateSubscriptionHandler
 } from "./routes/payments";
 import { paypalWebhookHandler, stripeWebhookHandler } from "./routes/webhooks";
 import {
@@ -199,6 +201,20 @@ app.http("jobs-generate", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: generateJobsHandler
+});
+
+app.http("billing-summary", {
+  route: "billing/summary",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: billingSummaryHandler
+});
+
+app.http("subscription-update", {
+  route: "subscription/update",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: updateSubscriptionHandler
 });
 
 app.http("stripe-checkout", {

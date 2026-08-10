@@ -177,6 +177,31 @@ export const paypalCreateSubscriptionResponseSchema = z.object({
   amountCents: z.number().int().nonnegative()
 });
 
+export const billingAddressSummarySchema = z.object({
+  id: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  canCount: z.number().int(),
+  pickupsPerWeek: z.number().int(),
+  monthlyCents: z.number().int().nonnegative(),
+  covered: z.boolean(),
+  status: z.string().nullable()
+});
+
+export const billingSummarySchema = z.object({
+  active: z.boolean(),
+  pastDue: z.boolean(),
+  source: z.string().nullable(),
+  currentPeriodEnd: z.string().nullable(),
+  coveredMonthlyCents: z.number().int().nonnegative(),
+  totalMonthlyCents: z.number().int().nonnegative(),
+  uncoveredCount: z.number().int().nonnegative(),
+  addresses: z.array(billingAddressSummarySchema)
+});
+
+export type BillingSummary = z.infer<typeof billingSummarySchema>;
+export type BillingAddressSummary = z.infer<typeof billingAddressSummarySchema>;
+
 export const operatorQueueJobSchema = z.object({
   id: z.string(),
   serviceAddressId: z.string(),
