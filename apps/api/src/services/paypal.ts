@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { prisma } from "@gpp/db";
 import { env } from "../lib/env";
 import { HttpError } from "../lib/http";
 import {
@@ -82,10 +83,39 @@ export async function createPayPalSubscription(args: {
 
   // PayPal subscriptions need a product + plan; create them dynamically so the
   // monthly price matches the customer's configured service.
+  const planId = await createPayPalPlan(token, amountValue);
+
+  const subscription = await paypalPost<{
+    id?: string;
+    links?: Array<{ rel?: string; href?: string }>;
+  }>("/v1/billing/subscriptions", token, {
+    plan_id: planId,
+    custom_id: args.userId,
+    application_context: {
+      brand_name: "Garbage Pail Pals",
+      user_action: "SUBSCRIBE_NOW",
+      return_url: args.returnUrl,
+      cancel_url: args.cancelUrl
+    }
+  });
+
+  const approvalUrl = subscription.links?.find((link) => link.rel === "approve")?.href;
+  if (!subscription.id || !approvalUrl) {
+    throw new Error("PayPal subscription response missing approval URL or id");
+  }
+
+  return {
+    approvalUrl,
+    subscriptionId: subscription.id,
+    amountCents
+  };
+}
+
+// Build a product + plan for a given monthly amount (shared by create + revise).
+async function createPayPalPlan(token: string, amountValue: string): Promise<string> {
   const product = await paypalPost<{ id?: string }>("/v1/catalogs/products", token, {
     name: "Garbage Pail Pals curbside service",
-    type: "SERVICE",
-    category: "OTHER_SERVICES"
+    type: "SERVICE"
   });
   if (!product.id) {
     throw new Error("PayPal product creation returned no id");
@@ -113,31 +143,63 @@ export async function createPayPalSubscription(args: {
   if (!plan.id) {
     throw new Error("PayPal plan creation returned no id");
   }
+  return plan.id;
+}
 
-  const subscription = await paypalPost<{
-    id?: string;
-    links?: Array<{ rel?: string; href?: string }>;
-  }>("/v1/billing/subscriptions", token, {
-    plan_id: plan.id,
-    custom_id: args.userId,
-    application_context: {
-      brand_name: "Garbage Pail Pals",
-      user_action: "SUBSCRIBE_NOW",
-      return_url: args.returnUrl,
-      cancel_url: args.cancelUrl
+// Amend a PayPal subscription to the user's current total by revising it onto a
+// new plan. Price changes require buyer re-approval, so this returns an approval
+// URL the customer must visit; the BILLING.SUBSCRIPTION.UPDATED webhook then syncs.
+export async function revisePayPalSubscription(
+  userId: string,
+  args: { returnUrl: string; cancelUrl: string }
+): Promise<{ amountCents: number; approvalUrl: string | null }> {
+  const active = await prisma.subscription.findFirst({
+    where: {
+      userId,
+      source: "PAYPAL",
+      status: { in: ["ACTIVE", "TRIALING"] },
+      externalSubscriptionId: { not: null }
     }
   });
-
-  const approvalUrl = subscription.links?.find((link) => link.rel === "approve")?.href;
-  if (!subscription.id || !approvalUrl) {
-    throw new Error("PayPal subscription response missing approval URL or id");
+  if (!active?.externalSubscriptionId) {
+    throw new HttpError(400, "No active PayPal subscription to update");
   }
 
-  return {
-    approvalUrl,
-    subscriptionId: subscription.id,
-    amountCents
-  };
+  const amountCents = await computeUserMonthlyCents(userId);
+  if (amountCents <= 0) {
+    throw new HttpError(400, "Add a service address before updating your subscription");
+  }
+  const amountValue = (amountCents / 100).toFixed(2);
+
+  const token = await getPayPalAccessToken();
+  const planId = await createPayPalPlan(token, amountValue);
+
+  const revision = await paypalPost<{ links?: Array<{ rel?: string; href?: string }> }>(
+    `/v1/billing/subscriptions/${active.externalSubscriptionId}/revise`,
+    token,
+    {
+      plan_id: planId,
+      application_context: {
+        brand_name: "Garbage Pail Pals",
+        user_action: "SUBSCRIBE_NOW",
+        return_url: args.returnUrl,
+        cancel_url: args.cancelUrl
+      }
+    }
+  );
+
+  const approvalUrl = revision.links?.find((link) => link.rel === "approve")?.href ?? null;
+
+  // If PayPal applied the change without requiring approval, reflect it now.
+  if (!approvalUrl) {
+    await activateSubscriptionsForUser(userId, {
+      source: "PAYPAL",
+      externalSubscriptionId: active.externalSubscriptionId,
+      currentPeriodEnd: null
+    });
+  }
+
+  return { amountCents, approvalUrl };
 }
 
 export async function verifyPayPalWebhookSignature(args: {

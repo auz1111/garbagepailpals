@@ -195,12 +195,28 @@ export const billingSummarySchema = z.object({
   currentPeriodEnd: z.string().nullable(),
   coveredMonthlyCents: z.number().int().nonnegative(),
   totalMonthlyCents: z.number().int().nonnegative(),
+  // What the processor currently bills (sum of active subscription amounts).
+  billedMonthlyCents: z.number().int().nonnegative(),
+  // True when the billed amount no longer matches the current addresses.
+  needsUpdate: z.boolean(),
   uncoveredCount: z.number().int().nonnegative(),
   addresses: z.array(billingAddressSummarySchema)
 });
 
+export const subscriptionUpdateRequestSchema = z.object({
+  returnUrl: z.string().url().optional(),
+  cancelUrl: z.string().url().optional()
+});
+
+export const subscriptionUpdateResponseSchema = z.object({
+  amountCents: z.number().int().nonnegative(),
+  approvalUrl: z.string().url().nullable()
+});
+
 export type BillingSummary = z.infer<typeof billingSummarySchema>;
 export type BillingAddressSummary = z.infer<typeof billingAddressSummarySchema>;
+export type SubscriptionUpdateRequest = z.infer<typeof subscriptionUpdateRequestSchema>;
+export type SubscriptionUpdateResponse = z.infer<typeof subscriptionUpdateResponseSchema>;
 
 export const operatorQueueJobSchema = z.object({
   id: z.string(),

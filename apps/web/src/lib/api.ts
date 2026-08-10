@@ -19,6 +19,7 @@ import type {
   PayPalCreateSubscriptionRequest,
   PayPalCreateSubscriptionResponse,
   BillingSummary,
+  SubscriptionUpdateResponse,
   MeResponse,
   ProtectedMessage,
   RefreshInput,
@@ -291,8 +292,16 @@ export function getBillingSummary(accessToken: string): Promise<BillingSummary> 
   return request<undefined, BillingSummary>("/billing/summary", "GET", undefined, accessToken);
 }
 
-export function updateSubscription(accessToken: string): Promise<{ amountCents: number }> {
-  return request<undefined, { amountCents: number }>("/subscription/update", "POST", undefined, accessToken);
+export function updateSubscription(
+  accessToken: string,
+  body: { returnUrl: string; cancelUrl: string }
+): Promise<SubscriptionUpdateResponse> {
+  return request<{ returnUrl: string; cancelUrl: string }, SubscriptionUpdateResponse>(
+    "/subscription/update",
+    "POST",
+    body,
+    accessToken
+  );
 }
 
 export function createStripeCheckout(

@@ -136,8 +136,17 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   });
 
   const updateSubscriptionMutation = useMutation({
-    mutationFn: () => updateSubscription(accessToken),
-    onSuccess: () => {
+    mutationFn: () =>
+      updateSubscription(accessToken, {
+        returnUrl: `${window.location.origin}/customer/billing?checkout=success`,
+        cancelUrl: `${window.location.origin}/customer/billing?checkout=cancel`
+      }),
+    onSuccess: (data) => {
+      // PayPal price changes require buyer re-approval — redirect there.
+      if (data.approvalUrl) {
+        window.location.assign(data.approvalUrl);
+        return;
+      }
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] });
@@ -471,11 +480,11 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
               </ul>
               <div className="price-total">
                 <span>{summary.active ? "Billed now" : "Estimated total"}</span>
-                <strong>{formatUsd(summary.active ? summary.coveredMonthlyCents : summary.totalMonthlyCents)}/mo</strong>
+                <strong>{formatUsd(summary.active ? summary.billedMonthlyCents : summary.totalMonthlyCents)}/mo</strong>
               </div>
-              {summary.active && summary.uncoveredCount > 0 ? (
+              {summary.active && summary.needsUpdate ? (
                 <div className="price-total secondary">
-                  <span>With all addresses on plan</span>
+                  <span>After update</span>
                   <strong>{formatUsd(summary.totalMonthlyCents)}/mo</strong>
                 </div>
               ) : null}
@@ -495,21 +504,23 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             {!hasAddress
               ? "Add a service address to activate."
               : summary?.active
-                ? summary.uncoveredCount > 0
-                  ? `Update your subscription to bill all addresses (${formatUsd(summary.totalMonthlyCents)}/mo, prorated).`
+                ? summary.needsUpdate
+                  ? `Your plan bills ${formatUsd(summary.billedMonthlyCents)}/mo. Update to ${formatUsd(summary.totalMonthlyCents)}/mo to match your current addresses (prorated).`
                   : "Your plan is up to date. Manage payment details in the billing portal."
                 : `You'll be billed ${formatUsd(summary?.totalMonthlyCents ?? 0)}/month via Stripe or PayPal.`}
           </p>
           <div className="button-row">
             {summary?.active ? (
               <>
-                <button
-                  type="button"
-                  onClick={() => updateSubscriptionMutation.mutate()}
-                  disabled={updateSubscriptionMutation.isPending}
-                >
-                  {updateSubscriptionMutation.isPending ? "Updating…" : "Update subscription"}
-                </button>
+                {summary.needsUpdate ? (
+                  <button
+                    type="button"
+                    onClick={() => updateSubscriptionMutation.mutate()}
+                    disabled={updateSubscriptionMutation.isPending}
+                  >
+                    {updateSubscriptionMutation.isPending ? "Updating…" : "Update subscription"}
+                  </button>
+                ) : null}
                 <button type="button" onClick={() => stripePortalMutation.mutate()} disabled={stripePortalMutation.isPending}>
                   {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
                 </button>

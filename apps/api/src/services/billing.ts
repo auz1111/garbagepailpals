@@ -40,13 +40,21 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
     .sort((a, b) => a - b)
     .at(-1);
 
+  const active = addressSummaries.some((a) => a.covered);
+  const totalMonthlyCents = addressSummaries.reduce((sum, a) => sum + a.monthlyCents, 0);
+  // What the processor is actually charging today (stored at last activation/sync).
+  const billedMonthlyCents = activeSubs.reduce((sum, sub) => sum + (sub.amountCents ?? 0), 0);
+
   return {
-    active: addressSummaries.some((a) => a.covered),
+    active,
     pastDue: subscriptions.some((sub) => sub.status === "PAST_DUE"),
     source: activeSubs[0]?.source ?? null,
     currentPeriodEnd: latestPeriodEnd !== undefined ? new Date(latestPeriodEnd).toISOString() : null,
     coveredMonthlyCents: addressSummaries.filter((a) => a.covered).reduce((sum, a) => sum + a.monthlyCents, 0),
-    totalMonthlyCents: addressSummaries.reduce((sum, a) => sum + a.monthlyCents, 0),
+    totalMonthlyCents,
+    billedMonthlyCents,
+    // Billed amount drifted from current addresses (added address or changed cans/pickups).
+    needsUpdate: active && billedMonthlyCents !== totalMonthlyCents,
     uncoveredCount: addressSummaries.filter((a) => !a.covered).length,
     addresses: addressSummaries
   };

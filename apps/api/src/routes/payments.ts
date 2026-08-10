@@ -7,12 +7,14 @@ import {
   stripeCheckoutRequestSchema,
   stripeCheckoutResponseSchema,
   stripePortalRequestSchema,
-  stripePortalResponseSchema
+  stripePortalResponseSchema,
+  subscriptionUpdateRequestSchema,
+  subscriptionUpdateResponseSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { getBillingSummary } from "../services/billing";
-import { createPayPalSubscription } from "../services/paypal";
+import { createPayPalSubscription, revisePayPalSubscription } from "../services/paypal";
 import {
   createStripeCheckoutSession,
   createStripePortalSession,
@@ -46,7 +48,9 @@ export async function updateSubscriptionHandler(
   }
 
   return withErrorBoundary(context, async () =>
-    withAuth(async (_req, _ctx, auth) => {
+    withAuth(async (req, _ctx, auth) => {
+      const rawBody = await req.text();
+      const input = subscriptionUpdateRequestSchema.parse(rawBody ? JSON.parse(rawBody) : {});
       const active = await prisma.subscription.findFirst({
         where: { userId: auth.sub, status: { in: ["ACTIVE", "TRIALING"] } }
       });
@@ -54,15 +58,23 @@ export async function updateSubscriptionHandler(
       if (!active) {
         throw new HttpError(400, "No active subscription to update. Start one first.");
       }
+
       if (active.source === "PAYPAL") {
-        throw new HttpError(
-          400,
-          "Updating a PayPal plan isn't supported yet — cancel in PayPal and re-subscribe, or contact support."
-        );
+        if (!input.returnUrl || !input.cancelUrl) {
+          throw new HttpError(400, "returnUrl and cancelUrl are required to revise a PayPal plan");
+        }
+        const result = await revisePayPalSubscription(auth.sub, {
+          returnUrl: input.returnUrl,
+          cancelUrl: input.cancelUrl
+        });
+        return jsonResponse(200, subscriptionUpdateResponseSchema.parse(result));
       }
 
       const result = await syncStripeSubscriptionAmount(auth.sub);
-      return jsonResponse(200, { amountCents: result.amountCents });
+      return jsonResponse(
+        200,
+        subscriptionUpdateResponseSchema.parse({ amountCents: result.amountCents, approvalUrl: null })
+      );
     })(request, context)
   );
 }
