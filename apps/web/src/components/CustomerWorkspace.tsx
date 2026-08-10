@@ -351,7 +351,11 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
 
         <article className="panel">
           <h3>Activate &amp; manage</h3>
-          <p className="subtext">Start your subscription or manage payment details.</p>
+          <p className="subtext">
+            {hasAddress
+              ? `You'll be billed ${formatUsd(monthlyTotal)}/month via Stripe or PayPal — the total above.`
+              : "Start your subscription or manage payment details."}
+          </p>
           <div className="button-row">
             <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
               {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}

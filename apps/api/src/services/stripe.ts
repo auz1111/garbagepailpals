@@ -1,6 +1,8 @@
 import Stripe from "stripe";
 import { prisma } from "@gpp/db";
 import { env } from "../lib/env";
+import { HttpError } from "../lib/http";
+import { computeUserMonthlyCents } from "./billing";
 import { grantEntitlement, revokeEntitlement } from "./entitlements";
 
 type StripeEventLike = {
@@ -34,13 +36,14 @@ export async function createStripeCheckoutSession(args: {
   planCode: string;
   successUrl: string;
   cancelUrl: string;
-}): Promise<{ checkoutUrl: string; sessionId: string }> {
-  const stripe = getStripeClient();
-
-  const plan = await prisma.plan.findUnique({ where: { code: args.planCode } });
-  if (!plan?.stripePriceId) {
-    throw new Error("Plan is not configured for Stripe");
+}): Promise<{ checkoutUrl: string; sessionId: string; amountCents: number }> {
+  // Amount is derived server-side from the user's addresses (cans + pickups/week).
+  const amountCents = await computeUserMonthlyCents(args.userId);
+  if (amountCents <= 0) {
+    throw new HttpError(400, "Add a service address before starting a subscription");
   }
+
+  const stripe = getStripeClient();
 
   const user = await prisma.user.findUnique({ where: { id: args.userId } });
   if (!user) {
@@ -66,16 +69,25 @@ export async function createStripeCheckoutSession(args: {
     customer: customerId,
     line_items: [
       {
-        price: plan.stripePriceId,
-        quantity: 1
+        quantity: 1,
+        price_data: {
+          currency: "usd",
+          unit_amount: amountCents,
+          recurring: { interval: "month" },
+          product_data: { name: "Garbage Pail Pals curbside service" }
+        }
       }
     ],
     success_url: args.successUrl,
     cancel_url: args.cancelUrl,
+    // Stamp userId on the subscription itself so subscription.* webhooks resolve it.
+    subscription_data: {
+      metadata: { userId: args.userId, amountCents: String(amountCents) }
+    },
     metadata: {
       userId: args.userId,
-      planId: plan.id,
-      planCode: plan.code
+      planCode: args.planCode,
+      amountCents: String(amountCents)
     }
   });
 
@@ -85,7 +97,8 @@ export async function createStripeCheckoutSession(args: {
 
   return {
     checkoutUrl: session.url,
-    sessionId: session.id
+    sessionId: session.id,
+    amountCents
   };
 }
 

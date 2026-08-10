@@ -1,6 +1,17 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { ZodError, type ZodType } from "zod";
 
+// Throw to return a specific HTTP status with a client-safe message.
+export class HttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
 export function jsonResponse(status: number, body: unknown): HttpResponseInit {
   const headers = {
     "Content-Type": "application/json",
@@ -49,6 +60,10 @@ export async function withErrorBoundary(
         message: "Invalid request",
         issues: error.issues
       });
+    }
+
+    if (error instanceof HttpError) {
+      return jsonResponse(error.status, { message: error.message });
     }
 
     context.error("Unhandled API error", error);

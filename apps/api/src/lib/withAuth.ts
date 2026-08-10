@@ -34,16 +34,20 @@ export function withAuth(handler: AuthenticatedHandler, options: AuthOptions = {
       return jsonResponse(401, { message: "Missing or invalid Authorization header" });
     }
 
+    let auth: AuthTokenPayload;
     try {
-      const auth = await verifyAccessToken(token);
-      if (options.roles && !options.roles.includes(auth.role)) {
-        return jsonResponse(403, { message: "Forbidden" });
-      }
-
-      return await handler(request, context, auth);
+      auth = await verifyAccessToken(token);
     } catch (error: unknown) {
       context.warn("Token verification failed", error);
       return jsonResponse(401, { message: "Invalid or expired token" });
     }
+
+    if (options.roles && !options.roles.includes(auth.role)) {
+      return jsonResponse(403, { message: "Forbidden" });
+    }
+
+    // Handler errors propagate to withErrorBoundary — do NOT swallow them here,
+    // otherwise business errors get mislabeled as auth failures.
+    return handler(request, context, auth);
   };
 }

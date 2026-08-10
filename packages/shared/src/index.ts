@@ -153,7 +153,8 @@ export const stripeCheckoutRequestSchema = z.object({
 
 export const stripeCheckoutResponseSchema = z.object({
   checkoutUrl: z.string().url(),
-  sessionId: z.string()
+  sessionId: z.string(),
+  amountCents: z.number().int().nonnegative()
 });
 
 export const stripePortalRequestSchema = z.object({
@@ -172,7 +173,8 @@ export const paypalCreateSubscriptionRequestSchema = z.object({
 
 export const paypalCreateSubscriptionResponseSchema = z.object({
   approvalUrl: z.string().url(),
-  subscriptionId: z.string()
+  subscriptionId: z.string(),
+  amountCents: z.number().int().nonnegative()
 });
 
 export const operatorQueueJobSchema = z.object({

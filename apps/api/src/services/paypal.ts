@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
-import { prisma } from "@gpp/db";
 import { env } from "../lib/env";
+import { HttpError } from "../lib/http";
+import { computeUserMonthlyCents } from "./billing";
 import { grantEntitlement, revokeEntitlement } from "./entitlements";
 
 type PayPalWebhookEvent = {
@@ -42,53 +43,96 @@ async function getPayPalAccessToken(): Promise<string> {
   return payload.access_token;
 }
 
-export async function createPayPalSubscription(args: {
-  userId: string;
-  planCode: string;
-  returnUrl: string;
-  cancelUrl: string;
-}): Promise<{ approvalUrl: string; subscriptionId: string }> {
-  const plan = await prisma.plan.findUnique({ where: { code: args.planCode } });
-  if (!plan?.paypalPlanId) {
-    throw new Error("Plan is not configured for PayPal");
-  }
-
-  const token = await getPayPalAccessToken();
-  const response = await fetch(`${getPayPalBaseUrl()}/v1/billing/subscriptions`, {
+async function paypalPost<T>(path: string, token: string, body: unknown): Promise<T> {
+  const response = await fetch(`${getPayPalBaseUrl()}${path}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      plan_id: plan.paypalPlanId,
-      custom_id: args.userId,
-      application_context: {
-        brand_name: "Garbage Pail Pals",
-        user_action: "SUBSCRIBE_NOW",
-        return_url: args.returnUrl,
-        cancel_url: args.cancelUrl
-      }
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
-    throw new Error("Failed to create PayPal subscription");
+    const detail = await response.text().catch(() => "");
+    throw new Error(`PayPal ${path} failed (${response.status}): ${detail.slice(0, 300)}`);
   }
 
-  const payload = (await response.json()) as {
+  return (await response.json()) as T;
+}
+
+export async function createPayPalSubscription(args: {
+  userId: string;
+  planCode: string;
+  returnUrl: string;
+  cancelUrl: string;
+}): Promise<{ approvalUrl: string; subscriptionId: string; amountCents: number }> {
+  // Amount is derived server-side from the user's addresses (cans + pickups/week).
+  const amountCents = await computeUserMonthlyCents(args.userId);
+  if (amountCents <= 0) {
+    throw new HttpError(400, "Add a service address before starting a subscription");
+  }
+  const amountValue = (amountCents / 100).toFixed(2);
+
+  const token = await getPayPalAccessToken();
+
+  // PayPal subscriptions need a product + plan; create them dynamically so the
+  // monthly price matches the customer's configured service.
+  const product = await paypalPost<{ id?: string }>("/v1/catalogs/products", token, {
+    name: "Garbage Pail Pals curbside service",
+    type: "SERVICE",
+    category: "OTHER_SERVICES"
+  });
+  if (!product.id) {
+    throw new Error("PayPal product creation returned no id");
+  }
+
+  const plan = await paypalPost<{ id?: string }>("/v1/billing/plans", token, {
+    product_id: product.id,
+    name: `GPP Monthly ${amountValue} USD`,
+    billing_cycles: [
+      {
+        frequency: { interval_unit: "MONTH", interval_count: 1 },
+        tenure_type: "REGULAR",
+        sequence: 1,
+        total_cycles: 0,
+        pricing_scheme: { fixed_price: { value: amountValue, currency_code: "USD" } }
+      }
+    ],
+    payment_preferences: {
+      auto_bill_outstanding: true,
+      setup_fee: { value: "0", currency_code: "USD" },
+      setup_fee_failure_action: "CONTINUE",
+      payment_failure_threshold: 1
+    }
+  });
+  if (!plan.id) {
+    throw new Error("PayPal plan creation returned no id");
+  }
+
+  const subscription = await paypalPost<{
     id?: string;
     links?: Array<{ rel?: string; href?: string }>;
-  };
+  }>("/v1/billing/subscriptions", token, {
+    plan_id: plan.id,
+    custom_id: args.userId,
+    application_context: {
+      brand_name: "Garbage Pail Pals",
+      user_action: "SUBSCRIBE_NOW",
+      return_url: args.returnUrl,
+      cancel_url: args.cancelUrl
+    }
+  });
 
-  const approvalUrl = payload.links?.find((link) => link.rel === "approve")?.href;
-  if (!payload.id || !approvalUrl) {
+  const approvalUrl = subscription.links?.find((link) => link.rel === "approve")?.href;
+  if (!subscription.id || !approvalUrl) {
     throw new Error("PayPal subscription response missing approval URL or id");
   }
 
   return {
     approvalUrl,
-    subscriptionId: payload.id
+    subscriptionId: subscription.id,
+    amountCents
   };
 }
 
