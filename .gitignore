@@ -7,6 +7,7 @@ node_modules/
 dist/
 build/
 coverage/
+.azurite/
 .vscode/settings.json
 apps/web/ios/
 apps/web/android/
