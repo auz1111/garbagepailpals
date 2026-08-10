@@ -137,8 +137,8 @@ export function App() {
         <header className="topbar">
           <h1>
             <Link to="/" className="brand-link" aria-label="Garbage Pail Pals — home">
-              <img className="brand-logo" src="/logo-96.png" width={96} height={96} alt="" aria-hidden="true" />
-              Garbage Pail Pals
+              <img className="brand-logo" src="/logo-144.png" width={144} height={144} alt="" aria-hidden="true" />
+              <span className="brand-garbage">Garbage</span> <span className="brand-pail">Pail</span> <span className="brand-pals">Pals</span>
             </Link>
           </h1>
           <nav className="nav-links">

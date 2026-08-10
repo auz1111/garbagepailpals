@@ -24,6 +24,8 @@
   --teal-deep: #043e42;
   --teal-ink: #044247;
   --teal-wash: #e4f1f1;
+  --teal-bright: #45bfc4;
+  --teal-bright-wash: #e8fafb;
 
   /* Accent — marigold (from mascot lid/arms) */
   --gold: #f7a81b;
@@ -151,9 +153,10 @@ a {
 
 .topbar h1 {
   margin: 0;
-  font-size: 1.2rem;
-  font-weight: 900;
-  letter-spacing: -0.03em;
+  font-family: "Boogaloo", "Inter", system-ui, sans-serif;
+  font-size: clamp(1.9rem, 3.2vw, 2.6rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
@@ -163,14 +166,46 @@ a {
   gap: 0.55rem;
   color: var(--teal);
   text-decoration: none;
+  /* Cartoon text effect: layered dark outline + soft drop shadow */
+  text-shadow:
+    0 -1px 0 #212121,
+    0 1px 0 #212121,
+    -1px 0 0 #212121,
+    1px 0 0 #212121,
+    -1px -1px 0 #212121,
+    1px -1px 0 #212121,
+    -1px 1px 0 #212121,
+    1px 1px 0 #212121,
+    -1px 5px 0 #212121,
+    0 5px 0 #212121,
+    2px 4px 0 #212121,
+    0 5px 1px rgba(0, 0, 0, 0.1),
+    0 0 1px rgba(0, 0, 0, 0.1),
+    0 1px 1px rgba(0, 0, 0, 0.3),
+    0 3px 1px rgba(0, 0, 0, 0.2),
+    0 5px 5px rgba(0, 0, 0, 0.25),
+    0 6px 6px rgba(0, 0, 0, 0.2),
+    0 10px 10px rgba(0, 0, 0, 0.15);
 }
 
 .brand-link:hover {
   color: var(--teal-2);
 }
 
+.brand-garbage {
+  color: var(--teal-bright);
+}
+
+.brand-pail {
+  color: var(--gold);
+}
+
+.brand-pals {
+  color: #ffffff;
+}
+
 .brand-logo {
-  height: 38px;
+  height: clamp(56px, 6vw, 72px);
   width: auto;
   display: block;
 }
@@ -260,7 +295,8 @@ a {
   padding: clamp(3.5rem, 9vw, 7rem) clamp(1rem, 5vw, 2rem) clamp(3rem, 7vw, 5.5rem);
   background:
     radial-gradient(60% 60% at 50% -10%, rgba(247, 168, 27, 0.18) 0%, transparent 60%),
-    radial-gradient(52% 52% at 88% 18%, rgba(5, 90, 95, 0.12) 0%, transparent 62%),
+    radial-gradient(52% 52% at 88% 18%, rgba(69, 191, 196, 0.22) 0%, transparent 62%),
+    radial-gradient(46% 46% at 10% 30%, rgba(69, 191, 196, 0.12) 0%, transparent 60%),
     var(--surface);
 }
 
@@ -278,7 +314,7 @@ a {
 }
 
 .landing-hero h2 .accent {
-  color: var(--teal);
+  color: var(--teal-bright);
   white-space: nowrap;
 }
 
@@ -376,8 +412,9 @@ a {
 }
 
 .landing-jump-links a:hover {
-  border-color: var(--teal);
+  border-color: var(--teal-bright);
   color: var(--teal);
+  background: var(--teal-bright-wash);
 }
 
 /* Trust bar --------------------------------------------------------------- */
@@ -461,7 +498,7 @@ a {
 .landing-card:hover {
   transform: translateY(-4px);
   box-shadow: var(--shadow-md);
-  border-color: var(--line-2);
+  border-color: var(--teal-bright);
 }
 
 .landing-card .card-icon {
@@ -470,7 +507,8 @@ a {
   display: grid;
   place-items: center;
   border-radius: 14px;
-  background: var(--teal-wash);
+  background: var(--teal-bright-wash);
+  border: 1px solid rgba(69, 191, 196, 0.4);
   font-size: 1.5rem;
   margin-bottom: 1rem;
 }
@@ -649,6 +687,7 @@ a {
   max-width: none;
   background:
     radial-gradient(70% 90% at 50% -10%, rgba(247, 168, 27, 0.16) 0%, transparent 60%),
+    radial-gradient(60% 80% at 100% 120%, rgba(69, 191, 196, 0.28) 0%, transparent 62%),
     var(--teal-deep);
   color: #fff;
   text-align: center;
@@ -781,6 +820,7 @@ a {
 .auth-promo {
   background:
     radial-gradient(80% 60% at 100% 0%, rgba(247, 168, 27, 0.22) 0%, transparent 60%),
+    radial-gradient(70% 70% at 0% 100%, rgba(69, 191, 196, 0.3) 0%, transparent 62%),
     var(--teal-deep);
   color: #fff;
   padding: clamp(1.6rem, 3vw, 2.4rem);
