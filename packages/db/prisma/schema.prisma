@@ -69,6 +69,7 @@ model User {
   stripeCustomerId     String?
   paypalPayerId        String?
   revenueCatAppUserId  String?
+  requestedServiceArea String?
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   serviceAddresses     ServiceAddress[]

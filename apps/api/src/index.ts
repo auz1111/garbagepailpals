@@ -2,7 +2,7 @@ import { app } from "@azure/functions";
 import { healthHandler } from "./routes/health";
 import { loginHandler, refreshHandler, registerHandler } from "./routes/auth";
 import { meHandler } from "./routes/protected";
-import { serviceAreaCheckHandler } from "./routes/domain/serviceAreas";
+import { requestServiceAreaHandler, serviceAreaCheckHandler } from "./routes/domain/serviceAreas";
 import {
   addressHoldsHandler,
   addressesRootHandler,
@@ -143,6 +143,13 @@ app.http("service-area-check", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: serviceAreaCheckHandler
+});
+
+app.http("service-area-request", {
+  route: "service-areas/request",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: requestServiceAreaHandler
 });
 
 app.http("addresses", {

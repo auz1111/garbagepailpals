@@ -805,6 +805,69 @@ a {
   margin-top: 0;
 }
 
+/* Service-area gate ------------------------------------------------------- */
+
+.service-gate {
+  text-align: center;
+}
+
+.service-gate .eyebrow {
+  justify-content: center;
+}
+
+.service-gate h2 {
+  margin: 0.3rem 0 0.6rem;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+.service-gate .subtext {
+  margin: 0 auto;
+  max-width: 42ch;
+}
+
+.service-gate form {
+  margin-top: 1.6rem;
+  text-align: left;
+}
+
+.gate-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.1rem;
+  display: grid;
+  place-items: center;
+  font-size: 1.9rem;
+  border-radius: 999px;
+  background: var(--teal-bright-wash);
+  border: 1px solid rgba(52, 166, 171, 0.4);
+}
+
+.gate-icon-muted {
+  background: var(--gold-wash);
+  border-color: rgba(247, 168, 27, 0.4);
+}
+
+.gate-actions {
+  margin-top: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.gate-actions .cta-primary {
+  width: 100%;
+}
+
+.cta-link-dark {
+  color: var(--slate);
+}
+
+.cta-link-dark:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
 /* Auth — two-panel marketing card ----------------------------------------- */
 
 .auth-card {

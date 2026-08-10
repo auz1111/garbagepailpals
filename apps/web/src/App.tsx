@@ -13,6 +13,7 @@ import {
 } from "@gpp/shared";
 import { getMe, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace } from "./components/CustomerWorkspace";
 import { OperatorWorkspace } from "./components/OperatorWorkspace";
 import { AdminWorkspace } from "./components/AdminWorkspace";
@@ -43,7 +44,8 @@ export function App() {
       setAccessToken(data.accessToken);
       setUser(data.user);
       localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
-      navigate(defaultRouteForRole(data.user.role));
+      // New customers must confirm we serve their area before reaching the dashboard.
+      navigate(data.user.role === "CUSTOMER" ? "/service-area" : defaultRouteForRole(data.user.role));
     }
   });
 
@@ -484,6 +486,10 @@ export function App() {
           <Route
             element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["CUSTOMER", "ADMIN"]} />}
           >
+            <Route
+              path="/service-area"
+              element={user && accessToken ? <ServiceAreaGate user={user} accessToken={accessToken} /> : null}
+            />
             <Route
               path="/customer"
               element={

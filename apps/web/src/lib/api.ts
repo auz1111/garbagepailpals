@@ -223,6 +223,23 @@ export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckRe
   return request<undefined, ServiceAreaCheckResponse>(`/service-areas/check?${params.toString()}`, "GET");
 }
 
+type ServiceAreaRequestResponse = {
+  postalCode: string;
+  recorded: boolean;
+};
+
+export function requestServiceArea(
+  postalCode: string,
+  accessToken: string
+): Promise<ServiceAreaRequestResponse> {
+  return request<{ postalCode: string }, ServiceAreaRequestResponse>(
+    "/service-areas/request",
+    "POST",
+    { postalCode },
+    accessToken
+  );
+}
+
 export function listAddresses(accessToken: string): Promise<ServiceAddressListResponse> {
   return request<undefined, ServiceAddressListResponse>("/addresses", "GET", undefined, accessToken);
 }

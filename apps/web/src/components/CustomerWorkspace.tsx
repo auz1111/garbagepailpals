@@ -198,7 +198,7 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
           >
             <label>
               Postal code
-              <input {...serviceAreaForm.register("postalCode")} placeholder="97201" />
+              <input {...serviceAreaForm.register("postalCode")} placeholder="97702" />
             </label>
             <button type="submit">Check Area</button>
           </form>
@@ -228,7 +228,7 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
             </label>
             <label>
               Postal code
-              <input {...addressForm.register("postalCode")} placeholder="97201" />
+              <input {...addressForm.register("postalCode")} placeholder="97702" />
             </label>
             <label>
               Timezone
