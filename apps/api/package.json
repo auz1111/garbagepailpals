@@ -6,7 +6,9 @@
   "main": "dist/index.cjs",
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit && pnpm exec esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.cjs --external:@azure/functions --external:@prisma/client --external:prisma --external:@prisma/engines",
-    "dev": "func start",
+    "bundle": "pnpm exec esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.cjs --external:@azure/functions --external:@prisma/client --external:prisma --external:@prisma/engines",
+    "dev": "pnpm run bundle && func start",
+    "dev:watch": "pnpm run bundle -- --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests"
   },

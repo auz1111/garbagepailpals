@@ -108,6 +108,16 @@ export function App() {
     navigate("/auth");
   }
 
+  function goToSignUp() {
+    setMode("REGISTER");
+    navigate("/auth");
+  }
+
+  function goToSignIn() {
+    setMode("LOGIN");
+    navigate("/auth");
+  }
+
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
 
   if (isBootstrapping) {
@@ -126,8 +136,10 @@ export function App() {
       <section className="app-shell">
         <header className="topbar">
           <h1>
-            <img className="brand-logo" src="/logo-96.png" width={96} height={96} alt="Garbage Pail Pals logo" />
-            Garbage Pail Pals
+            <Link to="/" className="brand-link" aria-label="Garbage Pail Pals — home">
+              <img className="brand-logo" src="/logo-96.png" width={96} height={96} alt="" aria-hidden="true" />
+              Garbage Pail Pals
+            </Link>
           </h1>
           <nav className="nav-links">
             <Link to="/">Home</Link>
@@ -136,9 +148,15 @@ export function App() {
             <Link to="/operator">Operator</Link>
             <Link to="/admin">Admin</Link>
           </nav>
-          <button type="button" onClick={logout} disabled={!isAuthenticated}>
-            Logout
-          </button>
+          {isAuthenticated ? (
+            <button type="button" onClick={logout}>
+              Logout
+            </button>
+          ) : (
+            <button type="button" onClick={goToSignIn}>
+              Sign in
+            </button>
+          )}
         </header>
 
         <Routes>
@@ -163,11 +181,15 @@ export function App() {
                     Residents and operators stay in sync on one tidy dashboard so nothing slips.
                   </p>
                   <div className="landing-actions">
-                    <button type="button" className="cta-primary" onClick={() => navigate(primaryActionPath)}>
+                    <button
+                      type="button"
+                      className="cta-primary"
+                      onClick={() => (isAuthenticated ? navigate(primaryActionPath) : goToSignUp())}
+                    >
                       {isAuthenticated ? "Go to dashboard" : "Start free trial"}
                     </button>
                     {!isAuthenticated ? (
-                      <button type="button" className="cta-secondary" onClick={() => navigate("/auth")}>
+                      <button type="button" className="cta-secondary" onClick={goToSignIn}>
                         Sign in
                       </button>
                     ) : null}
@@ -270,7 +292,7 @@ export function App() {
                         <li>Curbside roll-out &amp; return</li>
                         <li>Text &amp; email reminders</li>
                       </ul>
-                      <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
+                      <button type="button" className="plan-cta" onClick={goToSignUp}>
                         Go Starter
                       </button>
                     </article>
@@ -283,7 +305,7 @@ export function App() {
                         <li>Vacation holds &amp; reschedules</li>
                         <li>Priority support</li>
                       </ul>
-                      <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
+                      <button type="button" className="plan-cta" onClick={goToSignUp}>
                         Start free trial
                       </button>
                     </article>
@@ -296,7 +318,7 @@ export function App() {
                         <li>Operator job assignment</li>
                         <li>Service reports &amp; history</li>
                       </ul>
-                      <button type="button" className="plan-cta" onClick={() => navigate("/auth")}>
+                      <button type="button" className="plan-cta" onClick={goToSignUp}>
                         Go Pro Ops
                       </button>
                     </article>
@@ -323,7 +345,7 @@ export function App() {
                       Create an account and jump straight to your role dashboard in seconds.
                     </p>
                     <div className="landing-actions">
-                      <button type="button" className="cta-primary" onClick={() => navigate("/auth")}>
+                      <button type="button" className="cta-primary" onClick={goToSignUp}>
                         Get started free
                       </button>
                       <a className="cta-link" href="#top">
@@ -346,7 +368,7 @@ export function App() {
                       <a href="#features">Features</a>
                       <a href="#how">How it works</a>
                       <a href="#pricing">Pricing</a>
-                      <Link to="/auth">Sign in</Link>
+                      <Link to="/auth" onClick={() => setMode("LOGIN")}>Sign in</Link>
                     </nav>
                     <small>© {new Date().getFullYear()} Garbage Pail Pals</small>
                   </div>
@@ -357,56 +379,96 @@ export function App() {
           <Route
             path="/auth"
             element={isAuthenticated && user ? <Navigate to={defaultRouteForRole(user.role)} replace /> : (
-              <section className="card">
-                <p className="subtext">Phase 3 auth + role shells.</p>
-                <div className="tabs">
-                  <button type="button" className={mode === "LOGIN" ? "active" : ""} onClick={() => setMode("LOGIN")}>
-                    Login
-                  </button>
-                  <button
-                    type="button"
-                    className={mode === "REGISTER" ? "active" : ""}
-                    onClick={() => setMode("REGISTER")}
-                  >
-                    Register
-                  </button>
-                </div>
+              <section className="card auth-card">
+                <aside className="auth-promo">
+                  <span className="trial-badge">✨ 14-day free trial</span>
+                  <h2>Never take the bins out again.</h2>
+                  <p>
+                    Sign up today and we'll roll your cans to the curb and back — right on schedule,
+                    week after week.
+                  </p>
+                  <ul className="trial-perks">
+                    <li>Free for your first 14 days</li>
+                    <li>No credit card required</li>
+                    <li>Cancel anytime, no hassle</li>
+                  </ul>
+                  <p className="auth-promo-foot">
+                    Join 4,000+ neighbors who never think about trash day.
+                  </p>
+                </aside>
 
-                {mode === "REGISTER" ? (
-                  <form onSubmit={registerForm.handleSubmit((values) => registerMutation.mutate(values))}>
-                    <label>
-                      Name
-                      <input {...registerForm.register("name")} placeholder="Chris Curb" />
-                    </label>
-                    <label>
-                      Email
-                      <input {...registerForm.register("email")} type="email" placeholder="you@example.com" />
-                    </label>
-                    <label>
-                      Password
-                      <input {...registerForm.register("password")} type="password" placeholder="At least 8 chars" />
-                    </label>
-                    <button type="submit" disabled={registerMutation.isPending}>
-                      {registerMutation.isPending ? "Creating account..." : "Create account"}
+                <div className="auth-form-side">
+                  <div className="tabs">
+                    <button type="button" className={mode === "LOGIN" ? "active" : ""} onClick={() => setMode("LOGIN")}>
+                      Log in
                     </button>
-                    {registerMutation.isError ? <p className="error">{registerMutation.error.message}</p> : null}
-                  </form>
-                ) : (
-                  <form onSubmit={loginForm.handleSubmit((values) => loginMutation.mutate(values))}>
-                    <label>
-                      Email
-                      <input {...loginForm.register("email")} type="email" placeholder="you@example.com" />
-                    </label>
-                    <label>
-                      Password
-                      <input {...loginForm.register("password")} type="password" placeholder="Your password" />
-                    </label>
-                    <button type="submit" disabled={loginMutation.isPending}>
-                      {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                    <button
+                      type="button"
+                      className={mode === "REGISTER" ? "active" : ""}
+                      onClick={() => setMode("REGISTER")}
+                    >
+                      Sign up
                     </button>
-                    {loginMutation.isError ? <p className="error">{loginMutation.error.message}</p> : null}
-                  </form>
-                )}
+                  </div>
+
+                  <div className="auth-head">
+                    <h3>{mode === "REGISTER" ? "Start your free trial" : "Welcome back"}</h3>
+                    <p className="subtext">
+                      {mode === "REGISTER"
+                        ? "Create your account — it takes less than a minute."
+                        : "Log in to manage your pickups and schedule."}
+                    </p>
+                  </div>
+
+                  {mode === "REGISTER" ? (
+                    <form onSubmit={registerForm.handleSubmit((values) => registerMutation.mutate(values))}>
+                      <label>
+                        Name
+                        <input {...registerForm.register("name")} placeholder="Chris Curb" />
+                      </label>
+                      <label>
+                        Email
+                        <input {...registerForm.register("email")} type="email" placeholder="you@example.com" />
+                      </label>
+                      <label>
+                        Password
+                        <input {...registerForm.register("password")} type="password" placeholder="At least 8 chars" />
+                      </label>
+                      <button type="submit" disabled={registerMutation.isPending}>
+                        {registerMutation.isPending ? "Starting your trial..." : "Start my free trial"}
+                      </button>
+                      <p className="fineprint">No credit card required · Cancel anytime</p>
+                      {registerMutation.isError ? <p className="error">{registerMutation.error.message}</p> : null}
+                      <p className="auth-switch">
+                        Already have an account?{" "}
+                        <button type="button" className="link-inline" onClick={() => setMode("LOGIN")}>
+                          Log in
+                        </button>
+                      </p>
+                    </form>
+                  ) : (
+                    <form onSubmit={loginForm.handleSubmit((values) => loginMutation.mutate(values))}>
+                      <label>
+                        Email
+                        <input {...loginForm.register("email")} type="email" placeholder="you@example.com" />
+                      </label>
+                      <label>
+                        Password
+                        <input {...loginForm.register("password")} type="password" placeholder="Your password" />
+                      </label>
+                      <button type="submit" disabled={loginMutation.isPending}>
+                        {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                      </button>
+                      {loginMutation.isError ? <p className="error">{loginMutation.error.message}</p> : null}
+                      <p className="auth-switch">
+                        New to Garbage Pail Pals?{" "}
+                        <button type="button" className="link-inline" onClick={() => setMode("REGISTER")}>
+                          Start a free trial
+                        </button>
+                      </p>
+                    </form>
+                  )}
+                </div>
               </section>
             )}
           />

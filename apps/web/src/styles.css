@@ -119,8 +119,8 @@ a {
   width: 100%;
 }
 
-.app-shell > .card:not(.role-shell),
-.page > .card:not(.role-shell) {
+.app-shell > .card:not(.role-shell):not(.auth-card),
+.page > .card:not(.role-shell):not(.auth-card) {
   width: min(520px, calc(100% - 2rem));
   margin: 3rem auto;
 }
@@ -154,11 +154,19 @@ a {
   font-size: 1.2rem;
   font-weight: 900;
   letter-spacing: -0.03em;
-  display: flex;
+  white-space: nowrap;
+}
+
+.brand-link {
+  display: inline-flex;
   align-items: center;
   gap: 0.55rem;
-  white-space: nowrap;
   color: var(--teal);
+  text-decoration: none;
+}
+
+.brand-link:hover {
+  color: var(--teal-2);
 }
 
 .brand-logo {
@@ -759,6 +767,133 @@ a {
   margin-top: 0;
 }
 
+/* Auth — two-panel marketing card ----------------------------------------- */
+
+.auth-card {
+  width: min(880px, calc(100% - 2rem));
+  margin: clamp(2rem, 6vw, 4rem) auto;
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+}
+
+.auth-promo {
+  background:
+    radial-gradient(80% 60% at 100% 0%, rgba(247, 168, 27, 0.22) 0%, transparent 60%),
+    var(--teal-deep);
+  color: #fff;
+  padding: clamp(1.6rem, 3vw, 2.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.trial-badge {
+  align-self: flex-start;
+  background: var(--gold);
+  color: var(--teal-deep);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+  padding: 0.4rem 0.85rem;
+  border-radius: var(--pill);
+}
+
+.auth-promo h2 {
+  color: #fff;
+  margin: 0.2rem 0 0;
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  line-height: 1.08;
+}
+
+.auth-promo p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.98rem;
+}
+
+.trial-perks {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.trial-perks li {
+  position: relative;
+  padding-left: 1.9rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.trial-perks li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  top: -0.05em;
+  width: 1.3rem;
+  height: 1.3rem;
+  display: grid;
+  place-items: center;
+  background: var(--gold);
+  color: var(--teal-deep);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 900;
+}
+
+.auth-promo-foot {
+  margin-top: auto;
+  padding-top: 0.6rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.68) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.auth-form-side {
+  padding: clamp(1.6rem, 3vw, 2.4rem);
+}
+
+.auth-head {
+  margin: 1.3rem 0 1.1rem;
+}
+
+.auth-head h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.4rem;
+}
+
+.fineprint {
+  margin: 0.1rem 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--slate-2);
+}
+
+.auth-switch {
+  margin: 0.4rem 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--slate);
+}
+
+.link-inline {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+.link-inline:hover {
+  color: var(--teal-2);
+}
+
 h1 {
   margin-top: 0;
 }
@@ -966,5 +1101,10 @@ button[type="submit"]:disabled {
 
   .nav-links {
     display: none;
+  }
+
+  .auth-card {
+    grid-template-columns: 1fr;
+    width: min(460px, calc(100% - 2rem));
   }
 }

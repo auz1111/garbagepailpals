@@ -2,14 +2,24 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import { ZodError, type ZodType } from "zod";
 
 export function jsonResponse(status: number, body: unknown): HttpResponseInit {
+  const headers = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": process.env.WEB_ORIGIN ?? "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS"
+  };
+
+  // 204/205/304 responses must not include a response body.
+  if (status === 204 || status === 205 || status === 304) {
+    return {
+      status,
+      headers
+    };
+  }
+
   return {
     status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": process.env.WEB_ORIGIN ?? "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS"
-    },
+    headers,
     jsonBody: body
   };
 }
