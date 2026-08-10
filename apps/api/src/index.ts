@@ -4,10 +4,8 @@ import { loginHandler, refreshHandler, registerHandler } from "./routes/auth";
 import { meHandler } from "./routes/protected";
 import { serviceAreaCheckHandler } from "./routes/domain/serviceAreas";
 import {
-  createAddressHandler,
-  createHoldHandler,
-  listAddressesHandler,
-  listHoldsHandler,
+  addressHoldsHandler,
+  addressesRootHandler,
   updateAddressHandler,
   upsertScheduleHandler
 } from "./routes/domain/addresses";
@@ -147,18 +145,11 @@ app.http("service-area-check", {
   handler: serviceAreaCheckHandler
 });
 
-app.http("address-create", {
+app.http("addresses", {
   route: "addresses",
-  methods: ["POST", "OPTIONS"],
+  methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
-  handler: createAddressHandler
-});
-
-app.http("address-list", {
-  route: "addresses",
-  methods: ["GET", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: listAddressesHandler
+  handler: addressesRootHandler
 });
 
 app.http("address-update", {
@@ -175,18 +166,11 @@ app.http("address-schedule-upsert", {
   handler: upsertScheduleHandler
 });
 
-app.http("address-hold-create", {
+app.http("address-holds", {
   route: "addresses/{addressId}/holds",
-  methods: ["POST", "OPTIONS"],
+  methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
-  handler: createHoldHandler
-});
-
-app.http("address-hold-list", {
-  route: "addresses/{addressId}/holds",
-  methods: ["GET", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: listHoldsHandler
+  handler: addressHoldsHandler
 });
 
 app.http("jobs-upcoming", {

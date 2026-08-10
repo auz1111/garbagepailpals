@@ -287,6 +287,28 @@ export async function createHoldHandler(
   );
 }
 
+// Azure Functions disallows two functions sharing one route, even across
+// methods, so /addresses is registered once and dispatched here by method.
+export async function addressesRootHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  if (request.method.toUpperCase() === "GET") {
+    return listAddressesHandler(request, context);
+  }
+  return createAddressHandler(request, context);
+}
+
+export async function addressHoldsHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  if (request.method.toUpperCase() === "GET") {
+    return listHoldsHandler(request, context);
+  }
+  return createHoldHandler(request, context);
+}
+
 export async function listHoldsHandler(
   request: HttpRequest,
   context: InvocationContext
