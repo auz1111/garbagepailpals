@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Link, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   loginSchema,
   registerSchema,
@@ -14,7 +14,7 @@ import {
 import { getMe, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
-import { CustomerWorkspace } from "./components/CustomerWorkspace";
+import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
 import { OperatorWorkspace } from "./components/OperatorWorkspace";
 import { AdminWorkspace } from "./components/AdminWorkspace";
 
@@ -26,6 +26,7 @@ export function App() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const navigate = useNavigate();
 
   const registerForm = useForm<RegisterInput>({
@@ -128,6 +129,7 @@ export function App() {
   }
 
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
+  const showDashboardMenu = isAuthenticated && user?.role === "CUSTOMER" && !customerBlocked;
 
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
 
@@ -146,18 +148,35 @@ export function App() {
     <main className="page">
       <section className="app-shell">
         <header className="topbar">
-          <h1>
-            <Link to="/" className="brand-link" aria-label="Garbage Pail Pals — home">
-              <img className="brand-logo" src="/logo-144.png" width={144} height={144} alt="" aria-hidden="true" />
-              <span className="brand-garbage">Garbage</span> <span className="brand-pail">Pail</span> <span className="brand-pals">Pals</span>
-            </Link>
-          </h1>
-          <nav className="nav-links" aria-label="Primary">
-            <a href="/#features">Features</a>
-            <a href="/#how">How it works</a>
-            <a href="/#pricing">Pricing</a>
-            <a href="/#contact">Contact</a>
-          </nav>
+          <div className="topbar-left">
+            {showDashboardMenu ? (
+              <button
+                type="button"
+                className="hamburger"
+                aria-label="Open dashboard menu"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen(true)}
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+            ) : null}
+            <h1>
+              <Link to="/" className="brand-link" aria-label="Garbage Pail Pals — home">
+                <img className="brand-logo" src="/logo-144.png" width={144} height={144} alt="" aria-hidden="true" />
+                <span className="brand-garbage">Garbage</span> <span className="brand-pail">Pail</span> <span className="brand-pals">Pals</span>
+              </Link>
+            </h1>
+          </div>
+          {!showDashboardMenu ? (
+            <nav className="nav-links" aria-label="Primary">
+              <a href="/#features">Features</a>
+              <a href="/#how">How it works</a>
+              <a href="/#pricing">Pricing</a>
+              <a href="/#contact">Contact</a>
+            </nav>
+          ) : null}
           {isAuthenticated ? (
             <button type="button" onClick={logout}>
               Logout
@@ -168,6 +187,41 @@ export function App() {
             </button>
           )}
         </header>
+
+        {showDashboardMenu && menuOpen ? (
+          <div className="drawer-root">
+            <div className="drawer-backdrop" onClick={() => setMenuOpen(false)} />
+            <aside className="drawer" aria-label="Dashboard navigation">
+              <div className="drawer-head">
+                <span>Dashboard</span>
+                <button
+                  type="button"
+                  className="drawer-close"
+                  aria-label="Close menu"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  ×
+                </button>
+              </div>
+              <nav className="drawer-nav">
+                {CUSTOMER_NAV.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={"end" in item ? item.end : undefined}
+                    className={({ isActive }) => (isActive ? "drawer-link active" : "drawer-link")}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    <span className="drawer-link-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </NavLink>
+                ))}
+              </nav>
+            </aside>
+          </div>
+        ) : null}
 
         <Routes>
           <Route
@@ -501,7 +555,7 @@ export function App() {
               }
             />
             <Route
-              path="/customer"
+              path="/customer/*"
               element={
                 user && accessToken ? (
                   customerBlocked ? (

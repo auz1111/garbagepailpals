@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
+import { Link, Navigate, Route, Routes } from "react-router-dom";
 import type { CurrentUser, ServiceAddressInput, ServiceScheduleInput } from "@gpp/shared";
 import {
   ApiError,
@@ -47,6 +48,16 @@ const defaultScheduleValues: ServiceScheduleInput = {
   curbOutOffsetHours: -12,
   curbInOffsetHours: 8
 };
+
+export const CUSTOMER_NAV = [
+  { to: "/customer", label: "Overview", icon: "🏡", end: true },
+  { to: "/customer/billing", label: "Billing", icon: "💳" },
+  { to: "/customer/service-area", label: "Service Area", icon: "📍" },
+  { to: "/customer/addresses", label: "Addresses", icon: "🏠" },
+  { to: "/customer/schedule", label: "Schedule", icon: "🗓️" },
+  { to: "/customer/jobs", label: "Upcoming Jobs", icon: "🚚" },
+  { to: "/customer/history", label: "History", icon: "🕓" }
+] as const;
 
 export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps): JSX.Element {
   const queryClient = useQueryClient();
@@ -160,17 +171,39 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
     return errors.some((error) => error instanceof ApiError && error.status === 402);
   }, [addressesQuery.error, historyJobsQuery.error, upcomingJobsQuery.error]);
 
-  return (
-    <section className="card role-shell customer-workspace">
-      <h2>Customer Dashboard</h2>
-      <p className="subtext">
-        Signed in as {user.name} ({user.email})
-      </p>
+  const firstName = user.name.split(" ")[0];
 
-      <div className="panel-grid">
-        <article className="panel">
-          <h3>Billing</h3>
+  function renderOverview(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Welcome back, {firstName}!</h2>
+          <p className="subtext">
+            Signed in as {user.name} ({user.email})
+          </p>
+        </div>
+        <div className="dash-nav-grid">
+          {CUSTOMER_NAV.filter((item) => item.to !== "/customer").map((item) => (
+            <Link key={item.to} to={item.to} className="dash-nav-card">
+              <span className="dash-nav-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+              <strong>{item.label}</strong>
+            </Link>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  function renderBilling(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Billing</h2>
           <p className="subtext">Activate service first, then manage the subscription in Stripe.</p>
+        </div>
+        <article className="panel">
           <div className="button-row">
             <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending}>
               {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
@@ -188,9 +221,18 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
             </p>
           ) : null}
         </article>
+      </div>
+    );
+  }
 
+  function renderServiceArea(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Service Area Check</h2>
+          <p className="subtext">Confirm we operate in a ZIP code.</p>
+        </div>
         <article className="panel">
-          <h3>Service Area Check</h3>
           <form
             onSubmit={serviceAreaForm.handleSubmit(
               async (values) => {
@@ -233,48 +275,82 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
           ) : null}
         </article>
       </div>
+    );
+  }
 
-      <div className="panel-grid">
-        <article className="panel">
-          <h3>Add Service Address</h3>
-          <form onSubmit={addressForm.handleSubmit((values) => createAddressMutation.mutate(values))}>
-            <label>
-              Line 1
-              <input {...addressForm.register("line1")} placeholder="123 Main St" />
-            </label>
-            <label>
-              City
-              <input {...addressForm.register("city")} placeholder="Portland" />
-            </label>
-            <label>
-              State
-              <input {...addressForm.register("state")} placeholder="OR" />
-            </label>
-            <label>
-              Postal code
-              <input {...addressForm.register("postalCode")} placeholder="97702" />
-            </label>
-            <label>
-              Timezone
-              <input {...addressForm.register("timezone")} placeholder="America/Los_Angeles" />
-            </label>
-            <label>
-              Access notes
-              <input {...addressForm.register("accessNotes")} placeholder="Gate opens inward" />
-            </label>
-            <label>
-              Can count
-              <input type="number" min={1} max={20} {...addressForm.register("canCount", { valueAsNumber: true })} />
-            </label>
-            <button type="submit" disabled={createAddressMutation.isPending}>
-              {createAddressMutation.isPending ? "Saving..." : "Save Address"}
-            </button>
-          </form>
-          {createAddressMutation.isError ? <p className="error">{getErrorMessage(createAddressMutation.error)}</p> : null}
-        </article>
+  function renderAddresses(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Addresses</h2>
+          <p className="subtext">Add a pickup location and review your saved addresses.</p>
+        </div>
+        <div className="panel-grid">
+          <article className="panel">
+            <h3>Add Service Address</h3>
+            <form onSubmit={addressForm.handleSubmit((values) => createAddressMutation.mutate(values))}>
+              <label>
+                Line 1
+                <input {...addressForm.register("line1")} placeholder="123 Main St" />
+              </label>
+              <label>
+                City
+                <input {...addressForm.register("city")} placeholder="Portland" />
+              </label>
+              <label>
+                State
+                <input {...addressForm.register("state")} placeholder="OR" />
+              </label>
+              <label>
+                Postal code
+                <input {...addressForm.register("postalCode")} placeholder="97702" />
+              </label>
+              <label>
+                Timezone
+                <input {...addressForm.register("timezone")} placeholder="America/Los_Angeles" />
+              </label>
+              <label>
+                Access notes
+                <input {...addressForm.register("accessNotes")} placeholder="Gate opens inward" />
+              </label>
+              <label>
+                Can count
+                <input type="number" min={1} max={20} {...addressForm.register("canCount", { valueAsNumber: true })} />
+              </label>
+              <button type="submit" disabled={createAddressMutation.isPending}>
+                {createAddressMutation.isPending ? "Saving..." : "Save Address"}
+              </button>
+            </form>
+            {createAddressMutation.isError ? <p className="error">{getErrorMessage(createAddressMutation.error)}</p> : null}
+          </article>
 
+          <article className="panel">
+            <h3>Your Addresses</h3>
+            <ul className="meta-list compact">
+              {addressesQuery.data?.addresses.map((address) => (
+                <li key={address.id}>
+                  {address.line1}, {address.city}, {address.state} {address.postalCode} | cans: {address.canCount}
+                </li>
+              ))}
+            </ul>
+            {addressesQuery.data && addressesQuery.data.addresses.length === 0 ? (
+              <p className="subtext">No addresses yet — add your first one.</p>
+            ) : null}
+            {addressesQuery.isError ? <p className="error">{getErrorMessage(addressesQuery.error)}</p> : null}
+          </article>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSchedule(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Schedule</h2>
+          <p className="subtext">Set the pickup day and cadence for an address.</p>
+        </div>
         <article className="panel">
-          <h3>Schedule</h3>
           <label>
             Address
             <select
@@ -319,10 +395,17 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
           {scheduleMutation.isError ? <p className="error">{getErrorMessage(scheduleMutation.error)}</p> : null}
         </article>
       </div>
+    );
+  }
 
-      <div className="panel-grid">
+  function renderJobs(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Upcoming Jobs</h2>
+          <p className="subtext">Your scheduled pickups over the next 30 days.</p>
+        </div>
         <article className="panel">
-          <h3>Upcoming Jobs (30 days)</h3>
           <ul className="meta-list compact">
             {upcomingJobsQuery.data?.jobs.slice(0, 8).map((job) => (
               <li key={job.id}>
@@ -330,11 +413,23 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
               </li>
             ))}
           </ul>
+          {upcomingJobsQuery.data && upcomingJobsQuery.data.jobs.length === 0 ? (
+            <p className="subtext">No upcoming jobs scheduled yet.</p>
+          ) : null}
           {upcomingJobsQuery.isError ? <p className="error">{getErrorMessage(upcomingJobsQuery.error)}</p> : null}
         </article>
+      </div>
+    );
+  }
 
+  function renderHistory(): JSX.Element {
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Recent History</h2>
+          <p className="subtext">A look back at your recent pickups.</p>
+        </div>
         <article className="panel">
-          <h3>Recent History</h3>
           <ul className="meta-list compact">
             {historyJobsQuery.data?.jobs.slice(0, 8).map((job) => (
               <li key={job.id}>
@@ -342,21 +437,27 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
               </li>
             ))}
           </ul>
+          {historyJobsQuery.data && historyJobsQuery.data.jobs.length === 0 ? (
+            <p className="subtext">No past jobs yet.</p>
+          ) : null}
           {historyJobsQuery.isError ? <p className="error">{getErrorMessage(historyJobsQuery.error)}</p> : null}
         </article>
       </div>
+    );
+  }
 
-      <article className="panel">
-        <h3>Your Addresses</h3>
-        <ul className="meta-list compact">
-          {addressesQuery.data?.addresses.map((address) => (
-            <li key={address.id}>
-              {address.line1}, {address.city}, {address.state} {address.postalCode} | cans: {address.canCount}
-            </li>
-          ))}
-        </ul>
-        {addressesQuery.isError ? <p className="error">{getErrorMessage(addressesQuery.error)}</p> : null}
-      </article>
+  return (
+    <section className="card role-shell customer-workspace">
+      <Routes>
+        <Route index element={renderOverview()} />
+        <Route path="billing" element={renderBilling()} />
+        <Route path="service-area" element={renderServiceArea()} />
+        <Route path="addresses" element={renderAddresses()} />
+        <Route path="schedule" element={renderSchedule()} />
+        <Route path="jobs" element={renderJobs()} />
+        <Route path="history" element={renderHistory()} />
+        <Route path="*" element={<Navigate to="/customer" replace />} />
+      </Routes>
     </section>
   );
 }
