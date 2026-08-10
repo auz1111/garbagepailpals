@@ -204,12 +204,6 @@ export function App() {
                       </button>
                     ) : null}
                   </div>
-                  <nav className="landing-jump-links" aria-label="Homepage sections">
-                    <a href="#features">Features</a>
-                    <a href="#how">How it works</a>
-                    <a href="#pricing">Pricing</a>
-                    <a href="#contact">Contact</a>
-                  </nav>
                 </div>
 
                 <section className="trust-bar" aria-label="At a glance">
