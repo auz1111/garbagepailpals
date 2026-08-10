@@ -173,6 +173,87 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
 
   const firstName = user.name.split(" ")[0];
 
+  const addresses = addressesQuery.data?.addresses ?? [];
+  const hasAddress = addresses.length > 0;
+  // Reaching address data means the entitlement gate let us through -> the
+  // subscription/entitlement is active. A 402 (entitlementBlocked) means it isn't.
+  const subscriptionActive = addressesQuery.isSuccess;
+
+  function renderAccountStatus(): JSX.Element {
+    if (addressesQuery.isLoading) {
+      return (
+        <div className="account-status is-info">
+          <span className="account-status-icon" aria-hidden="true">
+            ⏳
+          </span>
+          <div className="account-status-body">
+            <strong>Checking your account status…</strong>
+          </div>
+        </div>
+      );
+    }
+
+    // A non-entitlement error means we couldn't read the account at all.
+    if (addressesQuery.isError && !entitlementBlocked) {
+      return (
+        <div className="account-status is-warn">
+          <span className="account-status-icon" aria-hidden="true">
+            ⚠️
+          </span>
+          <div className="account-status-body">
+            <strong>We couldn't load your account status.</strong>
+            <p className="subtext">{getErrorMessage(addressesQuery.error)}</p>
+          </div>
+        </div>
+      );
+    }
+
+    const allOk = subscriptionActive && hasAddress;
+
+    return (
+      <div className={`account-status ${allOk ? "is-ok" : "is-warn"}`}>
+        <span className="account-status-icon" aria-hidden="true">
+          {allOk ? "✅" : "⚠️"}
+        </span>
+        <div className="account-status-body">
+          <strong>
+            {allOk
+              ? "You're all set — your account is active and ready for service."
+              : "Action needed before we can service your cans."}
+          </strong>
+          <ul className="account-status-list">
+            <li className={subscriptionActive ? "ok" : "bad"}>
+              {subscriptionActive ? (
+                "Subscription active"
+              ) : (
+                <>
+                  No active subscription — <Link to="/customer/billing">set up billing</Link> to
+                  activate your plan (an unpaid or expired plan pauses service).
+                </>
+              )}
+            </li>
+            <li
+              className={
+                !subscriptionActive ? "pending" : hasAddress ? "ok" : "bad"
+              }
+            >
+              {!subscriptionActive ? (
+                "Service address — activate your subscription first"
+              ) : hasAddress ? (
+                `${addresses.length} service address${addresses.length === 1 ? "" : "es"} added`
+              ) : (
+                <>
+                  No service address yet — <Link to="/customer/addresses">add one</Link> so we can
+                  schedule pickups.
+                </>
+              )}
+            </li>
+          </ul>
+        </div>
+      </div>
+    );
+  }
+
   function renderOverview(): JSX.Element {
     return (
       <div className="dash-page">
@@ -182,6 +263,7 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
             Signed in as {user.name} ({user.email})
           </p>
         </div>
+        {renderAccountStatus()}
         <div className="dash-nav-grid">
           {CUSTOMER_NAV.filter((item) => item.to !== "/customer").map((item) => (
             <Link key={item.to} to={item.to} className="dash-nav-card">
