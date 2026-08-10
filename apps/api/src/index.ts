@@ -9,7 +9,7 @@ import {
   updateAddressHandler,
   upsertScheduleHandler
 } from "./routes/domain/addresses";
-import { historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
+import { generateJobsHandler, historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
 import { nightlySchedulerHandler } from "./timers/nightlyScheduler";
 import { reminderSweepHandler } from "./timers/reminders";
 import {
@@ -192,6 +192,13 @@ app.http("jobs-history", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: historyJobsHandler
+});
+
+app.http("jobs-generate", {
+  route: "jobs/generate",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: generateJobsHandler
 });
 
 app.http("stripe-checkout", {

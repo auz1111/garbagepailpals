@@ -9,6 +9,7 @@ type SchedulerAddress = {
   id: string;
   city: string;
   timezone: string;
+  pickupsPerWeek: number;
   schedule: {
     pickupDayOfWeek: number;
     cadence: Cadence;
@@ -51,6 +52,18 @@ function weekdayIndexFromLuxon(dt: DateTime): number {
   return dt.weekday % 7;
 }
 
+// Spread N pickups evenly across the week, anchored at the primary pickup day.
+// e.g. Tue + 2/week -> [Tue, Fri]; Tue + 3/week -> [Tue, Thu, Sat].
+export function computePickupWeekdays(primaryDay: number, pickupsPerWeek: number): number[] {
+  const count = Math.min(7, Math.max(1, Math.floor(pickupsPerWeek || 1)));
+  const days = new Set<number>();
+  for (let i = 0; i < count; i += 1) {
+    const offset = Math.floor((i * 7) / count);
+    days.add((primaryDay + offset) % 7);
+  }
+  return [...days].sort((a, b) => a - b);
+}
+
 function isHoldCovered(date: DateTime, holds: SchedulerAddress["holds"]): boolean {
   return holds.some((hold) => {
     const start = DateTime.fromJSDate(hold.startDate).startOf("day");
@@ -86,15 +99,17 @@ export function calculateJobsForAddress(
   holds: SchedulerAddress["holds"],
   holidays: HolidayRule[],
   lookaheadDays: number,
-  referenceDate = new Date()
+  referenceDate = new Date(),
+  pickupsPerWeek = 1
 ): PendingJob[] {
   const start = DateTime.fromJSDate(referenceDate, { zone: timezone }).startOf("day");
   const jobs: PendingJob[] = [];
+  const pickupWeekdays = computePickupWeekdays(schedule.pickupDayOfWeek, pickupsPerWeek);
 
   for (let i = 0; i < lookaheadDays; i += 1) {
     const day = start.plus({ days: i });
     const shiftedDay = day.minus({ days: resolveShiftDays(day, holidays) });
-    const matchesWeekday = weekdayIndexFromLuxon(shiftedDay) === schedule.pickupDayOfWeek;
+    const matchesWeekday = pickupWeekdays.includes(weekdayIndexFromLuxon(shiftedDay));
 
     if (!matchesWeekday) {
       continue;
@@ -131,13 +146,17 @@ export function calculateJobsForAddress(
   return jobs;
 }
 
-export async function runNightlyJobGeneration(now = new Date()): Promise<{ created: number }> {
+export async function runNightlyJobGeneration(
+  now = new Date(),
+  options: { force?: boolean; userId?: string } = {}
+): Promise<{ created: number }> {
   const lookahead = env.SCHEDULER_LOOKAHEAD_DAYS;
 
   const subscriptions = (await prisma.subscription.findMany({
     where: {
       status: { in: ["ACTIVE", "TRIALING"] },
-      serviceAddress: { isActive: true }
+      serviceAddress: { isActive: true },
+      ...(options.userId ? { userId: options.userId } : {})
     },
     include: {
       serviceAddress: {
@@ -161,7 +180,7 @@ export async function runNightlyJobGeneration(now = new Date()): Promise<{ creat
   let created = 0;
 
   for (const subscription of subscriptions) {
-    if (!shouldRunForAddressNow(subscription.serviceAddress.timezone, now)) {
+    if (!options.force && !shouldRunForAddressNow(subscription.serviceAddress.timezone, now)) {
       continue;
     }
 
@@ -182,7 +201,8 @@ export async function runNightlyJobGeneration(now = new Date()): Promise<{ creat
       subscription.serviceAddress.holds,
       applicableHolidays,
       lookahead,
-      now
+      now,
+      subscription.serviceAddress.pickupsPerWeek ?? 1
     );
 
     for (const job of jobs) {

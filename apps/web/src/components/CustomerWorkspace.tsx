@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, Route, Routes } from "react-router-dom";
-import type { CurrentUser, ServiceAddressInput, ServiceScheduleInput } from "@gpp/shared";
+import type { CurrentUser, ServiceAddress, ServiceAddressInput, ServiceScheduleInput } from "@gpp/shared";
+import { addressMonthlyCents, formatUsd, monthlyTotalCents, PRICING } from "@gpp/shared";
 import {
   ApiError,
   checkServiceArea,
@@ -10,9 +11,11 @@ import {
   createPayPalSubscription,
   createStripeCheckout,
   createStripePortal,
+  generateJobs,
   listAddresses,
   listHistoryJobs,
   listUpcomingJobs,
+  updateAddress,
   upsertAddressSchedule
 } from "../lib/api";
 
@@ -38,7 +41,8 @@ const defaultAddressValues: ServiceAddressInput = {
   lng: -122.67,
   timezone: "America/Los_Angeles",
   accessNotes: "Leave can near driveway gate.",
-  canCount: 1,
+  canCount: 2,
+  pickupsPerWeek: 1,
   isActive: true
 };
 
@@ -99,6 +103,22 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       addressForm.reset(defaultAddressValues);
+    }
+  });
+
+  const updateAddressMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<ServiceAddressInput> }) =>
+      updateAddress(id, patch, accessToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+    }
+  });
+
+  const generateJobsMutation = useMutation({
+    mutationFn: () => generateJobs(accessToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] });
     }
   });
 
@@ -166,21 +186,23 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
     }
   });
 
+  // Address/schedule config is available before paying; only the job feeds are
+  // entitlement-gated, so a 402 there is our "no active subscription" signal.
   const entitlementBlocked = useMemo(() => {
-    const errors = [addressesQuery.error, upcomingJobsQuery.error, historyJobsQuery.error];
+    const errors = [upcomingJobsQuery.error, historyJobsQuery.error];
     return errors.some((error) => error instanceof ApiError && error.status === 402);
-  }, [addressesQuery.error, historyJobsQuery.error, upcomingJobsQuery.error]);
+  }, [historyJobsQuery.error, upcomingJobsQuery.error]);
 
   const firstName = user.name.split(" ")[0];
 
   const addresses = addressesQuery.data?.addresses ?? [];
   const hasAddress = addresses.length > 0;
-  // Reaching address data means the entitlement gate let us through -> the
-  // subscription/entitlement is active. A 402 (entitlementBlocked) means it isn't.
-  const subscriptionActive = addressesQuery.isSuccess;
+  // A successful job feed means the entitlement gate let us through.
+  const subscriptionActive = upcomingJobsQuery.isSuccess;
+  const monthlyTotal = monthlyTotalCents(addresses);
 
   function renderAccountStatus(): JSX.Element {
-    if (addressesQuery.isLoading) {
+    if (addressesQuery.isLoading || upcomingJobsQuery.isLoading) {
       return (
         <div className="account-status is-info">
           <span className="account-status-icon" aria-hidden="true">
@@ -283,23 +305,69 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
       <div className="dash-page">
         <div className="dash-page-head">
           <h2>Billing</h2>
-          <p className="subtext">Activate service first, then manage the subscription in Stripe.</p>
+          <p className="subtext">
+            Your plan is billed monthly based on the addresses, cans, and pickup days you set up.
+          </p>
         </div>
+
         <article className="panel">
+          <h3>Your monthly estimate</h3>
+          {!hasAddress ? (
+            <p className="subtext">
+              Add a service address to see your price. <Link to="/customer/addresses">Add an address</Link>.
+            </p>
+          ) : (
+            <>
+              <ul className="price-breakdown">
+                {addresses.map((address) => (
+                  <li key={address.id}>
+                    <span className="price-breakdown-name">
+                      {address.line1}, {address.city}
+                    </span>
+                    <span className="price-breakdown-meta">
+                      {address.canCount} cans · {address.pickupsPerWeek}×/week
+                    </span>
+                    <span className="price-breakdown-amount">
+                      {formatUsd(addressMonthlyCents(address))}/mo
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="price-total">
+                <span>
+                  Total · {addresses.length} address{addresses.length === 1 ? "" : "es"}
+                </span>
+                <strong>{formatUsd(monthlyTotal)}/mo</strong>
+              </div>
+            </>
+          )}
+          <p className="subtext">
+            Each address includes {PRICING.includedCansPerAddress} cans and 1 pickup/week
+            ({formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo). Extra cans add{" "}
+            {formatUsd(PRICING.extraCanMonthlyCents)}/mo each; extra pickup days add{" "}
+            {formatUsd(PRICING.extraPickupDayMonthlyCents)}/mo each.
+          </p>
+        </article>
+
+        <article className="panel">
+          <h3>Activate &amp; manage</h3>
+          <p className="subtext">Start your subscription or manage payment details.</p>
           <div className="button-row">
-            <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending}>
+            <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
               {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
             </button>
-            <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending}>
+            <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending || !hasAddress}>
               {paypalCheckoutMutation.isPending ? "Redirecting..." : "Pay with PayPal"}
             </button>
             <button type="button" onClick={() => stripePortalMutation.mutate()} disabled={stripePortalMutation.isPending}>
               {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
             </button>
           </div>
-          {entitlementBlocked ? (
+          {!hasAddress ? (
+            <p className="notice">Add a service address before starting your subscription.</p>
+          ) : entitlementBlocked ? (
             <p className="notice">
-              Your account does not have an active entitlement yet. Complete checkout to unlock address and job features.
+              No active subscription yet. Complete checkout to start service and unlock your pickup schedule.
             </p>
           ) : null}
         </article>
@@ -395,10 +463,25 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
                 Access notes
                 <input {...addressForm.register("accessNotes")} placeholder="Gate opens inward" />
               </label>
-              <label>
-                Can count
-                <input type="number" min={1} max={20} {...addressForm.register("canCount", { valueAsNumber: true })} />
-              </label>
+              <div className="field-row">
+                <label>
+                  Cans
+                  <input type="number" min={1} max={20} {...addressForm.register("canCount", { valueAsNumber: true })} />
+                </label>
+                <label>
+                  Pickups per week
+                  <input
+                    type="number"
+                    min={1}
+                    max={7}
+                    {...addressForm.register("pickupsPerWeek", { valueAsNumber: true })}
+                  />
+                </label>
+              </div>
+              <p className="subtext">
+                Defaults to {PRICING.includedCansPerAddress} cans, 1 pickup/week. More cans or pickup
+                days increase your monthly cost.
+              </p>
               <button type="submit" disabled={createAddressMutation.isPending}>
                 {createAddressMutation.isPending ? "Saving..." : "Save Address"}
               </button>
@@ -408,15 +491,22 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
 
           <article className="panel">
             <h3>Your Addresses</h3>
-            <ul className="meta-list compact">
-              {addressesQuery.data?.addresses.map((address) => (
-                <li key={address.id}>
-                  {address.line1}, {address.city}, {address.state} {address.postalCode} | cans: {address.canCount}
-                </li>
+            <p className="subtext">Adjust cans and pickup days per address — billing updates to match.</p>
+            <ul className="address-list">
+              {addresses.map((address) => (
+                <AddressRow
+                  key={address.id}
+                  address={address}
+                  saving={
+                    updateAddressMutation.isPending && updateAddressMutation.variables?.id === address.id
+                  }
+                  onSave={(id, patch) => updateAddressMutation.mutate({ id, patch })}
+                />
               ))}
             </ul>
-            {addressesQuery.data && addressesQuery.data.addresses.length === 0 ? (
-              <p className="subtext">No addresses yet — add your first one.</p>
+            {!hasAddress ? <p className="subtext">No addresses yet — add your first one.</p> : null}
+            {updateAddressMutation.isError ? (
+              <p className="error">{getErrorMessage(updateAddressMutation.error)}</p>
             ) : null}
             {addressesQuery.isError ? <p className="error">{getErrorMessage(addressesQuery.error)}</p> : null}
           </article>
@@ -488,6 +578,25 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
           <p className="subtext">Your scheduled pickups over the next 30 days.</p>
         </div>
         <article className="panel">
+          <div className="button-row">
+            <button
+              type="button"
+              onClick={() => generateJobsMutation.mutate()}
+              disabled={generateJobsMutation.isPending}
+            >
+              {generateJobsMutation.isPending ? "Running scheduler…" : "Run scheduler now"}
+            </button>
+          </div>
+          {generateJobsMutation.isSuccess ? (
+            <p className={generateJobsMutation.data.created > 0 ? "success-inline" : "subtext"}>
+              {generateJobsMutation.data.created > 0
+                ? `Scheduled ${generateJobsMutation.data.created} job${generateJobsMutation.data.created === 1 ? "" : "s"}.`
+                : "No new jobs to schedule. You need an active subscription and a saved schedule for pickups to generate."}
+            </p>
+          ) : null}
+          {generateJobsMutation.isError ? (
+            <p className="error">{getErrorMessage(generateJobsMutation.error)}</p>
+          ) : null}
           <ul className="meta-list compact">
             {upcomingJobsQuery.data?.jobs.slice(0, 8).map((job) => (
               <li key={job.id}>
@@ -541,5 +650,57 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
         <Route path="*" element={<Navigate to="/customer" replace />} />
       </Routes>
     </section>
+  );
+}
+
+function AddressRow({
+  address,
+  saving,
+  onSave
+}: {
+  address: ServiceAddress;
+  saving: boolean;
+  onSave: (id: string, patch: { canCount: number; pickupsPerWeek: number }) => void;
+}): JSX.Element {
+  const [cans, setCans] = useState(address.canCount);
+  const [days, setDays] = useState(address.pickupsPerWeek);
+  const dirty = cans !== address.canCount || days !== address.pickupsPerWeek;
+  const valid = cans >= 1 && cans <= 20 && days >= 1 && days <= 7;
+  const monthly = addressMonthlyCents({
+    canCount: Math.max(1, cans || 1),
+    pickupsPerWeek: Math.max(1, days || 1)
+  });
+
+  return (
+    <li className="address-row">
+      <div className="address-row-main">
+        <strong>{address.line1}</strong>
+        <span className="subtext">
+          {address.city}, {address.state} {address.postalCode}
+        </span>
+      </div>
+      <div className="address-row-controls">
+        <label className="field-mini">
+          Cans
+          <input type="number" min={1} max={20} value={cans} onChange={(event) => setCans(Number(event.target.value))} />
+        </label>
+        <label className="field-mini">
+          Days/wk
+          <input type="number" min={1} max={7} value={days} onChange={(event) => setDays(Number(event.target.value))} />
+        </label>
+        <span className="address-row-price">
+          {formatUsd(monthly)}
+          <span>/mo</span>
+        </span>
+        <button
+          type="button"
+          className="address-row-save"
+          disabled={!dirty || !valid || saving}
+          onClick={() => onSave(address.id, { canCount: cans, pickupsPerWeek: days })}
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
+      </div>
+    </li>
   );
 }

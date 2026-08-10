@@ -4,6 +4,7 @@ import { serviceJobsResponseSchema } from "@gpp/shared";
 import { handleOptions, jsonResponse, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
 import { withEntitlement } from "../../lib/withEntitlement";
+import { runNightlyJobGeneration } from "../../services/scheduler";
 
 export async function upcomingJobsHandler(
   request: HttpRequest,
@@ -47,6 +48,32 @@ export async function upcomingJobsHandler(
 
         return jsonResponse(200, response);
       }),
+      { roles: ["CUSTOMER", "ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Manually triggers job generation ("run scheduler now"), bypassing the 2am
+// gate. Customers generate only their own jobs; admins generate for everyone.
+export async function generateJobsHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (_req, _ctx, auth) => {
+        const result = await runNightlyJobGeneration(new Date(), {
+          force: true,
+          userId: auth.role === "ADMIN" ? undefined : auth.sub
+        });
+
+        return jsonResponse(200, { created: result.created });
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );

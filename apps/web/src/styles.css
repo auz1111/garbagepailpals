@@ -389,6 +389,158 @@ a {
   gap: 1.1rem;
 }
 
+.field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+/* Address list with per-address cans / pickups editing */
+.address-list {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.address-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.address-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.address-row-main .subtext {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.address-row-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.field-mini {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--slate-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.field-mini input {
+  width: 64px;
+  padding: 0.4rem 0.5rem;
+  text-align: center;
+}
+
+.address-row-price {
+  font-weight: 900;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.address-row-price span {
+  font-weight: 600;
+  color: var(--slate-2);
+  font-size: 0.8rem;
+}
+
+.address-row-save {
+  border: 1px solid var(--line-2);
+  border-radius: var(--pill);
+  padding: 0.5rem 0.9rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.address-row-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.address-row-save:not(:disabled):hover {
+  border-color: var(--ink);
+}
+
+/* Billing price breakdown */
+.price-breakdown {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.price-breakdown li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.price-breakdown-name {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.price-breakdown-meta {
+  grid-column: 1;
+  font-size: 0.85rem;
+  color: var(--slate-2);
+}
+
+.price-breakdown-amount {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-weight: 800;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.price-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 0.9rem;
+  padding-top: 0.2rem;
+}
+
+.price-total strong {
+  font-size: 1.5rem;
+  color: var(--teal);
+  letter-spacing: -0.02em;
+}
+
+@media (max-width: 560px) {
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+  .address-row-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
 .account-status {
   display: flex;
   gap: 0.9rem;

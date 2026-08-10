@@ -60,6 +60,7 @@ export const serviceAddressInputSchema = z.object({
   accessNotes: z.string().min(1).max(500),
   gateCode: z.string().max(40).optional(),
   canCount: z.number().int().min(1).max(20),
+  pickupsPerWeek: z.number().int().min(1).max(7),
   isActive: z.boolean().optional()
 });
 
@@ -69,6 +70,36 @@ export const serviceAddressSchema = serviceAddressInputSchema.extend({
   createdAt: z.string(),
   updatedAt: z.string()
 });
+
+// --- Subscription pricing -------------------------------------------------
+// Cost is driven per address by cans serviced and pickup days per week.
+// NOTE: placeholder rates — adjust to real pricing before launch.
+export const PRICING = {
+  includedCansPerAddress: 2,
+  baseMonthlyCentsPerAddress: 1900,
+  extraCanMonthlyCents: 400,
+  extraPickupDayMonthlyCents: 900
+} as const;
+
+export function addressMonthlyCents(input: { canCount: number; pickupsPerWeek: number }): number {
+  const extraCans = Math.max(0, input.canCount - PRICING.includedCansPerAddress);
+  const extraDays = Math.max(0, input.pickupsPerWeek - 1);
+  return (
+    PRICING.baseMonthlyCentsPerAddress +
+    extraCans * PRICING.extraCanMonthlyCents +
+    extraDays * PRICING.extraPickupDayMonthlyCents
+  );
+}
+
+export function monthlyTotalCents(
+  addresses: Array<{ canCount: number; pickupsPerWeek: number }>
+): number {
+  return addresses.reduce((sum, address) => sum + addressMonthlyCents(address), 0);
+}
+
+export function formatUsd(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
 
 export const serviceScheduleInputSchema = z.object({
   pickupDayOfWeek: z.number().int().min(0).max(6),

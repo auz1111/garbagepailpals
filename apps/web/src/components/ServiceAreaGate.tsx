@@ -39,7 +39,8 @@ export function ServiceAreaGate({
     if (result.eligible) {
       localStorage.setItem(VERIFIED_AREA_KEY, postalCode);
       onRequestedAreaChange(null);
-      navigate("/customer", { replace: true });
+      // First step after confirming coverage is adding a service address.
+      navigate("/customer/addresses", { replace: true });
       return;
     }
 

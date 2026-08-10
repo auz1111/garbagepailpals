@@ -10,7 +10,6 @@ import {
 } from "@gpp/shared";
 import { handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
-import { withEntitlement } from "../../lib/withEntitlement";
 
 function toAddressResponse(address: {
   id: string;
@@ -26,6 +25,7 @@ function toAddressResponse(address: {
   accessNotes: string;
   gateCode: string | null;
   canCount: number;
+  pickupsPerWeek: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -52,7 +52,7 @@ export async function createAddressHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      withEntitlement(async (req, _ctx, auth) => {
+      async (req, _ctx, auth) => {
         const input = await parseJson(req, serviceAddressInputSchema);
 
         const allowedArea = await prisma.serviceArea.findUnique({
@@ -77,12 +77,13 @@ export async function createAddressHandler(
             accessNotes: input.accessNotes,
             gateCode: input.gateCode,
             canCount: input.canCount,
+            pickupsPerWeek: input.pickupsPerWeek,
             isActive: input.isActive ?? true
           }
         });
 
         return jsonResponse(201, { address: toAddressResponse(created) });
-      }),
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );
@@ -99,7 +100,7 @@ export async function listAddressesHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      withEntitlement(async (_req, _ctx, auth) => {
+      async (_req, _ctx, auth) => {
         const rows = await prisma.serviceAddress.findMany({
           where: auth.role === "ADMIN" ? undefined : { userId: auth.sub },
           orderBy: { createdAt: "desc" }
@@ -108,7 +109,7 @@ export async function listAddressesHandler(
         return jsonResponse(200, {
           addresses: rows.map(toAddressResponse)
         });
-      }),
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );
@@ -125,7 +126,7 @@ export async function updateAddressHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      withEntitlement(async (req, _ctx, auth) => {
+      async (req, _ctx, auth) => {
         const addressId = req.params.addressId;
         if (!addressId) {
           return jsonResponse(400, { message: "addressId is required" });
@@ -155,7 +156,7 @@ export async function updateAddressHandler(
         });
 
         return jsonResponse(200, { address: toAddressResponse(updated) });
-      }),
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );
@@ -172,7 +173,7 @@ export async function upsertScheduleHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      withEntitlement(async (req, _ctx, auth) => {
+      async (req, _ctx, auth) => {
         const addressId = req.params.addressId;
         if (!addressId) {
           return jsonResponse(400, { message: "addressId is required" });
@@ -224,7 +225,7 @@ export async function upsertScheduleHandler(
         });
 
         return jsonResponse(200, { schedule: response });
-      }),
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );
@@ -241,7 +242,7 @@ export async function createHoldHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      withEntitlement(async (req, _ctx, auth) => {
+      async (req, _ctx, auth) => {
         const addressId = req.params.addressId;
         if (!addressId) {
           return jsonResponse(400, { message: "addressId is required" });
@@ -281,7 +282,7 @@ export async function createHoldHandler(
         });
 
         return jsonResponse(201, { hold: response });
-      }),
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );
@@ -320,7 +321,7 @@ export async function listHoldsHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      withEntitlement(async (req, _ctx, auth) => {
+      async (req, _ctx, auth) => {
         const addressId = req.params.addressId;
         if (!addressId) {
           return jsonResponse(400, { message: "addressId is required" });
@@ -353,7 +354,7 @@ export async function listHoldsHandler(
             })
           )
         });
-      }),
+      },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );

@@ -248,6 +248,19 @@ export function createAddress(input: ServiceAddressInput, accessToken: string): 
   return request<ServiceAddressInput, ServiceAddressResponse>("/addresses", "POST", input, accessToken);
 }
 
+export function updateAddress(
+  addressId: string,
+  input: Partial<ServiceAddressInput>,
+  accessToken: string
+): Promise<ServiceAddressResponse> {
+  return request<Partial<ServiceAddressInput>, ServiceAddressResponse>(
+    `/addresses/${addressId}`,
+    "PATCH",
+    input,
+    accessToken
+  );
+}
+
 export function upsertAddressSchedule(
   addressId: string,
   input: ServiceScheduleInput,
@@ -267,6 +280,10 @@ export function listUpcomingJobs(accessToken: string): Promise<ServiceJobsRespon
 
 export function listHistoryJobs(accessToken: string): Promise<ServiceJobsResponse> {
   return request<undefined, ServiceJobsResponse>("/jobs/history", "GET", undefined, accessToken);
+}
+
+export function generateJobs(accessToken: string): Promise<{ created: number }> {
+  return request<undefined, { created: number }>("/jobs/generate", "POST", undefined, accessToken);
 }
 
 export function createStripeCheckout(

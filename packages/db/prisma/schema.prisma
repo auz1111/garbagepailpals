@@ -93,7 +93,8 @@ model ServiceAddress {
   timezone         String
   accessNotes      String
   gateCode         String?
-  canCount         Int               @default(1)
+  canCount         Int               @default(2)
+  pickupsPerWeek   Int               @default(1)
   isActive         Boolean           @default(true)
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
