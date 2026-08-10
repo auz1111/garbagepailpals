@@ -54,6 +54,7 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
   const [serviceAreaResult, setServiceAreaResult] = useState<
     { postalCode: string; eligible: boolean } | null
   >(null);
+  const [serviceAreaError, setServiceAreaError] = useState<string | null>(null);
 
   const serviceAreaForm = useForm<ServiceAreaForm>({
     defaultValues: { postalCode: "" }
@@ -191,16 +192,39 @@ export function CustomerWorkspace({ user, accessToken }: CustomerWorkspaceProps)
         <article className="panel">
           <h3>Service Area Check</h3>
           <form
-            onSubmit={serviceAreaForm.handleSubmit(async (values) => {
-              const result = await checkServiceArea(values.postalCode.trim());
-              setServiceAreaResult(result);
-            })}
+            onSubmit={serviceAreaForm.handleSubmit(
+              async (values) => {
+                setServiceAreaError(null);
+                try {
+                  const result = await checkServiceArea(values.postalCode.trim());
+                  setServiceAreaResult(result);
+                } catch (error) {
+                  setServiceAreaResult(null);
+                  setServiceAreaError(getErrorMessage(error));
+                }
+              },
+              () => {
+                // Validation failed (e.g. blank field) — clear any stale result.
+                setServiceAreaResult(null);
+                setServiceAreaError(null);
+              }
+            )}
           >
             <label>
               Postal code
-              <input {...serviceAreaForm.register("postalCode")} placeholder="97702" />
+              <input
+                {...serviceAreaForm.register("postalCode", {
+                  validate: (value) =>
+                    value.trim().length > 0 || "Please enter a postal code to check."
+                })}
+                placeholder="97702"
+              />
             </label>
             <button type="submit">Check Area</button>
+            {serviceAreaForm.formState.errors.postalCode ? (
+              <p className="error">{serviceAreaForm.formState.errors.postalCode.message}</p>
+            ) : null}
+            {serviceAreaError ? <p className="error">{serviceAreaError}</p> : null}
           </form>
           {serviceAreaResult ? (
             <p className={serviceAreaResult.eligible ? "success-inline" : "error"}>
