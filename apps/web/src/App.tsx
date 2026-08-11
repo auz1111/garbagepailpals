@@ -4,7 +4,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
+  addressMonthlyCents,
   loginSchema,
+  monthlyTotalCents,
   registerSchema,
   type CurrentUser,
   type LoginInput,
@@ -20,6 +22,22 @@ import { AdminWorkspace } from "./components/AdminWorkspace";
 
 type AuthMode = "LOGIN" | "REGISTER";
 const REFRESH_TOKEN_KEY = "gpp.refreshToken";
+
+// Marketing plan prices are derived from the same billing engine that bills
+// customers (packages/shared PRICING), so the landing page can never drift from
+// what people are actually charged. Each tier is a representative configuration:
+//   Starter      — one location, default 2 cans + 1 pickup/week (the base price)
+//   Neighborhood — one location, 3 cans + 2 pickups/week
+//   Pro Ops      — two locations at the default config ("from" pricing)
+const PLAN_PRICE_CENTS = {
+  starter: addressMonthlyCents({ canCount: 2, pickupsPerWeek: 1 }),
+  neighborhood: addressMonthlyCents({ canCount: 3, pickupsPerWeek: 2 }),
+  proOps: monthlyTotalCents([
+    { canCount: 2, pickupsPerWeek: 1 },
+    { canCount: 2, pickupsPerWeek: 1 }
+  ])
+} as const;
+const wholeDollars = (cents: number): string => `$${Math.round(cents / 100)}`;
 
 export function App() {
   const [mode, setMode] = useState<AuthMode>("LOGIN");
@@ -355,7 +373,10 @@ export function App() {
                   <div className="landing-grid">
                     <article className="landing-card">
                       <h4>Starter</h4>
-                      <p className="price">$19<span>/month</span></p>
+                      <p className="price">
+                        {wholeDollars(PLAN_PRICE_CENTS.starter)}
+                        <span>/month</span>
+                      </p>
                       <p>For single-address households that want reliable service and reminders.</p>
                       <ul className="plan-features">
                         <li>One bin, one pickup day</li>
@@ -368,7 +389,10 @@ export function App() {
                     </article>
                     <article className="landing-card landing-card-highlight">
                       <h4>Neighborhood</h4>
-                      <p className="price">$39<span>/month</span></p>
+                      <p className="price">
+                        {wholeDollars(PLAN_PRICE_CENTS.neighborhood)}
+                        <span>/month</span>
+                      </p>
                       <p>For larger households with recycling, yard waste, and frequent changes.</p>
                       <ul className="plan-features">
                         <li>Up to 3 bins</li>
@@ -381,7 +405,11 @@ export function App() {
                     </article>
                     <article className="landing-card">
                       <h4>Pro Ops</h4>
-                      <p className="price">$89<span>/month</span></p>
+                      <p className="price">
+                        <small>from </small>
+                        {wholeDollars(PLAN_PRICE_CENTS.proOps)}
+                        <span>/month</span>
+                      </p>
                       <p>For property managers juggling multiple addresses and operator scheduling.</p>
                       <ul className="plan-features">
                         <li>Multiple addresses</li>

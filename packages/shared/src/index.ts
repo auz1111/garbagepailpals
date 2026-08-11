@@ -76,7 +76,7 @@ export const serviceAddressSchema = serviceAddressInputSchema.extend({
 // NOTE: placeholder rates — adjust to real pricing before launch.
 export const PRICING = {
   includedCansPerAddress: 2,
-  baseMonthlyCentsPerAddress: 1900,
+  baseMonthlyCentsPerAddress: 4500,
   extraCanMonthlyCents: 400,
   extraPickupDayMonthlyCents: 900
 } as const;
