@@ -7,7 +7,9 @@ import {
   adminUserResponseSchema,
   adminUserUpdateSchema,
   adminUsersResponseSchema,
-  adminDashboardMetricsSchema
+  adminDashboardMetricsSchema,
+  operatorAvailabilityResponseSchema,
+  operatorAvailabilityUpdateSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
@@ -205,6 +207,55 @@ export async function adminUserByIdHandler(
         return jsonResponse(
           200,
           adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Admin get/set of a specific operator's availability (next-30-days).
+export async function adminUserAvailabilityHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const userId = req.params.userId;
+        if (!userId) {
+          throw new HttpError(400, "userId is required");
+        }
+
+        if (req.method === "PUT") {
+          const { dates } = await parseJson(req, operatorAvailabilityUpdateSchema);
+          const unique = [...new Set(dates)];
+          await prisma.$transaction([
+            prisma.operatorAvailability.deleteMany({ where: { operatorId: userId } }),
+            prisma.operatorAvailability.createMany({
+              data: unique.map((d) => ({ operatorId: userId, date: new Date(`${d}T00:00:00Z`) }))
+            })
+          ]);
+          return jsonResponse(
+            200,
+            operatorAvailabilityResponseSchema.parse({ dates: unique.sort() })
+          );
+        }
+
+        const rows = await prisma.operatorAvailability.findMany({
+          where: { operatorId: userId },
+          orderBy: { date: "asc" }
+        });
+        return jsonResponse(
+          200,
+          operatorAvailabilityResponseSchema.parse({
+            dates: rows.map((r) => r.date.toISOString().slice(0, 10))
+          })
         );
       },
       { roles: ["ADMIN"] }

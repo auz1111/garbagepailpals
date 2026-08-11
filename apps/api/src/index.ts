@@ -28,6 +28,7 @@ import {
 } from "./routes/operatorJobs";
 import {
   adminUserByIdHandler,
+  adminUserAvailabilityHandler,
   adminUsersHandler,
   adminDashboardMetricsHandler
 } from "./routes/adminDashboard";
@@ -121,6 +122,13 @@ app.http("admin-user-by-id", {
   methods: ["GET", "PATCH", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminUserByIdHandler
+});
+
+app.http("admin-user-availability", {
+  route: "ops-admin/users/{userId}/availability",
+  methods: ["GET", "PUT", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminUserAvailabilityHandler
 });
 
 app.http("admin-todays-route", {

@@ -203,6 +203,31 @@ export function getAvailableOperators(
   );
 }
 
+export function getAdminUserAvailability(
+  userId: string,
+  accessToken: string
+): Promise<OperatorAvailabilityResponse> {
+  return request<undefined, OperatorAvailabilityResponse>(
+    `/ops-admin/users/${userId}/availability`,
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function setAdminUserAvailability(
+  userId: string,
+  dates: string[],
+  accessToken: string
+): Promise<OperatorAvailabilityResponse> {
+  return request<OperatorAvailabilityUpdate, OperatorAvailabilityResponse>(
+    `/ops-admin/users/${userId}/availability`,
+    "PUT",
+    { dates },
+    accessToken
+  );
+}
+
 export function getOperatorAvailability(accessToken: string): Promise<OperatorAvailabilityResponse> {
   return request<undefined, OperatorAvailabilityResponse>(
     "/operator/availability",
