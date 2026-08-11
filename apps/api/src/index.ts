@@ -111,7 +111,7 @@ app.http("admin-dashboard", {
 
 app.http("admin-users", {
   route: "ops-admin/users",
-  methods: ["GET", "OPTIONS"],
+  methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminUsersHandler
 });

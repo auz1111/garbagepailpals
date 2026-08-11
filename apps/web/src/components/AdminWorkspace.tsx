@@ -6,6 +6,7 @@ import { formatUsd } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
+  createAdminUser,
   getAdminUser,
   getAdminUsers,
   updateAdminUser,
@@ -78,6 +79,7 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
   const navigate = useNavigate();
   const [userRoleFilter, setUserRoleFilter] = useState<"ALL" | Role>("ALL");
   const [userSearch, setUserSearch] = useState("");
+  const [showCreateUser, setShowCreateUser] = useState(false);
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => getAdminUsers(accessToken)
@@ -99,6 +101,14 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       queryClient.setQueryData(["admin-user", data.user.id], data);
+    }
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: (input: Parameters<typeof createAdminUser>[0]) => createAdminUser(input, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      setShowCreateUser(false);
     }
   });
 
@@ -195,12 +205,38 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     return (
       <div className="dash-page">
         <div className="dash-page-head">
-          <h2>Users</h2>
-          <p className="subtext">
-            {all.length} total · {counts.CUSTOMER ?? 0} customers · {counts.OPERATOR ?? 0} operators ·{" "}
-            {counts.ADMIN ?? 0} admins
-          </p>
+          <div className="panel-head-row">
+            <div>
+              <h2>Users</h2>
+              <p className="subtext">
+                {all.length} total · {counts.CUSTOMER ?? 0} customers · {counts.OPERATOR ?? 0}{" "}
+                operators · {counts.ADMIN ?? 0} admins
+              </p>
+            </div>
+            {!showCreateUser ? (
+              <button
+                type="button"
+                className="add-address-btn"
+                onClick={() => {
+                  createUserMutation.reset();
+                  setShowCreateUser(true);
+                }}
+              >
+                + Add user
+              </button>
+            ) : null}
+          </div>
         </div>
+
+        {showCreateUser ? (
+          <CreateUserForm
+            onCancel={() => setShowCreateUser(false)}
+            onCreate={(input) => createUserMutation.mutate(input)}
+            pending={createUserMutation.isPending}
+            error={createUserMutation.isError ? getErrorMessage(createUserMutation.error) : null}
+          />
+        ) : null}
+
         <article className="panel">
           <div className="admin-filters">
             <label className="admin-filter-search">
@@ -804,6 +840,110 @@ function AdminUserDetail({
         )}
       </article>
     </div>
+  );
+}
+
+function CreateUserForm({
+  onCancel,
+  onCreate,
+  pending,
+  error
+}: {
+  onCancel: () => void;
+  onCreate: (input: {
+    name: string;
+    email: string;
+    password: string;
+    role: Role;
+    phone?: string;
+    operatorAccess?: boolean;
+  }) => void;
+  pending: boolean;
+  error: string | null;
+}): JSX.Element {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [role, setRole] = useState<Role>("CUSTOMER");
+  const [operatorAccess, setOperatorAccess] = useState(false);
+
+  const valid = name.trim().length > 0 && /.+@.+\..+/.test(email.trim()) && password.length >= 8;
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    if (!valid) {
+      return;
+    }
+    onCreate({
+      name: name.trim(),
+      email: email.trim(),
+      password,
+      role,
+      phone: phone.trim() ? phone.trim() : undefined,
+      operatorAccess: role === "ADMIN" ? operatorAccess : false
+    });
+  }
+
+  return (
+    <article className="panel">
+      <div className="panel-head-row">
+        <h3>Add user</h3>
+        <button type="button" className="link-inline" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      <form onSubmit={handleSubmit}>
+        <label className="field-single">
+          Role
+          <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
+            <option value="CUSTOMER">Customer</option>
+            <option value="OPERATOR">Operator</option>
+            <option value="ADMIN">Admin</option>
+          </select>
+        </label>
+        {role === "ADMIN" ? (
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={operatorAccess}
+              onChange={(event) => setOperatorAccess(event.target.checked)}
+            />
+            <span>
+              <strong>Operator access</strong>
+              <span className="subtext">Give this admin the operator dashboard.</span>
+            </span>
+          </label>
+        ) : null}
+        <label className="field-single">
+          Name
+          <input value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className="field-single">
+          Email
+          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+        </label>
+        <label className="field-single">
+          Temporary password
+          <input
+            type="text"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="At least 8 characters"
+          />
+        </label>
+        <label className="field-single">
+          Phone
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Optional" />
+        </label>
+        <div className="detail-save-row">
+          <button type="submit" className="cta-primary" disabled={!valid || pending}>
+            {pending ? "Creating…" : "Create user"}
+          </button>
+        </div>
+        {error ? <p className="error">{error}</p> : null}
+      </form>
+    </article>
   );
 }
 

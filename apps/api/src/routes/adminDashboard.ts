@@ -1,7 +1,9 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import bcrypt from "bcryptjs";
 import { prisma } from "@gpp/db";
 import {
   addressMonthlyCents,
+  adminCreateUserSchema,
   adminUserResponseSchema,
   adminUserUpdateSchema,
   adminUsersResponseSchema,
@@ -106,7 +108,35 @@ export async function adminUsersHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async () => {
+      async (req) => {
+        if (req.method === "POST") {
+          const input = await parseJson(req, adminCreateUserSchema);
+          const existing = await prisma.user.findUnique({ where: { email: input.email } });
+          if (existing) {
+            throw new HttpError(409, "That email is already in use by another account.");
+          }
+          const passwordHash = await bcrypt.hash(input.password, 12);
+          const created = await prisma.user.create({
+            data: {
+              name: input.name,
+              email: input.email,
+              phone: input.phone,
+              role: input.role,
+              passwordHash,
+              authProviderId: `local:${input.email}`,
+              operatorAccess: input.role === "ADMIN" ? input.operatorAccess ?? false : false
+            }
+          });
+          const row = await prisma.user.findUnique({
+            where: { id: created.id },
+            include: USER_AGGREGATE_INCLUDE
+          });
+          return jsonResponse(
+            201,
+            adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
+          );
+        }
+
         const rows = await prisma.user.findMany({
           orderBy: { createdAt: "desc" },
           include: USER_AGGREGATE_INCLUDE

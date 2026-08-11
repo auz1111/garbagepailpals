@@ -13,6 +13,7 @@ import type {
   AdminUsersResponse,
   AdminUserResponse,
   AdminUserUpdate,
+  AdminCreateUser,
   AdminRouteRequest,
   AdminRouteResponse,
   AssignedRoutesResponse,
@@ -156,6 +157,13 @@ export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDash
 
 export function getAdminUsers(accessToken: string): Promise<AdminUsersResponse> {
   return request<undefined, AdminUsersResponse>("/ops-admin/users", "GET", undefined, accessToken);
+}
+
+export function createAdminUser(
+  input: AdminCreateUser,
+  accessToken: string
+): Promise<AdminUserResponse> {
+  return request<AdminCreateUser, AdminUserResponse>("/ops-admin/users", "POST", input, accessToken);
 }
 
 export function getAdminUser(userId: string, accessToken: string): Promise<AdminUserResponse> {

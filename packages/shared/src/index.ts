@@ -383,6 +383,16 @@ export const adminUserResponseSchema = z.object({
   user: adminUserDetailSchema
 });
 
+// Fields an admin provides when creating a user account.
+export const adminCreateUserSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(128),
+  role: roleSchema,
+  phone: z.string().max(40).optional(),
+  operatorAccess: z.boolean().optional()
+});
+
 // Fields an admin may edit on a user account.
 export const adminUserUpdateSchema = z.object({
   name: z.string().min(1).max(120).optional(),
@@ -615,6 +625,7 @@ export type AdminUser = z.infer<typeof adminUserSchema>;
 export type AdminUsersResponse = z.infer<typeof adminUsersResponseSchema>;
 export type AdminUserResponse = z.infer<typeof adminUserResponseSchema>;
 export type AdminUserUpdate = z.infer<typeof adminUserUpdateSchema>;
+export type AdminCreateUser = z.infer<typeof adminCreateUserSchema>;
 export type AdminUserLocation = z.infer<typeof adminUserLocationSchema>;
 export type AdminUserWithLocations = z.infer<typeof adminUserDetailSchema>;
 export type AdminRouteRequest = z.infer<typeof adminRouteRequestSchema>;
