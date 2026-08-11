@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, Route, Routes } from "react-router-dom";
-import type { AdminIncident, CurrentUser, Role } from "@gpp/shared";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import type { AdminIncident, AdminUser, CurrentUser, Role } from "@gpp/shared";
 import { formatUsd } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
+  getAdminUser,
   getAdminUsers,
+  updateAdminUser,
   getAdminDashboardMetrics,
   getAdminIncidents,
   getAdminRuntimeMetrics,
@@ -67,10 +69,31 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       })
   });
 
+  const location = useLocation();
+  const navigate = useNavigate();
   const [userRoleFilter, setUserRoleFilter] = useState<"ALL" | Role>("ALL");
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => getAdminUsers(accessToken)
+  });
+
+  // The user-detail route is /admin/users/:userId — read the id off the path.
+  const userDetailMatch = location.pathname.match(/\/admin\/users\/([^/]+)$/);
+  const detailUserId = userDetailMatch?.[1] ? decodeURIComponent(userDetailMatch[1]) : null;
+
+  const userDetailQuery = useQuery({
+    queryKey: ["admin-user", detailUserId],
+    queryFn: async () => getAdminUser(detailUserId as string, accessToken),
+    enabled: Boolean(detailUserId)
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Parameters<typeof updateAdminUser>[1] }) =>
+      updateAdminUser(id, patch, accessToken),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      queryClient.setQueryData(["admin-user", data.user.id], data);
+    }
   });
 
   const metrics = metricsQuery.data;
@@ -199,7 +222,19 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
                 </thead>
                 <tbody>
                   {rows.map((entry) => (
-                    <tr key={entry.id}>
+                    <tr
+                      key={entry.id}
+                      className="is-clickable"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(`/admin/users/${entry.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/admin/users/${entry.id}`);
+                        }
+                      }}
+                    >
                       <td className="admin-cell-user">
                         <strong>{entry.name}</strong>
                         <span className="admin-table-sub">{entry.email}</span>
@@ -234,6 +269,41 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
           )}
         </article>
       </div>
+    );
+  }
+
+  function renderUserDetail(): JSX.Element {
+    if (userDetailQuery.isLoading) {
+      return (
+        <div className="dash-page">
+          <article className="panel">
+            <p className="subtext">Loading user…</p>
+          </article>
+        </div>
+      );
+    }
+    const detail = userDetailQuery.data?.user;
+    if (!detail) {
+      return (
+        <div className="dash-page">
+          <div className="dash-page-head">
+            <Link to="/admin/users" className="back-link">
+              ← Back to users
+            </Link>
+            <h2>User not found</h2>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <AdminUserDetail
+        key={detail.id}
+        user={detail}
+        onSave={(id, patch) => updateUserMutation.mutate({ id, patch })}
+        saving={updateUserMutation.isPending}
+        saveError={updateUserMutation.isError ? getErrorMessage(updateUserMutation.error) : null}
+        saved={updateUserMutation.isSuccess}
+      />
     );
   }
 
@@ -472,8 +542,139 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       <Routes>
         <Route index element={renderDashboard()} />
         <Route path="users" element={renderUsers()} />
+        <Route path="users/:userId" element={renderUserDetail()} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>
     </section>
+  );
+}
+
+function AdminUserDetail({
+  user,
+  onSave,
+  saving,
+  saveError,
+  saved
+}: {
+  user: AdminUser;
+  onSave: (
+    id: string,
+    patch: {
+      name: string;
+      email: string;
+      phone: string | null;
+      role: Role;
+      requestedServiceArea: string | null;
+    }
+  ) => void;
+  saving: boolean;
+  saveError: string | null;
+  saved: boolean;
+}): JSX.Element {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [phone, setPhone] = useState(user.phone ?? "");
+  const [role, setRole] = useState<Role>(user.role);
+  const [area, setArea] = useState(user.requestedServiceArea ?? "");
+  const [submitted, setSubmitted] = useState(false);
+
+  const dirty =
+    name !== user.name ||
+    email !== user.email ||
+    phone !== (user.phone ?? "") ||
+    role !== user.role ||
+    area !== (user.requestedServiceArea ?? "");
+  const valid = name.trim().length > 0 && /.+@.+\..+/.test(email.trim());
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    if (!valid || !dirty) {
+      return;
+    }
+    setSubmitted(true);
+    onSave(user.id, {
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone.trim() ? phone.trim() : null,
+      role,
+      requestedServiceArea: area.trim() ? area.trim() : null
+    });
+  }
+
+  return (
+    <div className="dash-page">
+      <div className="dash-page-head">
+        <Link to="/admin/users" className="back-link">
+          ← Back to users
+        </Link>
+        <h2>{user.name}</h2>
+        <p className="subtext">{user.email}</p>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        <article className="panel">
+          <h3>Account information</h3>
+          <label className="field-single">
+            Name
+            <input value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label className="field-single">
+            Email
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label className="field-single">
+            Phone
+            <input
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="Optional"
+            />
+          </label>
+          <div className="field-row">
+            <label>
+              Role
+              <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
+                <option value="CUSTOMER">Customer</option>
+                <option value="OPERATOR">Operator</option>
+                <option value="ADMIN">Admin</option>
+              </select>
+            </label>
+            <label>
+              Requested area
+              <input
+                value={area}
+                onChange={(event) => setArea(event.target.value)}
+                placeholder="e.g. 97702"
+              />
+            </label>
+          </div>
+          <div className="detail-save-row">
+            <button type="submit" className="cta-primary" disabled={!valid || !dirty || saving}>
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+            {submitted && saved && !saving && !dirty && !saveError ? (
+              <span className="success-inline">Saved.</span>
+            ) : null}
+          </div>
+          {saveError ? <p className="error">{saveError}</p> : null}
+        </article>
+      </form>
+
+      <article className="panel">
+        <h3>Account summary</h3>
+        <ul className="meta-list compact">
+          <li>Role: {ROLE_LABELS[user.role]}</li>
+          <li>Locations: {user.role === "CUSTOMER" ? user.addressCount : "—"}</li>
+          <li>
+            Plan:{" "}
+            {user.role === "CUSTOMER" ? (user.activeSubscription ? "Active" : "None") : "—"}
+          </li>
+          <li>
+            Monthly: {user.role === "CUSTOMER" ? `${formatUsd(user.monthlyCents)}/mo` : "—"}
+          </li>
+          <li>Joined: {new Date(user.createdAt).toLocaleString()}</li>
+        </ul>
+      </article>
+    </div>
   );
 }

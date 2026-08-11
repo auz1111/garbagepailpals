@@ -26,7 +26,11 @@ import {
   operatorQueueHandler,
   updateOperatorJobStatusHandler
 } from "./routes/operatorJobs";
-import { adminUsersHandler, adminDashboardMetricsHandler } from "./routes/adminDashboard";
+import {
+  adminUserByIdHandler,
+  adminUsersHandler,
+  adminDashboardMetricsHandler
+} from "./routes/adminDashboard";
 import {
   adminAcknowledgeIncidentHandler,
   adminAssignIncidentHandler,
@@ -104,6 +108,13 @@ app.http("admin-users", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminUsersHandler
+});
+
+app.http("admin-user-by-id", {
+  route: "ops-admin/users/{userId}",
+  methods: ["GET", "PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminUserByIdHandler
 });
 
 app.http("admin-runtime-metrics", {

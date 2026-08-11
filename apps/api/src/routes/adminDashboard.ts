@@ -2,13 +2,62 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import { prisma } from "@gpp/db";
 import {
   addressMonthlyCents,
+  adminUserResponseSchema,
+  adminUserUpdateSchema,
   adminUsersResponseSchema,
   adminDashboardMetricsSchema
 } from "@gpp/shared";
-import { handleOptions, jsonResponse, withErrorBoundary } from "../lib/http";
+import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 
 const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
+
+const USER_AGGREGATE_INCLUDE = {
+  serviceAddresses: { where: { isActive: true }, include: { schedules: true } },
+  subscriptions: true
+} as const;
+
+type UserAggregateRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: "CUSTOMER" | "OPERATOR" | "ADMIN";
+  createdAt: Date;
+  requestedServiceArea: string | null;
+  serviceAddresses: Array<{
+    schedules: Array<{ pickupDayOfWeek: number; canCount: number; cadence: string; rollIn: boolean }>;
+  }>;
+  subscriptions: Array<{ status: string }>;
+};
+
+function toAdminUser(row: UserAggregateRow) {
+  const monthlyCents = row.serviceAddresses.reduce(
+    (sum, address) =>
+      sum +
+      addressMonthlyCents(
+        address.schedules.map((s) => ({
+          dayOfWeek: s.pickupDayOfWeek,
+          canCount: s.canCount,
+          cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+          rollIn: s.rollIn
+        }))
+      ),
+    0
+  );
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    role: row.role,
+    createdAt: row.createdAt.toISOString(),
+    requestedServiceArea: row.requestedServiceArea,
+    addressCount: row.serviceAddresses.length,
+    activeSubscription: row.subscriptions.some((sub) => ACTIVE_SUB_STATUSES.includes(sub.status)),
+    monthlyCents
+  };
+}
 
 export async function adminUsersHandler(
   request: HttpRequest,
@@ -24,42 +73,70 @@ export async function adminUsersHandler(
       async () => {
         const rows = await prisma.user.findMany({
           orderBy: { createdAt: "desc" },
-          include: {
-            serviceAddresses: { where: { isActive: true }, include: { schedules: true } },
-            subscriptions: true
-          }
+          include: USER_AGGREGATE_INCLUDE
         });
 
-        const users = rows.map((row) => {
-          const monthlyCents = row.serviceAddresses.reduce(
-            (sum, address) =>
-              sum +
-              addressMonthlyCents(
-                address.schedules.map((s) => ({
-                  dayOfWeek: s.pickupDayOfWeek,
-                  canCount: s.canCount,
-                  cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
-                  rollIn: s.rollIn
-                }))
-              ),
-            0
-          );
-          return {
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            role: row.role,
-            createdAt: row.createdAt.toISOString(),
-            requestedServiceArea: row.requestedServiceArea,
-            addressCount: row.serviceAddresses.length,
-            activeSubscription: row.subscriptions.some((sub) =>
-              ACTIVE_SUB_STATUSES.includes(sub.status)
-            ),
-            monthlyCents
-          };
-        });
-
+        const users = rows.map((row) => toAdminUser(row as unknown as UserAggregateRow));
         return jsonResponse(200, adminUsersResponseSchema.parse({ users }));
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+export async function adminUserByIdHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const userId = req.params.userId;
+        if (!userId) {
+          throw new HttpError(400, "userId is required");
+        }
+
+        if (req.method === "PATCH") {
+          const input = await parseJson(req, adminUserUpdateSchema);
+
+          if (input.email) {
+            const existing = await prisma.user.findUnique({ where: { email: input.email } });
+            if (existing && existing.id !== userId) {
+              throw new HttpError(409, "That email is already in use by another account.");
+            }
+          }
+
+          await prisma.user.update({
+            where: { id: userId },
+            data: {
+              ...(input.name !== undefined ? { name: input.name } : {}),
+              ...(input.email !== undefined ? { email: input.email } : {}),
+              ...(input.phone !== undefined ? { phone: input.phone } : {}),
+              ...(input.role !== undefined ? { role: input.role } : {}),
+              ...(input.requestedServiceArea !== undefined
+                ? { requestedServiceArea: input.requestedServiceArea }
+                : {})
+            }
+          });
+        }
+
+        const row = await prisma.user.findUnique({
+          where: { id: userId },
+          include: USER_AGGREGATE_INCLUDE
+        });
+        if (!row) {
+          throw new HttpError(404, "User not found");
+        }
+
+        return jsonResponse(
+          200,
+          adminUserResponseSchema.parse({ user: toAdminUser(row as unknown as UserAggregateRow) })
+        );
       },
       { roles: ["ADMIN"] }
     )(request, context)

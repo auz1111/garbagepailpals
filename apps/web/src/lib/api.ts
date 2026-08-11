@@ -11,6 +11,8 @@ import type {
   AdminRuntimeMetrics,
   AdminDashboardMetrics,
   AdminUsersResponse,
+  AdminUserResponse,
+  AdminUserUpdate,
   AuthResponse,
   LoginInput,
   OperatorJobClaimResponse,
@@ -148,6 +150,23 @@ export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDash
 
 export function getAdminUsers(accessToken: string): Promise<AdminUsersResponse> {
   return request<undefined, AdminUsersResponse>("/ops-admin/users", "GET", undefined, accessToken);
+}
+
+export function getAdminUser(userId: string, accessToken: string): Promise<AdminUserResponse> {
+  return request<undefined, AdminUserResponse>(`/ops-admin/users/${userId}`, "GET", undefined, accessToken);
+}
+
+export function updateAdminUser(
+  userId: string,
+  patch: AdminUserUpdate,
+  accessToken: string
+): Promise<AdminUserResponse> {
+  return request<AdminUserUpdate, AdminUserResponse>(
+    `/ops-admin/users/${userId}`,
+    "PATCH",
+    patch,
+    accessToken
+  );
 }
 
 export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntimeMetrics> {
