@@ -642,6 +642,13 @@ a {
   max-width: 320px;
 }
 
+.form-section-title {
+  margin: 1rem 0 0.2rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--teal);
+}
+
 .pickup-day-list {
   list-style: none;
   margin: 0.4rem 0 0.7rem;

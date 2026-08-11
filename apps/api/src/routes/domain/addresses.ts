@@ -1,6 +1,7 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
 import {
+  createAddressRequestSchema,
   scheduleUpdateSchema,
   serviceAddressInputSchema,
   serviceAddressSchema,
@@ -84,7 +85,12 @@ export async function createAddressHandler(
   return withErrorBoundary(context, async () =>
     withAuth(
       async (req, _ctx, auth) => {
-        const input = await parseJson(req, serviceAddressInputSchema);
+        const input = await parseJson(req, createAddressRequestSchema);
+        if (input.cadence === "BIWEEKLY" && !input.biweeklyAnchorDate) {
+          return jsonResponse(400, {
+            message: "A first pickup date is required for a biweekly schedule"
+          });
+        }
 
         const allowedArea = await prisma.serviceArea.findUnique({
           where: { postalCode: input.postalCode }
@@ -122,14 +128,17 @@ export async function createAddressHandler(
             gateCode: input.gateCode,
             canCount: input.canCount,
             pickupsPerWeek: 1,
-            rollIn: input.rollIn,
+            rollIn: input.rollIn ?? true,
             isActive: input.isActive ?? true,
             schedules: {
               create: {
-                pickupDayOfWeek: 2,
-                cadence: "WEEKLY",
+                pickupDayOfWeek: input.pickupDayOfWeek ?? 2,
+                cadence: input.cadence ?? "WEEKLY",
+                biweeklyAnchorDate: input.biweeklyAnchorDate
+                  ? new Date(input.biweeklyAnchorDate)
+                  : null,
                 canCount: input.canCount,
-                rollIn: input.rollIn
+                rollIn: input.rollIn ?? true
               }
             }
           },

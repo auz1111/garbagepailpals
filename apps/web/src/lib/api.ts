@@ -26,6 +26,7 @@ import type {
   RegisterInput,
   ServiceAddress,
   ServiceAddressInput,
+  CreateAddressRequest,
   ServiceAreaCheckResponse,
   ServiceJob,
   PickupDay,
@@ -246,8 +247,11 @@ export function listAddresses(accessToken: string): Promise<ServiceAddressListRe
   return request<undefined, ServiceAddressListResponse>("/addresses", "GET", undefined, accessToken);
 }
 
-export function createAddress(input: ServiceAddressInput, accessToken: string): Promise<ServiceAddressResponse> {
-  return request<ServiceAddressInput, ServiceAddressResponse>("/addresses", "POST", input, accessToken);
+export function createAddress(
+  input: CreateAddressRequest,
+  accessToken: string
+): Promise<ServiceAddressResponse> {
+  return request<CreateAddressRequest, ServiceAddressResponse>("/addresses", "POST", input, accessToken);
 }
 
 export function updateAddress(

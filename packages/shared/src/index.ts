@@ -95,6 +95,14 @@ export const scheduleUpdateSchema = z.object({
     })
 });
 
+// Creating a location also sets up its first pickup day. Cans + roll-in come
+// from the address input; add the weekday and cadence for that first day.
+export const createAddressRequestSchema = serviceAddressInputSchema.extend({
+  pickupDayOfWeek: z.number().int().min(0).max(6).default(2),
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]).default("WEEKLY"),
+  biweeklyAnchorDate: z.string().datetime().optional()
+});
+
 export const serviceAddressSchema = serviceAddressInputSchema.extend({
   id: z.string(),
   userId: z.string(),
@@ -434,6 +442,7 @@ export type MeResponse = z.infer<typeof meResponseSchema>;
 export type ProtectedMessage = z.infer<typeof protectedMessageSchema>;
 export type ServiceAreaCheckResponse = z.infer<typeof serviceAreaCheckResponseSchema>;
 export type ServiceAddressInput = z.infer<typeof serviceAddressInputSchema>;
+export type CreateAddressRequest = z.infer<typeof createAddressRequestSchema>;
 export type ServiceAddress = z.infer<typeof serviceAddressSchema>;
 export type PickupDayInput = z.infer<typeof pickupDayInputSchema>;
 export type PickupDay = z.infer<typeof pickupDaySchema>;

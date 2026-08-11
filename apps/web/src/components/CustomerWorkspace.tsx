@@ -5,7 +5,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-r
 import type {
   CurrentUser,
   ServiceAddress,
-  ServiceAddressInput,
+  CreateAddressRequest,
   PickupDay,
   PickupDayInput,
   PricingDay
@@ -51,7 +51,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-const defaultAddressValues: ServiceAddressInput = {
+const defaultAddressValues: CreateAddressRequest = {
   line1: "",
   city: "",
   state: "",
@@ -63,7 +63,9 @@ const defaultAddressValues: ServiceAddressInput = {
   canCount: 2,
   pickupsPerWeek: 1,
   rollIn: true,
-  isActive: true
+  isActive: true,
+  pickupDayOfWeek: 2,
+  cadence: "WEEKLY"
 };
 
 const DEFAULT_PICKUP_DAYS = [2];
@@ -97,9 +99,10 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   // The add-address form is hidden once the user has addresses (opened via a button).
   const [showAddressForm, setShowAddressForm] = useState(false);
 
-  const addressForm = useForm<ServiceAddressInput>({
+  const addressForm = useForm<CreateAddressRequest>({
     defaultValues: defaultAddressValues
   });
+  const addressCadence = addressForm.watch("cadence");
 
   function closeAddressForm(): void {
     setShowAddressForm(false);
@@ -146,7 +149,16 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   });
 
   const createAddressMutation = useMutation({
-    mutationFn: (input: ServiceAddressInput) => createAddress(input, accessToken),
+    mutationFn: (input: CreateAddressRequest) => {
+      // datetime-local → full ISO for the first pickup day (biweekly only).
+      let anchor: string | undefined;
+      const raw = input.biweeklyAnchorDate?.trim();
+      if (input.cadence === "BIWEEKLY" && raw) {
+        const parsed = new Date(raw);
+        anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+      }
+      return createAddress({ ...input, biweeklyAnchorDate: anchor }, accessToken);
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
@@ -710,6 +722,40 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                   placeholder="Gate opens inward"
                 />
               </label>
+              <h4 className="form-section-title">First pickup day</h4>
+              <div className="field-row">
+                <label>
+                  Pickup day
+                  <select {...addressForm.register("pickupDayOfWeek", { valueAsNumber: true })}>
+                    {WEEKDAYS.map((label, value) => (
+                      <option key={label} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Cadence
+                  <select {...addressForm.register("cadence")}>
+                    <option value="WEEKLY">Every week</option>
+                    <option value="BIWEEKLY">Every 2 weeks</option>
+                  </select>
+                </label>
+              </div>
+              {addressCadence === "BIWEEKLY" ? (
+                <label className="field-single">
+                  First pickup date
+                  <input
+                    type="datetime-local"
+                    {...addressForm.register("biweeklyAnchorDate", {
+                      required: "Pick a first date for a biweekly schedule"
+                    })}
+                  />
+                </label>
+              ) : null}
+              {addressForm.formState.errors.biweeklyAnchorDate ? (
+                <p className="error">{addressForm.formState.errors.biweeklyAnchorDate?.message}</p>
+              ) : null}
               <label className="field-single">
                 Cans
                 <input
@@ -727,9 +773,19 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
               {addressForm.formState.errors.canCount ? (
                 <p className="error">{addressForm.formState.errors.canCount?.message}</p>
               ) : null}
+              <label className="checkbox-field">
+                <input type="checkbox" {...addressForm.register("rollIn")} />
+                <span>
+                  <strong>Bring cans back the next day (roll-in)</strong>
+                  <span className="subtext">
+                    We return the cans the day after pickup. Turn off for roll-out only.
+                  </span>
+                </span>
+              </label>
               <p className="subtext">
-                Starts with one weekly pickup ({PRICING.includedCansPerPickup} cans included). Add
-                more pickup days, cans, or roll-in per day on the next screen.
+                This sets up your first pickup ({PRICING.includedCansPerPickup} cans included ={" "}
+                {formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo). Add more pickup days on the next
+                screen.
               </p>
               <button type="submit" disabled={createAddressMutation.isPending}>
                 {createAddressMutation.isPending ? "Saving..." : "Save Location"}
