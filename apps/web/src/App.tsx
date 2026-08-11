@@ -424,25 +424,6 @@ export function App() {
                     </div>
                   </div>
                 </section>
-
-                <footer className="site-footer">
-                  <div className="site-footer-inner">
-                    <div>
-                      <div className="brand">
-                        <img src="/logo-96.png" width={96} height={96} alt="" aria-hidden="true" />
-                        Garbage Pail Pals
-                      </div>
-                      <small>Can-to-curb service, minus the scramble.</small>
-                    </div>
-                    <nav aria-label="Footer">
-                      <a href="#features">Features</a>
-                      <a href="#how">How it works</a>
-                      <a href="#pricing">Pricing</a>
-                      <Link to="/auth" onClick={() => setMode("LOGIN")}>Sign in</Link>
-                    </nav>
-                    <small>© {new Date().getFullYear()} Garbage Pail Pals</small>
-                  </div>
-                </footer>
               </section>
             }
           />
@@ -610,6 +591,32 @@ export function App() {
             }
           />
         </Routes>
+
+        <footer className="site-footer">
+          <div className="site-footer-inner">
+            <div className="site-footer-brand">
+              <div className="brand">
+                <img src="/logo-96.png" width={96} height={96} alt="" aria-hidden="true" />
+                Garbage Pail Pals
+              </div>
+              <p>
+                Never think about trash day again. We roll your cans to the curb and back — right on
+                schedule, week after week.
+              </p>
+            </div>
+            <nav className="site-footer-nav" aria-label="Footer">
+              <span className="site-footer-heading">Explore</span>
+              <a href="/#features">Features</a>
+              <a href="/#how">How it works</a>
+              <a href="/#pricing">Pricing</a>
+              <a href="/#contact">Contact</a>
+            </nav>
+          </div>
+          <div className="site-footer-bottom">
+            <span>© {new Date().getFullYear()} Garbage Pail Pals</span>
+            <span>Can-to-curb service, minus the scramble.</span>
+          </div>
+        </footer>
       </section>
     </main>
   );
