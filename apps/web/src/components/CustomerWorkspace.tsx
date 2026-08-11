@@ -29,9 +29,6 @@ type CustomerWorkspaceProps = {
   refreshUser: () => Promise<void>;
 };
 
-type ServiceAreaForm = {
-  postalCode: string;
-};
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
@@ -61,7 +58,6 @@ const defaultScheduleValues: ServiceScheduleInput = {
 export const CUSTOMER_NAV = [
   { to: "/customer", label: "Overview", icon: "🏡", end: true },
   { to: "/customer/billing", label: "Billing", icon: "💳" },
-  { to: "/customer/service-area", label: "Service Area", icon: "📍" },
   { to: "/customer/addresses", label: "Addresses", icon: "🏠" },
   { to: "/customer/schedule", label: "Schedule", icon: "🗓️" },
   { to: "/customer/jobs", label: "Upcoming Jobs", icon: "🚚" },
@@ -74,18 +70,30 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   const navigate = useNavigate();
   const [finalizingCheckout, setFinalizingCheckout] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<string>("");
-  const [serviceAreaResult, setServiceAreaResult] = useState<
-    { postalCode: string; eligible: boolean } | null
-  >(null);
-  const [serviceAreaError, setServiceAreaError] = useState<string | null>(null);
-
-  const serviceAreaForm = useForm<ServiceAreaForm>({
-    defaultValues: { postalCode: "" }
-  });
+  // Inline service-area check for the Add Address form.
+  const [areaCheck, setAreaCheck] = useState<{ postalCode: string; eligible: boolean } | null>(null);
+  const [areaChecking, setAreaChecking] = useState(false);
 
   const addressForm = useForm<ServiceAddressInput>({
     defaultValues: defaultAddressValues
   });
+
+  async function checkAddressArea(postalCode: string): Promise<void> {
+    const trimmed = postalCode.trim();
+    if (!trimmed) {
+      setAreaCheck(null);
+      return;
+    }
+    setAreaChecking(true);
+    try {
+      const result = await checkServiceArea(trimmed);
+      setAreaCheck(result);
+    } catch {
+      setAreaCheck(null);
+    } finally {
+      setAreaChecking(false);
+    }
+  }
 
   const scheduleForm = useForm<ServiceScheduleInput>({
     defaultValues: defaultScheduleValues
@@ -571,58 +579,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     );
   }
 
-  function renderServiceArea(): JSX.Element {
-    return (
-      <div className="dash-page">
-        <div className="dash-page-head">
-          <h2>Service Area Check</h2>
-          <p className="subtext">Confirm we operate in a ZIP code.</p>
-        </div>
-        <article className="panel">
-          <form
-            onSubmit={serviceAreaForm.handleSubmit(
-              async (values) => {
-                setServiceAreaError(null);
-                try {
-                  const result = await checkServiceArea(values.postalCode.trim());
-                  setServiceAreaResult(result);
-                } catch (error) {
-                  setServiceAreaResult(null);
-                  setServiceAreaError(getErrorMessage(error));
-                }
-              },
-              () => {
-                // Validation failed (e.g. blank field) — clear any stale result.
-                setServiceAreaResult(null);
-                setServiceAreaError(null);
-              }
-            )}
-          >
-            <label>
-              Postal code
-              <input
-                {...serviceAreaForm.register("postalCode", {
-                  validate: (value) =>
-                    value.trim().length > 0 || "Please enter a postal code to check."
-                })}
-                placeholder="97702"
-              />
-            </label>
-            <button type="submit">Check Area</button>
-            {serviceAreaForm.formState.errors.postalCode ? (
-              <p className="error">{serviceAreaForm.formState.errors.postalCode.message}</p>
-            ) : null}
-            {serviceAreaError ? <p className="error">{serviceAreaError}</p> : null}
-          </form>
-          {serviceAreaResult ? (
-            <p className={serviceAreaResult.eligible ? "success-inline" : "error"}>
-              {serviceAreaResult.postalCode}: {serviceAreaResult.eligible ? "In service area" : "Out of service area"}
-            </p>
-          ) : null}
-        </article>
-      </div>
-    );
-  }
 
   function renderAddresses(): JSX.Element {
     return (
@@ -670,13 +626,22 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 <input
                   {...addressForm.register("postalCode", {
                     required: "Postal code is required",
-                    minLength: { value: 3, message: "Enter a valid postal code" }
+                    minLength: { value: 3, message: "Enter a valid postal code" },
+                    onBlur: (event) => void checkAddressArea((event.target as HTMLInputElement).value)
                   })}
                   placeholder="97702"
                 />
               </label>
               {addressForm.formState.errors.postalCode ? (
                 <p className="error">{addressForm.formState.errors.postalCode.message}</p>
+              ) : areaChecking ? (
+                <p className="subtext">Checking service area…</p>
+              ) : areaCheck ? (
+                <p className={areaCheck.eligible ? "success-inline" : "error"}>
+                  {areaCheck.eligible
+                    ? `✓ We service ${areaCheck.postalCode} — you're good to add this address.`
+                    : `✗ We don't service ${areaCheck.postalCode} yet. Adding it will be rejected.`}
+                </p>
               ) : null}
               <label>
                 Timezone
@@ -903,7 +868,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       <Routes>
         <Route index element={renderOverview()} />
         <Route path="billing" element={renderBilling()} />
-        <Route path="service-area" element={renderServiceArea()} />
         <Route path="addresses" element={renderAddresses()} />
         <Route path="schedule" element={renderSchedule()} />
         <Route path="jobs" element={renderJobs()} />
