@@ -133,19 +133,25 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     queryFn: async () => listAddresses(accessToken)
   });
 
+  const billingSummaryQuery = useQuery({
+    queryKey: ["customer-billing-summary"],
+    queryFn: async () => getBillingSummary(accessToken)
+  });
+
+  // Job feeds are entitlement-gated (402 without an active plan), so only fetch
+  // them once billing confirms the plan is active — no wasted 402s for unpaid
+  // accounts.
+  const hasActivePlan = billingSummaryQuery.data?.active === true;
   const upcomingJobsQuery = useQuery({
     queryKey: ["customer-jobs-upcoming"],
-    queryFn: async () => listUpcomingJobs(accessToken)
+    queryFn: async () => listUpcomingJobs(accessToken),
+    enabled: hasActivePlan
   });
 
   const historyJobsQuery = useQuery({
     queryKey: ["customer-jobs-history"],
-    queryFn: async () => listHistoryJobs(accessToken)
-  });
-
-  const billingSummaryQuery = useQuery({
-    queryKey: ["customer-billing-summary"],
-    queryFn: async () => getBillingSummary(accessToken)
+    queryFn: async () => listHistoryJobs(accessToken),
+    enabled: hasActivePlan
   });
 
   const createAddressMutation = useMutation({
