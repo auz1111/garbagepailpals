@@ -643,6 +643,67 @@ a {
   display: none;
 }
 
+.admin-loc-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.admin-loc-card {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 0.8rem 0.95rem;
+}
+
+.admin-loc-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-loc-head strong {
+  display: block;
+}
+
+.admin-loc-price {
+  font-weight: 900;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.admin-loc-pickups {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.admin-loc-pickups li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-size: 0.88rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  background: var(--teal-bright-wash);
+}
+
+.admin-loc-pickups li strong {
+  flex: none;
+  min-width: 2.5rem;
+  color: var(--teal);
+}
+
+.admin-loc-pickups li span {
+  color: var(--slate-2);
+}
+
 /* Wider pages: lay each card's fields out in columns so the card is short. */
 @media (min-width: 760px) {
   .admin-table tr {

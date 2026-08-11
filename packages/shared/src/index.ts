@@ -352,8 +352,29 @@ export const adminUsersResponseSchema = z.object({
   users: z.array(adminUserSchema)
 });
 
+export const adminUserLocationSchema = z.object({
+  id: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  monthlyCents: z.number().int().nonnegative(),
+  pickups: z.array(
+    z.object({
+      dayOfWeek: z.number().int().min(0).max(6),
+      cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
+      canCount: z.number().int().nonnegative(),
+      rollIn: z.boolean()
+    })
+  )
+});
+
+export const adminUserDetailSchema = adminUserSchema.extend({
+  locations: z.array(adminUserLocationSchema)
+});
+
 export const adminUserResponseSchema = z.object({
-  user: adminUserSchema
+  user: adminUserDetailSchema
 });
 
 // Fields an admin may edit on a user account.
@@ -496,6 +517,8 @@ export type AdminUser = z.infer<typeof adminUserSchema>;
 export type AdminUsersResponse = z.infer<typeof adminUsersResponseSchema>;
 export type AdminUserResponse = z.infer<typeof adminUserResponseSchema>;
 export type AdminUserUpdate = z.infer<typeof adminUserUpdateSchema>;
+export type AdminUserLocation = z.infer<typeof adminUserLocationSchema>;
+export type AdminUserWithLocations = z.infer<typeof adminUserDetailSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
 export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;

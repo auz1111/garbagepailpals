@@ -17,6 +17,17 @@ const USER_AGGREGATE_INCLUDE = {
   subscriptions: true
 } as const;
 
+type ScheduleRow = { pickupDayOfWeek: number; canCount: number; cadence: string; rollIn: boolean };
+
+type AddressRow = {
+  id: string;
+  line1: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  schedules: ScheduleRow[];
+};
+
 type UserAggregateRow = {
   id: string;
   name: string;
@@ -25,24 +36,22 @@ type UserAggregateRow = {
   role: "CUSTOMER" | "OPERATOR" | "ADMIN";
   createdAt: Date;
   requestedServiceArea: string | null;
-  serviceAddresses: Array<{
-    schedules: Array<{ pickupDayOfWeek: number; canCount: number; cadence: string; rollIn: boolean }>;
-  }>;
+  serviceAddresses: AddressRow[];
   subscriptions: Array<{ status: string }>;
 };
 
+function pricingDays(schedules: ScheduleRow[]) {
+  return schedules.map((s) => ({
+    dayOfWeek: s.pickupDayOfWeek,
+    canCount: s.canCount,
+    cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+    rollIn: s.rollIn
+  }));
+}
+
 function toAdminUser(row: UserAggregateRow) {
   const monthlyCents = row.serviceAddresses.reduce(
-    (sum, address) =>
-      sum +
-      addressMonthlyCents(
-        address.schedules.map((s) => ({
-          dayOfWeek: s.pickupDayOfWeek,
-          canCount: s.canCount,
-          cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
-          rollIn: s.rollIn
-        }))
-      ),
+    (sum, address) => sum + addressMonthlyCents(pricingDays(address.schedules)),
     0
   );
   return {
@@ -56,6 +65,28 @@ function toAdminUser(row: UserAggregateRow) {
     addressCount: row.serviceAddresses.length,
     activeSubscription: row.subscriptions.some((sub) => ACTIVE_SUB_STATUSES.includes(sub.status)),
     monthlyCents
+  };
+}
+
+function toAdminUserDetail(row: UserAggregateRow) {
+  return {
+    ...toAdminUser(row),
+    locations: row.serviceAddresses.map((address) => ({
+      id: address.id,
+      line1: address.line1,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode,
+      monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
+      pickups: [...address.schedules]
+        .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
+        .map((s) => ({
+          dayOfWeek: s.pickupDayOfWeek,
+          cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+          canCount: s.canCount,
+          rollIn: s.rollIn
+        }))
+    }))
   };
 }
 
@@ -135,7 +166,7 @@ export async function adminUserByIdHandler(
 
         return jsonResponse(
           200,
-          adminUserResponseSchema.parse({ user: toAdminUser(row as unknown as UserAggregateRow) })
+          adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
         );
       },
       { roles: ["ADMIN"] }

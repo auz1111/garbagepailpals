@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import type { AdminIncident, AdminUser, CurrentUser, Role } from "@gpp/shared";
+import type { AdminIncident, AdminUserWithLocations, CurrentUser, Role } from "@gpp/shared";
 import { formatUsd } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
@@ -31,6 +31,8 @@ const ROLE_LABELS: Record<Role, string> = {
   OPERATOR: "Operator",
   ADMIN: "Admin"
 };
+
+const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
@@ -556,7 +558,7 @@ function AdminUserDetail({
   saveError,
   saved
 }: {
-  user: AdminUser;
+  user: AdminUserWithLocations;
   onSave: (
     id: string,
     patch: {
@@ -674,6 +676,48 @@ function AdminUserDetail({
           </li>
           <li>Joined: {new Date(user.createdAt).toLocaleString()}</li>
         </ul>
+      </article>
+
+      <article className="panel">
+        <div className="panel-head-row">
+          <h3>Locations</h3>
+          <span className="detail-total">{formatUsd(user.monthlyCents)}/mo</span>
+        </div>
+        {user.locations.length === 0 ? (
+          <p className="subtext">This user has no service locations.</p>
+        ) : (
+          <ul className="admin-loc-list">
+            {user.locations.map((loc) => (
+              <li className="admin-loc-card" key={loc.id}>
+                <div className="admin-loc-head">
+                  <div>
+                    <strong>{loc.line1}</strong>
+                    <span className="admin-table-sub">
+                      {loc.city}, {loc.state} {loc.postalCode}
+                    </span>
+                  </div>
+                  <span className="admin-loc-price">{formatUsd(loc.monthlyCents)}/mo</span>
+                </div>
+                {loc.pickups.length === 0 ? (
+                  <p className="subtext">No pickup schedule set.</p>
+                ) : (
+                  <ul className="admin-loc-pickups">
+                    {loc.pickups.map((pickup, index) => (
+                      <li key={index}>
+                        <strong>{WEEKDAYS_SHORT[pickup.dayOfWeek]}</strong>
+                        <span>
+                          {pickup.canCount} can{pickup.canCount === 1 ? "" : "s"} ·{" "}
+                          {pickup.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly"} ·{" "}
+                          {pickup.rollIn ? "roll-in" : "roll-out only"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </article>
     </div>
   );
