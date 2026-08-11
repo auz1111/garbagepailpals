@@ -200,13 +200,15 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
                 <tbody>
                   {rows.map((entry) => (
                     <tr key={entry.id}>
-                      <td>
+                      <td className="admin-cell-user">
                         <strong>{entry.name}</strong>
                         <span className="admin-table-sub">{entry.email}</span>
                       </td>
-                      <td>{ROLE_LABELS[entry.role]}</td>
-                      <td>{entry.role === "CUSTOMER" ? entry.addressCount : "—"}</td>
-                      <td>
+                      <td data-label="Role">{ROLE_LABELS[entry.role]}</td>
+                      <td data-label="Locations">
+                        {entry.role === "CUSTOMER" ? entry.addressCount : "—"}
+                      </td>
+                      <td data-label="Plan">
                         {entry.role === "CUSTOMER" ? (
                           <span
                             className={`coverage-badge ${
@@ -219,9 +221,11 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
                           "—"
                         )}
                       </td>
-                      <td>{entry.role === "CUSTOMER" ? `${formatUsd(entry.monthlyCents)}/mo` : "—"}</td>
-                      <td>{entry.requestedServiceArea ?? "—"}</td>
-                      <td>{new Date(entry.createdAt).toLocaleDateString()}</td>
+                      <td data-label="Monthly">
+                        {entry.role === "CUSTOMER" ? `${formatUsd(entry.monthlyCents)}/mo` : "—"}
+                      </td>
+                      <td data-label="Area">{entry.requestedServiceArea ?? "—"}</td>
+                      <td data-label="Joined">{new Date(entry.createdAt).toLocaleDateString()}</td>
                     </tr>
                   ))}
                 </tbody>

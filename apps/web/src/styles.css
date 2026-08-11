@@ -554,36 +554,60 @@ a {
   white-space: nowrap;
 }
 
+/* The users list always renders as cards (one per user) at every screen size,
+   flowing into a responsive grid when there's room. */
 .admin-table-scroll {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .admin-table {
+  display: block;
   width: 100%;
-  border-collapse: collapse;
   font-size: 0.9rem;
 }
 
-.admin-table th {
-  text-align: left;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--slate-2);
-  padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--line);
-  white-space: nowrap;
+.admin-table thead {
+  display: none;
+}
+
+.admin-table tbody {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+.admin-table tr {
+  display: block;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 0.8rem 0.95rem;
+  box-shadow: 0 1px 2px rgba(10, 13, 21, 0.05), 0 6px 16px rgba(10, 13, 21, 0.07);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.admin-table tr:hover {
+  transform: translateY(-2px);
+  border-color: var(--teal-bright);
+  box-shadow: 0 4px 10px rgba(10, 13, 21, 0.08), 0 16px 32px rgba(5, 90, 95, 0.16);
 }
 
 .admin-table td {
-  padding: 0.65rem 0.7rem;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  border: 0;
+  text-align: right;
 }
 
-.admin-table tr:last-child td {
-  border-bottom: 0;
+.admin-table td::before {
+  content: attr(data-label);
+  font-weight: 800;
+  color: var(--slate-2);
+  text-align: left;
 }
 
 .admin-table td strong {
@@ -594,6 +618,53 @@ a {
   display: block;
   font-size: 0.8rem;
   color: var(--slate-2);
+}
+
+.admin-table td.admin-cell-user {
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 0.1rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.admin-table td.admin-cell-user::before {
+  display: none;
+}
+
+/* Wider pages: lay each card's fields out in columns so the card is short. */
+@media (min-width: 760px) {
+  .admin-table tr {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.75rem;
+  }
+
+  .admin-table td {
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    text-align: left;
+    gap: 0.15rem;
+    padding: 0;
+  }
+
+  .admin-table td::before {
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .admin-table td.admin-cell-user {
+    flex: 1 1 200px;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
 }
 
 .update-banner {
