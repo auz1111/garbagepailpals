@@ -73,10 +73,19 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   // Inline service-area check for the Add Address form.
   const [areaCheck, setAreaCheck] = useState<{ postalCode: string; eligible: boolean } | null>(null);
   const [areaChecking, setAreaChecking] = useState(false);
+  // The add-address form is hidden once the user has addresses (opened via a button).
+  const [showAddressForm, setShowAddressForm] = useState(false);
 
   const addressForm = useForm<ServiceAddressInput>({
     defaultValues: defaultAddressValues
   });
+
+  function closeAddressForm(): void {
+    setShowAddressForm(false);
+    createAddressMutation.reset();
+    addressForm.reset(defaultAddressValues);
+    setAreaCheck(null);
+  }
 
   async function checkAddressArea(postalCode: string): Promise<void> {
     const trimmed = postalCode.trim();
@@ -125,6 +134,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       addressForm.reset(defaultAddressValues);
+      setAreaCheck(null);
+      setShowAddressForm(false);
     }
   });
 
@@ -581,15 +592,29 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
 
 
   function renderAddresses(): JSX.Element {
+    const formOpen = !hasAddress || showAddressForm;
+    const summary = billingSummaryQuery.data;
+    const coverageById = new Map((summary?.addresses ?? []).map((a) => [a.id, a.covered] as const));
+    const uncoveredCount = summary ? addresses.filter((a) => !coverageById.get(a.id)).length : 0;
+
     return (
       <div className="dash-page">
         <div className="dash-page-head">
           <h2>Addresses</h2>
           <p className="subtext">Add a pickup location and review your saved addresses.</p>
         </div>
-        <div className="panel-grid">
+
+        <div className={formOpen && hasAddress ? "panel-grid" : ""}>
+          {formOpen ? (
           <article className="panel">
-            <h3>Add Service Address</h3>
+            <div className="panel-head-row">
+              <h3>Add Service Address</h3>
+              {hasAddress ? (
+                <button type="button" className="link-inline" onClick={closeAddressForm}>
+                  Cancel
+                </button>
+              ) : null}
+            </div>
             <form onSubmit={addressForm.handleSubmit((values) => createAddressMutation.mutate(values))}>
               <label>
                 Line 1
@@ -703,15 +728,36 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </form>
             {createAddressMutation.isError ? <p className="error">{getErrorMessage(createAddressMutation.error)}</p> : null}
           </article>
+          ) : null}
 
+          {hasAddress ? (
           <article className="panel">
-            <h3>Your Addresses</h3>
+            <div className="panel-head-row">
+              <h3>Your Addresses</h3>
+              {!showAddressForm ? (
+                <button type="button" className="add-address-btn" onClick={() => setShowAddressForm(true)}>
+                  + Add Address
+                </button>
+              ) : null}
+            </div>
             <p className="subtext">Adjust cans and pickup days per address — billing updates to match.</p>
+            {summary && uncoveredCount > 0 ? (
+              <p className="notice">
+                {uncoveredCount === 1 ? "1 address isn't" : `${uncoveredCount} addresses aren't`} being
+                serviced yet because {uncoveredCount === 1 ? "it isn't" : "they aren't"} included in
+                your billing.{" "}
+                <Link to="/customer/billing">
+                  {summary.active ? "Update your subscription" : "Set up billing"}
+                </Link>{" "}
+                to start service.
+              </p>
+            ) : null}
             <ul className="address-list">
               {addresses.map((address) => (
                 <AddressRow
                   key={address.id}
                   address={address}
+                  covered={summary ? (coverageById.get(address.id) ?? false) : undefined}
                   saving={
                     updateAddressMutation.isPending && updateAddressMutation.variables?.id === address.id
                   }
@@ -727,7 +773,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 />
               ))}
             </ul>
-            {!hasAddress ? <p className="subtext">No addresses yet — add your first one.</p> : null}
             {updateAddressMutation.isError ? (
               <p className="error">{getErrorMessage(updateAddressMutation.error)}</p>
             ) : null}
@@ -736,6 +781,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             ) : null}
             {addressesQuery.isError ? <p className="error">{getErrorMessage(addressesQuery.error)}</p> : null}
           </article>
+          ) : null}
         </div>
       </div>
     );
@@ -880,12 +926,14 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
 
 function AddressRow({
   address,
+  covered,
   saving,
   removing,
   onSave,
   onRemove
 }: {
   address: ServiceAddress;
+  covered: boolean | undefined;
   saving: boolean;
   removing: boolean;
   onSave: (id: string, patch: { canCount: number; pickupsPerWeek: number }) => void;
@@ -907,6 +955,11 @@ function AddressRow({
         <span className="subtext">
           {address.city}, {address.state} {address.postalCode}
         </span>
+        {covered !== undefined ? (
+          <span className={`coverage-badge ${covered ? "covered" : "uncovered"}`}>
+            {covered ? "✓ Serviced" : "Not serviced"}
+          </span>
+        ) : null}
       </div>
       <div className="address-row-controls">
         <label className="field-mini">

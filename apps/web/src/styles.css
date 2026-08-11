@@ -428,6 +428,11 @@ a {
   font-size: 0.85rem;
 }
 
+.address-row-main .coverage-badge {
+  margin-top: 0.35rem;
+  align-self: flex-start;
+}
+
 .address-row-controls {
   display: flex;
   align-items: flex-end;
@@ -1689,6 +1694,37 @@ button[type="submit"]:disabled {
 
 .panel h3 {
   margin: 0 0 0.6rem;
+}
+
+.panel-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+}
+
+.panel-head-row h3 {
+  margin: 0;
+}
+
+.add-address-btn {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--teal-deep);
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  box-shadow: var(--shadow-gold);
+  transition: transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.add-address-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 32px rgba(247, 168, 27, 0.45);
 }
 
 .button-row {
