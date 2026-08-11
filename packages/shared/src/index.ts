@@ -461,14 +461,12 @@ export const adminLocationNeighborhoodUpdateSchema = z.object({
 
 // --- Today's route (admin) ------------------------------------------------
 export const adminRouteRequestSchema = z.object({
-  // Both optional — when blank the optimizer picks the best start/end from the
-  // route's own stops (open routing).
-  start: z.string().max(200).optional(),
-  end: z.string().max(200).optional(),
   // Scope the route to a single neighborhood (recommended). Omit for all stops.
   neighborhoodId: z.string().optional(),
   // When present, jobs are split into a balanced optimized route per operator
-  // and assigned. When empty, a single unassigned preview route.
+  // and assigned. When empty, a single unassigned preview route. The route
+  // always starts from the stop nearest the cluster centroid (the natural first
+  // stop) and lets the optimizer order the rest.
   operatorIds: z.array(z.string()).max(20).optional()
 });
 
@@ -544,6 +542,36 @@ export const dailyRouteSchema = z.object({
   geometry: z.string().nullable(),
   acceptedAt: z.string().nullable(),
   stops: z.array(dailyRouteStopSchema)
+});
+
+// Lightweight counts (no routing/optimization) so the admin UI can tell, on
+// load, whether there's anything to assign in the selected scope.
+export const adminRouteSummarySchema = z.object({
+  date: z.string(),
+  neighborhoodId: z.string().nullable(),
+  scheduledToday: z.number().int().nonnegative(),
+  alreadyRouted: z.number().int().nonnegative(),
+  unassigned: z.number().int().nonnegative()
+});
+
+// Every serviceable location with a pickup scheduled today (for the map).
+export const adminTodaysLocationSchema = z.object({
+  addressId: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  customerName: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  // Whether this location is already on a route today.
+  assigned: z.boolean(),
+  neighborhoodName: z.string().nullable()
+});
+
+export const adminTodaysLocationsResponseSchema = z.object({
+  date: z.string(),
+  locations: z.array(adminTodaysLocationSchema)
 });
 
 // Admin view of every route assigned for the day (all operators).
@@ -701,6 +729,9 @@ export type RouteStatus = z.infer<typeof routeStatusSchema>;
 export type DailyRoute = z.infer<typeof dailyRouteSchema>;
 export type DailyRouteStop = z.infer<typeof dailyRouteStopSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
+export type AdminRouteSummary = z.infer<typeof adminRouteSummarySchema>;
+export type AdminTodaysLocation = z.infer<typeof adminTodaysLocationSchema>;
+export type AdminTodaysLocationsResponse = z.infer<typeof adminTodaysLocationsResponseSchema>;
 export type OperatorRoutesResponse = z.infer<typeof operatorRoutesResponseSchema>;
 export type Neighborhood = z.infer<typeof neighborhoodSchema>;
 export type NeighborhoodsResponse = z.infer<typeof neighborhoodsResponseSchema>;

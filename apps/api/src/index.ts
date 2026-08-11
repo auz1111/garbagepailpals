@@ -36,6 +36,8 @@ import {
   adminAssignedRoutesHandler,
   adminAvailableOperatorsHandler,
   adminDeleteRouteHandler,
+  adminRouteSummaryHandler,
+  adminTodaysLocationsHandler,
   adminTodaysRouteHandler
 } from "./routes/adminRoutes";
 import { operatorAcceptRouteHandler, operatorRoutesHandler } from "./routes/operatorRoutes";
@@ -151,6 +153,20 @@ app.http("admin-available-operators", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAvailableOperatorsHandler
+});
+
+app.http("admin-route-summary", {
+  route: "ops-admin/routes/summary",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminRouteSummaryHandler
+});
+
+app.http("admin-todays-locations", {
+  route: "ops-admin/routes/locations",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminTodaysLocationsHandler
 });
 
 app.http("admin-assigned-routes", {

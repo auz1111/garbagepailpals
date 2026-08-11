@@ -3,13 +3,14 @@ import { prisma } from "@gpp/db";
 import {
   adminRouteRequestSchema,
   adminRouteResponseSchema,
+  adminRouteSummarySchema,
+  adminTodaysLocationsResponseSchema,
   assignedRoutesResponseSchema,
   availableOperatorsResponseSchema
 } from "@gpp/shared";
 import { env } from "../lib/env";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
-import { geocode, isGeocodingConfigured } from "../services/geocoding";
 
 const ORS_BASE = "https://api.openrouteservice.org";
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
@@ -22,14 +23,6 @@ function biweeklyMatchesToday(anchor: Date | null, now: Date): boolean {
   }
   const days = Math.floor((now.getTime() - anchor.getTime()) / 86_400_000);
   return Math.floor(days / 7) % 2 === 0;
-}
-
-async function geocodeOrThrow(text: string): Promise<{ label: string; lat: number; lng: number }> {
-  const result = await geocode(text);
-  if (!result) {
-    throw new HttpError(400, `Could not find a location for "${text}".`);
-  }
-  return result;
 }
 
 // Users who can run a route: operators, plus admins granted operator access.
@@ -234,6 +227,151 @@ export async function adminDeleteRouteHandler(
   );
 }
 
+// Cheap counts (no ORS) for the selected scope so the UI knows, before the
+// admin clicks Assign, whether anything is left to assign today.
+export async function adminRouteSummaryHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const neighborhoodId = new URL(req.url).searchParams.get("neighborhoodId") || undefined;
+        const now = new Date();
+        const weekday = now.getDay();
+        const serviceDate = todayServiceDate(now);
+
+        const addresses = await prisma.serviceAddress.findMany({
+          where: {
+            isActive: true,
+            ...(neighborhoodId ? { neighborhoodId } : {}),
+            subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
+            schedules: { some: { pickupDayOfWeek: weekday } }
+          },
+          include: {
+            schedules: { where: { pickupDayOfWeek: weekday } },
+            subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
+          }
+        });
+
+        const routedAddressIds = new Set(
+          (
+            await prisma.routeStop.findMany({
+              where: { route: { serviceDate } },
+              select: { serviceAddressId: true }
+            })
+          ).map((r) => r.serviceAddressId)
+        );
+
+        let scheduledToday = 0;
+        let alreadyRouted = 0;
+        for (const a of addresses) {
+          const pickups = a.schedules.filter(
+            (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
+          );
+          if (pickups.length === 0 || !a.subscriptions[0]?.id) {
+            continue;
+          }
+          scheduledToday += 1;
+          if (routedAddressIds.has(a.id)) {
+            alreadyRouted += 1;
+          }
+        }
+
+        return jsonResponse(
+          200,
+          adminRouteSummarySchema.parse({
+            date: now.toISOString(),
+            neighborhoodId: neighborhoodId ?? null,
+            scheduledToday,
+            alreadyRouted,
+            unassigned: scheduledToday - alreadyRouted
+          })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// All serviceable locations with a pickup scheduled today (with coordinates),
+// for the map on the routes page. Optionally scoped to a neighborhood.
+export async function adminTodaysLocationsHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const neighborhoodId = new URL(req.url).searchParams.get("neighborhoodId") || undefined;
+        const now = new Date();
+        const weekday = now.getDay();
+        const serviceDate = todayServiceDate(now);
+
+        const addresses = await prisma.serviceAddress.findMany({
+          where: {
+            isActive: true,
+            ...(neighborhoodId ? { neighborhoodId } : {}),
+            subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
+            schedules: { some: { pickupDayOfWeek: weekday } }
+          },
+          include: {
+            schedules: { where: { pickupDayOfWeek: weekday } },
+            subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 },
+            user: { select: { name: true } },
+            neighborhood: { select: { name: true } }
+          }
+        });
+
+        const routedAddressIds = new Set(
+          (
+            await prisma.routeStop.findMany({
+              where: { route: { serviceDate } },
+              select: { serviceAddressId: true }
+            })
+          ).map((r) => r.serviceAddressId)
+        );
+
+        const locations = addresses
+          .filter((a) => {
+            const pickups = a.schedules.filter(
+              (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
+            );
+            return pickups.length > 0 && Boolean(a.subscriptions[0]?.id);
+          })
+          .map((a) => ({
+            addressId: a.id,
+            line1: a.line1,
+            city: a.city,
+            state: a.state,
+            postalCode: a.postalCode,
+            customerName: a.user.name,
+            lat: a.lat.toNumber(),
+            lng: a.lng.toNumber(),
+            assigned: routedAddressIds.has(a.id),
+            neighborhoodName: a.neighborhood?.name ?? null
+          }));
+
+        return jsonResponse(
+          200,
+          adminTodaysLocationsResponseSchema.parse({ date: now.toISOString(), locations })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
 type StopBuild = {
   addressId: string;
   customerName: string;
@@ -266,11 +404,6 @@ export async function adminTodaysRouteHandler(
         const input = await parseJson(req, adminRouteRequestSchema);
         const operatorIds = input.operatorIds ?? [];
         const assigning = operatorIds.length > 0;
-        const wantsStart = Boolean(input.start && input.start.trim());
-        const wantsEnd = Boolean(input.end && input.end.trim());
-        if ((wantsStart || wantsEnd) && !isGeocodingConfigured()) {
-          throw new HttpError(400, "Geocoding is not configured (GOOGLE_GEOCODING_API_KEY missing).");
-        }
 
         const now = new Date();
         const weekday = now.getDay();
@@ -336,9 +469,6 @@ export async function adminTodaysRouteHandler(
           });
         }
 
-        const geoStart = wantsStart ? await geocodeOrThrow((input.start as string).trim()) : null;
-        const geoEnd = wantsEnd ? await geocodeOrThrow((input.end as string).trim()) : null;
-
         // Resolve operator names for labelling assigned legs.
         const operatorUsers = assigning
           ? await prisma.user.findMany({
@@ -353,8 +483,8 @@ export async function adminTodaysRouteHandler(
             200,
             adminRouteResponseSchema.parse({
               date: now.toISOString(),
-              start: geoStart,
-              end: geoEnd,
+              start: null,
+              end: null,
               routes: [],
               assigned: assigning,
               emptyReason: scheduledTodayCount === 0 ? "none_scheduled" : "all_assigned"
@@ -362,21 +492,15 @@ export async function adminTodaysRouteHandler(
           );
         }
 
-        // ORS requires a start (or end) per vehicle, so when the admin leaves
-        // start blank we anchor to the stop nearest the cluster's centroid and
-        // leave the end open — the optimizer then picks the best last stop.
+        // Routes always start from the stop nearest the cluster centroid (the
+        // natural first stop) and leave the end open, so the optimizer orders the
+        // remaining stops for the shortest path. ORS requires a start per vehicle.
         const cx = stops.reduce((sum, s) => sum + s.lng, 0) / stops.length;
         const cy = stops.reduce((sum, s) => sum + s.lat, 0) / stops.length;
         const anchor = stops.reduce((best, s) =>
           (s.lng - cx) ** 2 + (s.lat - cy) ** 2 < (best.lng - cx) ** 2 + (best.lat - cy) ** 2 ? s : best
         );
-        const start = geoStart ?? {
-          label: `Auto — near ${anchor.line1}`,
-          lat: anchor.lat,
-          lng: anchor.lng
-        };
-        // End: explicit if given; else round-trip to an explicit start; else open.
-        const end = geoEnd ?? (geoStart ? geoStart : null);
+        const start = { label: `First stop — ${anchor.line1}`, lat: anchor.lat, lng: anchor.lng };
 
         // One vehicle per operator (or a single preview vehicle). Capacity splits
         // the stops into roughly equal portions across operators, each optimized.
@@ -386,8 +510,7 @@ export async function adminTodaysRouteHandler(
           id: i,
           profile: "driving-car",
           capacity: [perVehicleCap],
-          start: [start.lng, start.lat],
-          ...(end ? { end: [end.lng, end.lat] } : {})
+          start: [start.lng, start.lat]
         }));
 
         const optimizeRes = await fetch(`${ORS_BASE}/optimization`, {
@@ -474,9 +597,9 @@ export async function adminTodaysRouteHandler(
                 startLabel: start.label,
                 startLat: start.lat,
                 startLng: start.lng,
-                endLabel: end?.label ?? null,
-                endLat: end?.lat ?? null,
-                endLng: end?.lng ?? null,
+                endLabel: null,
+                endLat: null,
+                endLng: null,
                 distanceMeters: Math.round(leg.totalDistanceMeters),
                 durationSeconds: Math.round(leg.totalDurationSeconds),
                 geometry: leg.geometry,
@@ -497,7 +620,7 @@ export async function adminTodaysRouteHandler(
           adminRouteResponseSchema.parse({
             date: now.toISOString(),
             start,
-            end,
+            end: null,
             routes: legs,
             assigned: assigning,
             emptyReason: null

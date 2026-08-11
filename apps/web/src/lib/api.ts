@@ -16,6 +16,8 @@ import type {
   AdminCreateUser,
   AdminRouteRequest,
   AdminRouteResponse,
+  AdminRouteSummary,
+  AdminTodaysLocationsResponse,
   AssignedRoutesResponse,
   NeighborhoodsResponse,
   NeighborhoodCreate,
@@ -242,6 +244,32 @@ export function setLocationNeighborhood(
 export function getAssignedRoutes(accessToken: string): Promise<AssignedRoutesResponse> {
   return request<undefined, AssignedRoutesResponse>(
     "/ops-admin/routes/assigned",
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function getRouteSummary(
+  neighborhoodId: string | undefined,
+  accessToken: string
+): Promise<AdminRouteSummary> {
+  const qs = neighborhoodId ? `?neighborhoodId=${encodeURIComponent(neighborhoodId)}` : "";
+  return request<undefined, AdminRouteSummary>(
+    `/ops-admin/routes/summary${qs}`,
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function getTodaysLocations(
+  neighborhoodId: string | undefined,
+  accessToken: string
+): Promise<AdminTodaysLocationsResponse> {
+  const qs = neighborhoodId ? `?neighborhoodId=${encodeURIComponent(neighborhoodId)}` : "";
+  return request<undefined, AdminTodaysLocationsResponse>(
+    `/ops-admin/routes/locations${qs}`,
     "GET",
     undefined,
     accessToken

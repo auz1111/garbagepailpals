@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { AdminRouteResponse, AdminRouteLeg } from "@gpp/shared";
+import type { AdminTodaysLocation } from "@gpp/shared";
 import {
   deleteRoute,
   getAssignedRoutes,
   getAvailableOperators,
   getNeighborhoods,
+  getRouteSummary,
+  getTodaysLocations,
   getTodaysRoute
 } from "../lib/api";
 
@@ -15,15 +17,12 @@ type TodaysRouteProps = {
   accessToken: string;
 };
 
-const LEG_COLORS = ["#055a5f", "#f7a81b", "#7b2ff7", "#e5484d", "#2b8a3e", "#1071e5", "#d6336c", "#f76707"];
+// Pin colors for the serviceable-locations map.
+const COLOR_ASSIGNED = "#055a5f";
+const COLOR_UNASSIGNED = "#f7a81b";
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
-}
-
-function localDateKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 }
 
 function todayIso(): string {
@@ -31,77 +30,9 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-// Cache the last plan in localStorage keyed by today's date so it survives
-// refreshes and navigation; discarded when the day rolls over.
-const ROUTE_CACHE_KEY = "gpp.todaysRoute";
-type CachedPlan = { date: string; start: string; end: string; response: AdminRouteResponse };
-
-function loadCachedPlan(): CachedPlan | null {
-  try {
-    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CachedPlan;
-    return parsed.date === localDateKey() ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveCachedPlan(plan: Omit<CachedPlan, "date">): void {
-  try {
-    localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify({ date: localDateKey(), ...plan }));
-  } catch {
-    /* best-effort */
-  }
-}
-
-function decodePolyline(encoded: string): Array<[number, number]> {
-  const points: Array<[number, number]> = [];
-  let index = 0;
-  let lat = 0;
-  let lng = 0;
-  while (index < encoded.length) {
-    let result = 0;
-    let shift = 0;
-    let byte: number;
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    lat += result & 1 ? ~(result >> 1) : result >> 1;
-    result = 0;
-    shift = 0;
-    do {
-      byte = encoded.charCodeAt(index++) - 63;
-      result |= (byte & 0x1f) << shift;
-      shift += 5;
-    } while (byte >= 0x20);
-    lng += result & 1 ? ~(result >> 1) : result >> 1;
-    points.push([lat / 1e5, lng / 1e5]);
-  }
-  return points;
-}
-
-function formatDuration(seconds: number): string {
-  const mins = Math.round(seconds / 60);
-  return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
-}
-
-function formatMiles(meters: number): string {
-  return `${(meters / 1609.34).toFixed(1)} mi`;
-}
-
-function legGoogleMapsUrl(route: AdminRouteResponse, leg: AdminRouteLeg): string {
-  const points = [
-    ...(route.start ? [`${route.start.lat},${route.start.lng}`] : []),
-    ...leg.stops.map((s) => `${s.lat},${s.lng}`),
-    ...(route.end ? [`${route.end.lat},${route.end.lng}`] : [])
-  ];
-  return `https://www.google.com/maps/dir/${points.map(encodeURIComponent).join("/")}`;
-}
-
-function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
+// Read-only map of every serviceable location scheduled today. Pins are colored
+// by whether the location is already on a route.
+function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -123,58 +54,36 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
     if (!map || !layer) return;
     layer.clearLayers();
 
-    const pin = (label: string, color: string) =>
+    const pin = (color: string) =>
       L.divIcon({
-        className: "route-pin-wrap",
-        html: `<span class="route-pin" style="background:${color}">${label}</span>`,
-        iconSize: [26, 26],
-        iconAnchor: [13, 13]
+        className: "loc-pin-wrap",
+        html: `<span style="display:block;width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)"></span>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
       });
 
     const bounds: Array<[number, number]> = [];
-
-    if (route.start) {
-      L.marker([route.start.lat, route.start.lng], { icon: pin("A", "#043e42") })
-        .bindPopup(`<strong>Start</strong><br>${route.start.label}`)
+    locations.forEach((loc) => {
+      L.marker([loc.lat, loc.lng], { icon: pin(loc.assigned ? COLOR_ASSIGNED : COLOR_UNASSIGNED) })
+        .bindPopup(
+          `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br>${
+            loc.assigned ? "On a route" : "Unassigned"
+          }`
+        )
         .addTo(layer);
-      bounds.push([route.start.lat, route.start.lng]);
-    }
-    if (route.end) {
-      L.marker([route.end.lat, route.end.lng], { icon: pin("B", "#b5750a") })
-        .bindPopup(`<strong>End</strong><br>${route.end.label}`)
-        .addTo(layer);
-      bounds.push([route.end.lat, route.end.lng]);
-    }
-
-    route.routes.forEach((leg, legIndex) => {
-      const color = LEG_COLORS[legIndex % LEG_COLORS.length] ?? "#055a5f";
-      leg.stops.forEach((stop) => {
-        L.marker([stop.lat, stop.lng], { icon: pin(String(stop.order + 1), color) })
-          .bindPopup(
-            `<strong>${leg.operatorName ?? "Route"} · ${stop.order + 1}</strong><br>${stop.line1}, ${stop.city}`
-          )
-          .addTo(layer);
-        bounds.push([stop.lat, stop.lng]);
-      });
-      if (leg.geometry) {
-        L.polyline(decodePolyline(leg.geometry), { color, weight: 4 }).addTo(layer);
-      }
+      bounds.push([loc.lat, loc.lng]);
     });
 
     if (bounds.length > 0) {
-      map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24] });
+      map.fitBounds(L.latLngBounds(bounds), { padding: [28, 28], maxZoom: 17 });
     }
     setTimeout(() => map.invalidateSize(), 0);
-  }, [route]);
+  }, [locations]);
 
   return <div className="route-map" ref={containerRef} />;
 }
 
 export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
-  const cached = loadCachedPlan();
-  const [start, setStart] = useState(cached?.start ?? "");
-  const [end, setEnd] = useState(cached?.end ?? "");
-  const [route, setRoute] = useState<AdminRouteResponse | null>(cached?.response ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedOperator, setExpandedOperator] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -191,13 +100,6 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   });
   const assignedRoutes = assignedQuery.data?.routes ?? [];
 
-  const deleteMutation = useMutation({
-    mutationFn: (routeId: string) => deleteRoute(routeId, accessToken),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["assigned-routes"], data);
-    }
-  });
-
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
     queryFn: async () => getNeighborhoods(accessToken)
@@ -206,21 +108,49 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const [neighborhoodId, setNeighborhoodId] = useState("");
   const selectedHood = neighborhoods.find((n) => n.id === neighborhoodId) ?? null;
 
+  // Cheap counts for the selected scope so we can show the "nothing to assign"
+  // notice and disable the button before the admin clicks Assign.
+  const summaryQuery = useQuery({
+    queryKey: ["route-summary", neighborhoodId],
+    queryFn: async () => getRouteSummary(neighborhoodId || undefined, accessToken)
+  });
+  const summary = summaryQuery.data;
+  const nothingToAssign = Boolean(summary && summary.unassigned === 0);
+  const summaryReason = summary && summary.scheduledToday === 0 ? "none_scheduled" : "all_assigned";
+
+  // Every serviceable location scheduled today (for the map).
+  const locationsQuery = useQuery({
+    queryKey: ["today-locations", neighborhoodId],
+    queryFn: async () => getTodaysLocations(neighborhoodId || undefined, accessToken)
+  });
+  const locations = locationsQuery.data?.locations ?? [];
+  const assignedCount = locations.filter((l) => l.assigned).length;
+
+  const invalidateRouteViews = () => {
+    void queryClient.invalidateQueries({ queryKey: ["route-summary"] });
+    void queryClient.invalidateQueries({ queryKey: ["today-locations"] });
+  };
+
+  const deleteMutation = useMutation({
+    mutationFn: (routeId: string) => deleteRoute(routeId, accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["assigned-routes"], data);
+      invalidateRouteViews();
+    }
+  });
+
   const routeMutation = useMutation({
     mutationFn: () =>
       getTodaysRoute(
         {
-          start: start.trim() ? start.trim() : undefined,
-          end: end.trim() ? end.trim() : undefined,
           neighborhoodId: neighborhoodId || undefined,
           operatorIds: [...selected]
         },
         accessToken
       ),
-    onSuccess: (data) => {
-      setRoute(data);
-      saveCachedPlan({ start: start.trim(), end: end.trim(), response: data });
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["assigned-routes"] });
+      invalidateRouteViews();
     }
   });
 
@@ -241,17 +171,10 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const assigning = selected.size > 0;
   const scope = selectedHood ? ` in ${selectedHood.name}` : "";
   const emptyMessage =
-    route?.emptyReason === "all_assigned"
+    summaryReason === "all_assigned"
       ? `Every pickup${scope} today is already on a route. Remove a route above to free up its locations, then reassign.`
       : `No pickups are scheduled for today${scope}.`;
-  const totals = useMemo(() => {
-    const r = route?.routes ?? [];
-    return {
-      stops: r.reduce((n, leg) => n + leg.stops.length, 0),
-      distance: r.reduce((m, leg) => m + leg.totalDistanceMeters, 0),
-      duration: r.reduce((s, leg) => s + leg.totalDurationSeconds, 0)
-    };
-  }, [route]);
+  const emptyIcon = summaryReason === "all_assigned" ? "⚠️" : "🗓️";
 
   return (
     <div className="dash-page">
@@ -339,170 +262,137 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         ) : null}
       </article>
 
-      <article className="panel">
+      <article className="panel assign-panel">
+        <h3>Assign a route</h3>
         <form onSubmit={handleSubmit}>
-          <label className="field-single">
-            Neighborhood
-            <select value={neighborhoodId} onChange={(event) => setNeighborhoodId(event.target.value)}>
-              <option value="">All locations</option>
-              {neighborhoods.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.name} ({n.locationCount})
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedHood && selectedHood.locationCount === 0 ? (
-            <p className="subtext route-hood-hint">
-              {selectedHood.name} has no locations assigned yet — add some on the Neighborhoods page
-              before assigning a route here.
-            </p>
-          ) : null}
+          <ol className="assign-steps">
+            <li className="assign-step">
+              <div className="assign-step-head">
+                <span className="assign-step-num">1</span>
+                <div>
+                  <strong>Choose an area</strong>
+                  <span className="subtext">Route all of today's pickups, or just one neighborhood.</span>
+                </div>
+              </div>
+              <select
+                className="assign-select"
+                value={neighborhoodId}
+                onChange={(event) => setNeighborhoodId(event.target.value)}
+              >
+                <option value="">All locations</option>
+                {neighborhoods.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.name} ({n.locationCount})
+                  </option>
+                ))}
+              </select>
+              {selectedHood && selectedHood.locationCount === 0 ? (
+                <p className="subtext route-hood-hint">
+                  {selectedHood.name} has no locations assigned yet — add some on the Neighborhoods
+                  page before assigning a route here.
+                </p>
+              ) : summary && summary.unassigned > 0 ? (
+                <p className="assign-ready">
+                  {summary.unassigned} pickup{summary.unassigned === 1 ? "" : "s"} ready to assign
+                  {scope}.
+                </p>
+              ) : null}
+            </li>
 
-          <div className="admin-filters">
-            <label className="admin-filter-search">
-              Start location <span className="route-optional">(optional)</span>
-              <input
-                value={start}
-                onChange={(event) => setStart(event.target.value)}
-                placeholder="Blank = optimizer picks the best start"
-              />
-            </label>
-            <label className="admin-filter-search">
-              End location <span className="route-optional">(optional)</span>
-              <input
-                value={end}
-                onChange={(event) => setEnd(event.target.value)}
-                placeholder="Blank = defaults to start / optimizer picks"
-              />
-            </label>
-          </div>
-
-          <h4 className="form-section-title">Operators available today</h4>
-          {operatorsQuery.isLoading ? (
-            <p className="subtext">Loading operators…</p>
-          ) : operators.length === 0 ? (
-            <p className="subtext">
-              No operators have marked themselves available today. You can still preview an
-              unassigned route.
-            </p>
-          ) : (
-            <div className="operator-picker">
-              {operators.map((op) => (
-                <label key={op.id} className="operator-choice">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(op.id)}
-                    onChange={() => toggleOperator(op.id)}
-                  />
-                  <span>
-                    <strong>{op.name}</strong>
-                    <span className="admin-table-sub">{op.email}</span>
+            <li className="assign-step">
+              <div className="assign-step-head">
+                <span className="assign-step-num">2</span>
+                <div>
+                  <strong>Pick operator(s)</strong>
+                  <span className="subtext">
+                    One operator takes the whole route; pick several to split it into balanced
+                    routes.
                   </span>
-                </label>
-              ))}
-            </div>
-          )}
+                </div>
+              </div>
+              {operatorsQuery.isLoading ? (
+                <p className="subtext">Loading operators…</p>
+              ) : operators.length === 0 ? (
+                <p className="subtext">No operators have marked themselves available today.</p>
+              ) : (
+                <div className="operator-picker">
+                  {operators.map((op) => {
+                    const on = selected.has(op.id);
+                    return (
+                      <label key={op.id} className={`operator-choice${on ? " is-selected" : ""}`}>
+                        <input type="checkbox" checked={on} onChange={() => toggleOperator(op.id)} />
+                        <span>
+                          <strong>{op.name}</strong>
+                          <span className="admin-table-sub">{op.email}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </li>
+          </ol>
 
           <div className="detail-save-row">
-            <button type="submit" className="cta-primary" disabled={routeMutation.isPending}>
+            <button
+              type="submit"
+              className="cta-primary"
+              disabled={routeMutation.isPending || nothingToAssign || !assigning}
+            >
               {routeMutation.isPending
-                ? assigning
-                  ? "Assigning…"
-                  : "Planning…"
-                : assigning
-                  ? `Assign routes to ${selected.size} operator${selected.size === 1 ? "" : "s"}`
-                  : "Preview route (no assignment)"}
+                ? "Assigning…"
+                : nothingToAssign
+                  ? "Nothing to assign"
+                  : !assigning
+                    ? "Select an operator to assign"
+                    : `Assign ${summary?.unassigned ?? ""} pickup${summary?.unassigned === 1 ? "" : "s"} to ${selected.size} operator${selected.size === 1 ? "" : "s"}`}
             </button>
           </div>
           {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}
-          {routeMutation.isSuccess && route && totals.stops === 0 ? (
-            <p className="subtext">{emptyMessage}</p>
-          ) : null}
         </form>
       </article>
 
-      {route ? (
-        totals.stops === 0 ? (
-          <article className="panel">
-            <p className="subtext">{emptyMessage}</p>
-          </article>
+      {nothingToAssign ? (
+        <article className="panel">
+          <div className={`route-notice${summaryReason === "all_assigned" ? " is-warning" : ""}`}>
+            <span className="route-notice-icon" aria-hidden="true">
+              {emptyIcon}
+            </span>
+            <span>{emptyMessage}</span>
+          </div>
+        </article>
+      ) : null}
+
+      <article className="panel">
+        <div className="panel-head-row">
+          <h3>Today's serviceable locations{scope}</h3>
+          <span className="detail-total">
+            {locations.length} location{locations.length === 1 ? "" : "s"}
+          </span>
+        </div>
+        {locationsQuery.isLoading ? (
+          <p className="subtext">Loading…</p>
+        ) : locations.length === 0 ? (
+          <p className="subtext">No serviceable locations are scheduled for pickup today{scope}.</p>
         ) : (
           <>
-            <article className="panel">
-              <div className="route-summary">
-                <div className="admin-stat">
-                  <span className="admin-stat-label">{route.assigned ? "Operators" : "Route"}</span>
-                  <strong>{route.routes.length}</strong>
-                </div>
-                <div className="admin-stat">
-                  <span className="admin-stat-label">Stops</span>
-                  <strong>{totals.stops}</strong>
-                </div>
-                <div className="admin-stat">
-                  <span className="admin-stat-label">Total drive time</span>
-                  <strong>{formatDuration(totals.duration)}</strong>
-                </div>
-                <div className="admin-stat">
-                  <span className="admin-stat-label">Total distance</span>
-                  <strong>{formatMiles(totals.distance)}</strong>
-                </div>
-                {route.assigned ? (
-                  <span className="coverage-badge covered">Assigned to operators</span>
-                ) : null}
-              </div>
-            </article>
-
-            <article className="panel">
-              <RouteMap route={route} />
-            </article>
-
-            {route.routes.map((leg, legIndex) => (
-              <article className="panel" key={leg.operatorId ?? `preview-${legIndex}`}>
-                <div className="panel-head-row">
-                  <h3>
-                    <span
-                      className="route-leg-dot"
-                      style={{ background: LEG_COLORS[legIndex % LEG_COLORS.length] }}
-                    />
-                    {leg.operatorName ?? "Unassigned preview"}
-                  </h3>
-                  <a
-                    className="cta-secondary"
-                    href={legGoogleMapsUrl(route, leg)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Open in Maps
-                  </a>
-                </div>
-                <p className="subtext">
-                  {leg.stops.length} stop{leg.stops.length === 1 ? "" : "s"} ·{" "}
-                  {formatMiles(leg.totalDistanceMeters)} · {formatDuration(leg.totalDurationSeconds)}
-                </p>
-                <ol className="route-stop-list">
-                  {leg.stops.map((stop) => (
-                    <li className="route-stop" key={stop.addressId}>
-                      <span className="route-stop-num">{stop.order + 1}</span>
-                      <div>
-                        <strong>{stop.line1}</strong>
-                        <span className="admin-table-sub">
-                          {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
-                        </span>
-                        <span className="admin-table-sub">
-                          {stop.jobTypes
-                            .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                            .join(" + ")}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </article>
-            ))}
+            <LocationsMap locations={locations} />
+            <div className="map-legend">
+              <span>
+                <span className="legend-dot" style={{ background: COLOR_UNASSIGNED }} /> Unassigned (
+                {locations.length - assignedCount})
+              </span>
+              <span>
+                <span className="legend-dot" style={{ background: COLOR_ASSIGNED }} /> On a route (
+                {assignedCount})
+              </span>
+            </div>
           </>
-        )
-      ) : null}
+        )}
+        {locationsQuery.isError ? (
+          <p className="error">{getErrorMessage(locationsQuery.error)}</p>
+        ) : null}
+      </article>
     </div>
   );
 }
