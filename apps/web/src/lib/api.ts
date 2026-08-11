@@ -28,8 +28,8 @@ import type {
   ServiceAddressInput,
   ServiceAreaCheckResponse,
   ServiceJob,
-  ServiceSchedule,
-  ServiceScheduleInput,
+  PickupDay,
+  ScheduleUpdateInput,
   StripeCheckoutRequest,
   StripeCheckoutResponse,
   StripePortalRequest,
@@ -79,8 +79,8 @@ type ServiceAddressResponse = {
   address: ServiceAddress;
 };
 
-type ServiceScheduleResponse = {
-  schedule: ServiceSchedule;
+type ScheduleUpdateResponse = {
+  schedules: PickupDay[];
 };
 
 type ServiceJobsResponse = {
@@ -267,12 +267,12 @@ export function deleteAddress(addressId: string, accessToken: string): Promise<{
   return request<undefined, { deleted: boolean }>(`/addresses/${addressId}`, "DELETE", undefined, accessToken);
 }
 
-export function upsertAddressSchedule(
+export function updateAddressSchedule(
   addressId: string,
-  input: ServiceScheduleInput,
+  input: ScheduleUpdateInput,
   accessToken: string
-): Promise<ServiceScheduleResponse> {
-  return request<ServiceScheduleInput, ServiceScheduleResponse>(
+): Promise<ScheduleUpdateResponse> {
+  return request<ScheduleUpdateInput, ScheduleUpdateResponse>(
     `/addresses/${addressId}/schedule`,
     "PUT",
     input,

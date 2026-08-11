@@ -26,15 +26,18 @@ const REFRESH_TOKEN_KEY = "gpp.refreshToken";
 // Marketing plan prices are derived from the same billing engine that bills
 // customers (packages/shared PRICING), so the landing page can never drift from
 // what people are actually charged. Each tier is a representative configuration:
-//   Starter      — one location, default 2 cans + 1 pickup/week (the base price)
-//   Neighborhood — one location, 3 cans + 2 pickups/week
-//   Pro Ops      — two locations at the default config ("from" pricing)
+//   Starter      — one weekly pickup, 2 cans (the base price)
+//   Neighborhood — two weekly pickups, 3 cans each
+//   Pro Ops      — two locations, one weekly pickup each ("from" pricing)
 const PLAN_PRICE_CENTS = {
-  starter: addressMonthlyCents({ canCount: 2, pickupsPerWeek: 1 }),
-  neighborhood: addressMonthlyCents({ canCount: 3, pickupsPerWeek: 2 }),
+  starter: addressMonthlyCents([{ dayOfWeek: 2, canCount: 2, cadence: "WEEKLY", rollIn: true }]),
+  neighborhood: addressMonthlyCents([
+    { dayOfWeek: 1, canCount: 3, cadence: "WEEKLY", rollIn: true },
+    { dayOfWeek: 4, canCount: 3, cadence: "WEEKLY", rollIn: true }
+  ]),
   proOps: monthlyTotalCents([
-    { canCount: 2, pickupsPerWeek: 1 },
-    { canCount: 2, pickupsPerWeek: 1 }
+    [{ dayOfWeek: 2, canCount: 2, cadence: "WEEKLY", rollIn: true }],
+    [{ dayOfWeek: 2, canCount: 2, cadence: "WEEKLY", rollIn: true }]
   ])
 } as const;
 const wholeDollars = (cents: number): string => `$${Math.round(cents / 100)}`;

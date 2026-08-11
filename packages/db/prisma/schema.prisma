@@ -100,7 +100,7 @@ model ServiceAddress {
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  schedule         ServiceSchedule?
+  schedules        ServiceSchedule[]
   subscriptions    Subscription[]
   jobs             ServiceJob[]
   holds            ServiceHold[]
@@ -111,18 +111,20 @@ model ServiceAddress {
 
 model ServiceSchedule {
   id                  String         @id @default(cuid())
-  serviceAddressId    String         @unique
+  serviceAddressId    String
   pickupDayOfWeek     Int
-  pickupDaysOfWeek    Int[]          @default([])
-  cadence             Cadence
+  cadence             Cadence        @default(WEEKLY)
   biweeklyAnchorDate  DateTime?
+  canCount            Int            @default(2)
+  rollIn              Boolean        @default(true)
   curbOutOffsetHours  Int            @default(-12)
   curbInOffsetHours   Int            @default(8)
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   serviceAddress      ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
 
-  @@index([pickupDayOfWeek])
+  @@unique([serviceAddressId, pickupDayOfWeek])
+  @@index([serviceAddressId])
 }
 
 model Subscription {

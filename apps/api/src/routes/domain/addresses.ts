@@ -1,15 +1,40 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
 import {
+  scheduleUpdateSchema,
   serviceAddressInputSchema,
   serviceAddressSchema,
   serviceHoldInputSchema,
-  serviceHoldSchema,
-  serviceScheduleInputSchema,
-  serviceScheduleSchema
+  serviceHoldSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
+
+type ScheduleRow = {
+  id: string;
+  serviceAddressId: string;
+  pickupDayOfWeek: number;
+  cadence: string;
+  biweeklyAnchorDate: Date | null;
+  canCount: number;
+  rollIn: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+function toScheduleResponse(row: ScheduleRow) {
+  return {
+    id: row.id,
+    serviceAddressId: row.serviceAddressId,
+    dayOfWeek: row.pickupDayOfWeek,
+    cadence: row.cadence,
+    biweeklyAnchorDate: row.biweeklyAnchorDate?.toISOString(),
+    canCount: row.canCount,
+    rollIn: row.rollIn,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString()
+  };
+}
 
 function toAddressResponse(address: {
   id: string;
@@ -30,18 +55,7 @@ function toAddressResponse(address: {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
-  schedule?: {
-    id: string;
-    serviceAddressId: string;
-    pickupDayOfWeek: number;
-    pickupDaysOfWeek: number[];
-    cadence: string;
-    biweeklyAnchorDate: Date | null;
-    curbOutOffsetHours: number;
-    curbInOffsetHours: number;
-    createdAt: Date;
-    updatedAt: Date;
-  } | null;
+  schedules?: ScheduleRow[];
 }) {
   return serviceAddressSchema.parse({
     ...address,
@@ -51,20 +65,10 @@ function toAddressResponse(address: {
     gateCode: address.gateCode ?? undefined,
     createdAt: address.createdAt.toISOString(),
     updatedAt: address.updatedAt.toISOString(),
-    schedule: address.schedule
-      ? {
-          id: address.schedule.id,
-          serviceAddressId: address.schedule.serviceAddressId,
-          pickupDayOfWeek: address.schedule.pickupDayOfWeek,
-          pickupDaysOfWeek: address.schedule.pickupDaysOfWeek,
-          cadence: address.schedule.cadence,
-          biweeklyAnchorDate: address.schedule.biweeklyAnchorDate?.toISOString(),
-          curbOutOffsetHours: address.schedule.curbOutOffsetHours,
-          curbInOffsetHours: address.schedule.curbInOffsetHours,
-          createdAt: address.schedule.createdAt.toISOString(),
-          updatedAt: address.schedule.updatedAt.toISOString()
-        }
-      : null
+    schedules: (address.schedules ?? [])
+      .slice()
+      .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
+      .map(toScheduleResponse)
   });
 }
 
@@ -101,6 +105,8 @@ export async function createAddressHandler(
           throw new HttpError(409, "You've already added this address.");
         }
 
+        // Seed a sensible default pickup day (Tuesday, weekly) from the form's
+        // cans/roll-in, so a new location has a schedule and a price immediately.
         const created = await prisma.serviceAddress.create({
           data: {
             userId: auth.sub,
@@ -115,9 +121,19 @@ export async function createAddressHandler(
             accessNotes: input.accessNotes,
             gateCode: input.gateCode,
             canCount: input.canCount,
-            pickupsPerWeek: input.pickupsPerWeek,
-            isActive: input.isActive ?? true
-          }
+            pickupsPerWeek: 1,
+            rollIn: input.rollIn,
+            isActive: input.isActive ?? true,
+            schedules: {
+              create: {
+                pickupDayOfWeek: 2,
+                cadence: "WEEKLY",
+                canCount: input.canCount,
+                rollIn: input.rollIn
+              }
+            }
+          },
+          include: { schedules: true }
         });
 
         return jsonResponse(201, { address: toAddressResponse(created) });
@@ -142,7 +158,7 @@ export async function listAddressesHandler(
         const rows = await prisma.serviceAddress.findMany({
           where: auth.role === "ADMIN" ? undefined : { userId: auth.sub },
           orderBy: { createdAt: "desc" },
-          include: { schedule: true }
+          include: { schedules: true }
         });
 
         return jsonResponse(200, {
@@ -191,7 +207,8 @@ export async function updateAddressHandler(
 
         const updated = await prisma.serviceAddress.update({
           where: { id: addressId },
-          data: input
+          data: input,
+          include: { schedules: true }
         });
 
         return jsonResponse(200, { address: toAddressResponse(updated) });
@@ -274,51 +291,44 @@ export async function upsertScheduleHandler(
           return jsonResponse(403, { message: "Forbidden" });
         }
 
-        const input = await parseJson(req, serviceScheduleInputSchema);
-        if (input.cadence === "BIWEEKLY" && !input.biweeklyAnchorDate) {
-          return jsonResponse(400, { message: "biweeklyAnchorDate is required for BIWEEKLY cadence" });
+        const { days } = await parseJson(req, scheduleUpdateSchema);
+        const biweeklyMissingAnchor = days.some(
+          (day) => day.cadence === "BIWEEKLY" && !day.biweeklyAnchorDate
+        );
+        if (biweeklyMissingAnchor) {
+          return jsonResponse(400, {
+            message: "A first pickup date is required for every biweekly day"
+          });
         }
 
-        // The schema sorts + dedupes the days; the first is the primary day and
-        // the count is the pickups-per-week that drives pricing.
-        const days = input.pickupDaysOfWeek;
-        const primaryDay = days[0]!;
-        const scheduleData = {
-          pickupDayOfWeek: primaryDay,
-          pickupDaysOfWeek: days,
-          cadence: input.cadence,
-          biweeklyAnchorDate: input.biweeklyAnchorDate ? new Date(input.biweeklyAnchorDate) : null,
-          curbOutOffsetHours: input.curbOutOffsetHours,
-          curbInOffsetHours: input.curbInOffsetHours
-        };
-
-        const [upserted] = await prisma.$transaction([
-          prisma.serviceSchedule.upsert({
-            where: { serviceAddressId: addressId },
-            create: { serviceAddressId: addressId, ...scheduleData },
-            update: scheduleData
+        // Replace the whole set of pickup days for this location, and keep
+        // pickups-per-week (a legacy convenience field) in sync with the count.
+        const [, , rows] = await prisma.$transaction([
+          prisma.serviceSchedule.deleteMany({ where: { serviceAddressId: addressId } }),
+          prisma.serviceSchedule.createMany({
+            data: days.map((day) => ({
+              serviceAddressId: addressId,
+              pickupDayOfWeek: day.dayOfWeek,
+              cadence: day.cadence,
+              biweeklyAnchorDate: day.biweeklyAnchorDate ? new Date(day.biweeklyAnchorDate) : null,
+              canCount: day.canCount,
+              rollIn: day.rollIn
+            }))
           }),
-          // Keep pickups-per-week (pricing input) in sync with the chosen days.
-          prisma.serviceAddress.update({
-            where: { id: addressId },
-            data: { pickupsPerWeek: days.length }
-          })
+          prisma.serviceSchedule.findMany({ where: { serviceAddressId: addressId } })
         ]);
 
-        const response = serviceScheduleSchema.parse({
-          id: upserted.id,
-          serviceAddressId: upserted.serviceAddressId,
-          pickupDayOfWeek: upserted.pickupDayOfWeek,
-          pickupDaysOfWeek: upserted.pickupDaysOfWeek,
-          cadence: upserted.cadence,
-          biweeklyAnchorDate: upserted.biweeklyAnchorDate?.toISOString(),
-          curbOutOffsetHours: upserted.curbOutOffsetHours,
-          curbInOffsetHours: upserted.curbInOffsetHours,
-          createdAt: upserted.createdAt.toISOString(),
-          updatedAt: upserted.updatedAt.toISOString()
+        await prisma.serviceAddress.update({
+          where: { id: addressId },
+          data: { pickupsPerWeek: days.length }
         });
 
-        return jsonResponse(200, { schedule: response });
+        return jsonResponse(200, {
+          schedules: rows
+            .slice()
+            .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
+            .map(toScheduleResponse)
+        });
       },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)

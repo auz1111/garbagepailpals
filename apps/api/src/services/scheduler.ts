@@ -5,19 +5,19 @@ import { env } from "../lib/env";
 type Cadence = "WEEKLY" | "BIWEEKLY";
 type ServiceJobType = "CURB_OUT" | "CURB_IN";
 
+type PickupDay = {
+  pickupDayOfWeek: number;
+  cadence: Cadence;
+  biweeklyAnchorDate: Date | null;
+  curbOutOffsetHours: number;
+  rollIn: boolean;
+};
+
 type SchedulerAddress = {
   id: string;
   city: string;
   timezone: string;
-  pickupsPerWeek: number;
-  rollIn: boolean;
-  schedule: {
-    pickupDaysOfWeek: number[];
-    cadence: Cadence;
-    biweeklyAnchorDate: Date | null;
-    curbOutOffsetHours: number;
-    curbInOffsetHours: number;
-  } | null;
+  schedules: PickupDay[];
   holds: Array<{
     startDate: Date;
     endDate: Date;
@@ -84,55 +84,53 @@ export function calculateJobsForAddress(
   subscriptionId: string,
   serviceAddressId: string,
   timezone: string,
-  schedule: NonNullable<SchedulerAddress["schedule"]>,
+  schedules: PickupDay[],
   holds: SchedulerAddress["holds"],
   holidays: HolidayRule[],
   lookaheadDays: number,
-  referenceDate = new Date(),
-  rollIn = true
+  referenceDate = new Date()
 ): PendingJob[] {
   const start = DateTime.fromJSDate(referenceDate, { zone: timezone }).startOf("day");
   const jobs: PendingJob[] = [];
-  const pickupWeekdays = [...new Set(schedule.pickupDaysOfWeek)];
 
-  for (let i = 0; i < lookaheadDays; i += 1) {
-    const day = start.plus({ days: i });
-    const shiftedDay = day.minus({ days: resolveShiftDays(day, holidays) });
-    const matchesWeekday = pickupWeekdays.includes(weekdayIndexFromLuxon(shiftedDay));
+  // Each pickup day carries its own weekday, cadence, and roll-in choice.
+  for (const pickup of schedules) {
+    for (let i = 0; i < lookaheadDays; i += 1) {
+      const day = start.plus({ days: i });
+      const shiftedDay = day.minus({ days: resolveShiftDays(day, holidays) });
 
-    if (!matchesWeekday) {
-      continue;
-    }
-
-    if (schedule.cadence === "BIWEEKLY") {
-      if (!schedule.biweeklyAnchorDate || !isBiweeklyMatch(day, schedule.biweeklyAnchorDate)) {
+      if (weekdayIndexFromLuxon(shiftedDay) !== pickup.pickupDayOfWeek) {
         continue;
       }
-    }
 
-    if (isHoldCovered(day, holds)) {
-      continue;
-    }
+      if (pickup.cadence === "BIWEEKLY") {
+        if (!pickup.biweeklyAnchorDate || !isBiweeklyMatch(day, pickup.biweeklyAnchorDate)) {
+          continue;
+        }
+      }
 
-    const curbOut = day.plus({ hours: schedule.curbOutOffsetHours });
+      if (isHoldCovered(day, holds)) {
+        continue;
+      }
 
-    jobs.push({
-      serviceAddressId,
-      subscriptionId,
-      scheduledDate: curbOut.toUTC().toJSDate(),
-      type: "CURB_OUT"
-    });
-
-    // Roll-in is optional: when the customer keeps it, we bring the cans back the
-    // day after pickup. When they opt out, no roll-in job is generated.
-    if (rollIn) {
-      const curbIn = day.plus({ days: 1, hours: 8 });
+      const curbOut = day.plus({ hours: pickup.curbOutOffsetHours });
       jobs.push({
         serviceAddressId,
         subscriptionId,
-        scheduledDate: curbIn.toUTC().toJSDate(),
-        type: "CURB_IN"
+        scheduledDate: curbOut.toUTC().toJSDate(),
+        type: "CURB_OUT"
       });
+
+      // Roll-in is per-day: when kept, bring the cans back the day after pickup.
+      if (pickup.rollIn) {
+        const curbIn = day.plus({ days: 1, hours: 8 });
+        jobs.push({
+          serviceAddressId,
+          subscriptionId,
+          scheduledDate: curbIn.toUTC().toJSDate(),
+          type: "CURB_IN"
+        });
+      }
     }
   }
 
@@ -154,7 +152,7 @@ export async function runNightlyJobGeneration(
     include: {
       serviceAddress: {
         include: {
-          schedule: true,
+          schedules: true,
           holds: true
         }
       }
@@ -177,8 +175,8 @@ export async function runNightlyJobGeneration(
       continue;
     }
 
-    const schedule = subscription.serviceAddress.schedule;
-    if (!schedule) {
+    const schedules = subscription.serviceAddress.schedules;
+    if (!schedules || schedules.length === 0) {
       continue;
     }
 
@@ -190,12 +188,11 @@ export async function runNightlyJobGeneration(
       subscription.id,
       subscription.serviceAddress.id,
       subscription.serviceAddress.timezone,
-      schedule,
+      schedules,
       subscription.serviceAddress.holds,
       applicableHolidays,
       lookahead,
-      now,
-      subscription.serviceAddress.rollIn ?? true
+      now
     );
 
     for (const job of jobs) {

@@ -1,7 +1,18 @@
 import { prisma } from "@gpp/db";
-import { addressMonthlyCents, monthlyTotalCents, type BillingSummary } from "@gpp/shared";
+import { addressMonthlyCents, type BillingSummary, type PricingDay } from "@gpp/shared";
 
 const ACTIVE_STATUSES = ["ACTIVE", "TRIALING"] as const;
+
+type ScheduleRow = { pickupDayOfWeek: number; canCount: number; cadence: string; rollIn: boolean };
+
+function toPricingDay(row: ScheduleRow): PricingDay {
+  return {
+    dayOfWeek: row.pickupDayOfWeek,
+    canCount: row.canCount,
+    cadence: row.cadence as "WEEKLY" | "BIWEEKLY",
+    rollIn: row.rollIn
+  };
+}
 
 // Billing overview for a user: subscription status + per-address coverage,
 // so the UI can show whether billing is active and which addresses aren't yet
@@ -10,7 +21,8 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
   const [addresses, subscriptions] = await Promise.all([
     prisma.serviceAddress.findMany({
       where: { userId, isActive: true },
-      orderBy: { createdAt: "asc" }
+      orderBy: { createdAt: "asc" },
+      include: { schedules: true }
     }),
     prisma.subscription.findMany({ where: { userId } })
   ]);
@@ -25,8 +37,8 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
       line1: address.line1,
       city: address.city,
       canCount: address.canCount,
-      pickupsPerWeek: address.pickupsPerWeek,
-      monthlyCents: addressMonthlyCents(address),
+      pickupsPerWeek: address.schedules.length,
+      monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay)),
       covered,
       status: sub?.status ?? null
     };
@@ -66,10 +78,13 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
 export async function computeUserMonthlyCents(userId: string): Promise<number> {
   const addresses = await prisma.serviceAddress.findMany({
     where: { userId, isActive: true },
-    select: { canCount: true, pickupsPerWeek: true, rollIn: true }
+    include: { schedules: true }
   });
 
-  return monthlyTotalCents(addresses);
+  return addresses.reduce(
+    (sum, address) => sum + addressMonthlyCents(address.schedules.map(toPricingDay)),
+    0
+  );
 }
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
@@ -88,7 +103,7 @@ export async function activateSubscriptionsForUser(
 ): Promise<void> {
   const addresses = await prisma.serviceAddress.findMany({
     where: { userId, isActive: true },
-    select: { id: true, canCount: true, pickupsPerWeek: true, rollIn: true }
+    include: { schedules: true }
   });
 
   const now = new Date();
@@ -96,7 +111,7 @@ export async function activateSubscriptionsForUser(
   const status = opts.status ?? "ACTIVE";
 
   for (const address of addresses) {
-    const amountCents = addressMonthlyCents(address);
+    const amountCents = addressMonthlyCents(address.schedules.map(toPricingDay));
     await prisma.subscription.upsert({
       where: { userId_serviceAddressId: { userId, serviceAddressId: address.id } },
       create: {

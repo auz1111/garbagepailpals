@@ -2,8 +2,21 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import type { CurrentUser, ServiceAddress, ServiceAddressInput, ServiceScheduleInput } from "@gpp/shared";
-import { addressMonthlyCents, formatUsd, monthlyTotalCents, PRICING } from "@gpp/shared";
+import type {
+  CurrentUser,
+  ServiceAddress,
+  ServiceAddressInput,
+  PickupDay,
+  PickupDayInput,
+  PricingDay
+} from "@gpp/shared";
+import {
+  additionalPickupDayMonthlyCents,
+  addressMonthlyCents,
+  formatUsd,
+  pickupDayMonthlyCents,
+  PRICING
+} from "@gpp/shared";
 import {
   ApiError,
   checkServiceArea,
@@ -18,10 +31,14 @@ import {
   listAddresses,
   listHistoryJobs,
   listUpcomingJobs,
-  updateAddress,
   deleteAddress,
-  upsertAddressSchedule
+  updateAddressSchedule
 } from "../lib/api";
+
+// A schedule row from the API mapped to the shared pricing input.
+function toPricingDay(day: PickupDay): PricingDay {
+  return { dayOfWeek: day.dayOfWeek, canCount: day.canCount, cadence: day.cadence, rollIn: day.rollIn };
+}
 
 type CustomerWorkspaceProps = {
   user: CurrentUser;
@@ -139,15 +156,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     }
   });
 
-  const updateAddressMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<ServiceAddressInput> }) =>
-      updateAddress(id, patch, accessToken),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
-    }
-  });
-
   const deleteAddressMutation = useMutation({
     mutationFn: (id: string) => deleteAddress(id, accessToken),
     onSuccess: () => {
@@ -184,29 +192,23 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: ({ addressId, input }: { addressId: string; input: ServiceScheduleInput }) => {
-      if (!addressId) {
-        throw new Error("Choose a location before saving schedule");
-      }
-
+    mutationFn: ({ addressId, days }: { addressId: string; days: PickupDayInput[] }) => {
       // A datetime-local field yields "YYYY-MM-DDTHH:mm"; the API expects a full
-      // ISO-8601 timestamp, so normalize it (and drop blanks for weekly cadence).
-      const rawAnchor = input.biweeklyAnchorDate?.trim();
-      let anchor: string | undefined;
-      if (rawAnchor) {
-        const parsed = new Date(rawAnchor);
-        anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-      }
-
-      const normalizedInput: ServiceScheduleInput = {
-        ...input,
-        biweeklyAnchorDate: input.cadence === "BIWEEKLY" ? anchor : undefined
-      };
-
-      return upsertAddressSchedule(addressId, normalizedInput, accessToken);
+      // ISO-8601 timestamp, so normalize each day's anchor (only for biweekly).
+      const normalized: PickupDayInput[] = days.map((day) => {
+        let anchor: string | undefined;
+        const raw = day.biweeklyAnchorDate?.trim();
+        if (day.cadence === "BIWEEKLY" && raw) {
+          const parsed = new Date(raw);
+          anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+        }
+        return { ...day, biweeklyAnchorDate: anchor };
+      });
+      return updateAddressSchedule(addressId, { days: normalized }, accessToken);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
     }
   });
@@ -274,7 +276,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   const hasAddress = addresses.length > 0;
   // A successful job feed means the entitlement gate let us through.
   const subscriptionActive = upcomingJobsQuery.isSuccess;
-  const monthlyTotal = monthlyTotalCents(addresses);
 
   // The location-detail route lives under /customer/addresses/:id — the render
   // functions run in this parent's scope (not the nested Route's), so read the id
@@ -598,7 +599,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                       {address.line1}, {address.city}
                     </span>
                     <span className="price-breakdown-meta">
-                      {address.canCount} cans · {address.pickupsPerWeek}×/week ·{" "}
+                      {address.pickupsPerWeek} pickup{address.pickupsPerWeek === 1 ? "" : "s"}/week ·{" "}
                       <span className={`coverage-badge ${address.covered ? "covered" : "uncovered"}`}>
                         {address.covered ? "On plan" : "Not on plan"}
                       </span>
@@ -620,11 +621,11 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </>
           )}
           <p className="subtext">
-            Each location includes {PRICING.includedCansPerAddress} cans and 1 pickup/week
-            ({formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo). Extra cans add{" "}
-            {formatUsd(PRICING.extraCanMonthlyCents)}/mo each; extra pickup days add{" "}
-            {formatUsd(PRICING.extraPickupDayMonthlyCents)}/mo each. Skipping roll-in credits{" "}
-            {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo per can.
+            Your first weekly pickup ({PRICING.includedCansPerPickup} cans) is{" "}
+            {formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo. Each additional pickup day is half
+            that ({formatUsd(additionalPickupDayMonthlyCents())}/mo); extra cans on a day add{" "}
+            {formatUsd(PRICING.extraCanMonthlyCents)}/mo each; skipping roll-in on a day credits{" "}
+            {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo per can; biweekly days are half.
           </p>
         </article>
       </div>
@@ -723,45 +724,26 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                   placeholder="Gate opens inward"
                 />
               </label>
-              <div className="field-row">
-                <label>
-                  Cans
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    {...addressForm.register("canCount", {
-                      valueAsNumber: true,
-                      required: "Required",
-                      min: { value: 1, message: "Min 1" },
-                      max: { value: 20, message: "Max 20" }
-                    })}
-                  />
-                </label>
-                <label>
-                  Pickups per week
-                  <input
-                    type="number"
-                    min={1}
-                    max={7}
-                    {...addressForm.register("pickupsPerWeek", {
-                      valueAsNumber: true,
-                      required: "Required",
-                      min: { value: 1, message: "Min 1" },
-                      max: { value: 7, message: "Max 7" }
-                    })}
-                  />
-                </label>
-              </div>
-              {addressForm.formState.errors.canCount || addressForm.formState.errors.pickupsPerWeek ? (
-                <p className="error">
-                  {addressForm.formState.errors.canCount?.message ??
-                    addressForm.formState.errors.pickupsPerWeek?.message}
-                </p>
+              <label className="field-single">
+                Cans
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  {...addressForm.register("canCount", {
+                    valueAsNumber: true,
+                    required: "Required",
+                    min: { value: 1, message: "Min 1" },
+                    max: { value: 20, message: "Max 20" }
+                  })}
+                />
+              </label>
+              {addressForm.formState.errors.canCount ? (
+                <p className="error">{addressForm.formState.errors.canCount?.message}</p>
               ) : null}
               <p className="subtext">
-                Defaults to {PRICING.includedCansPerAddress} cans, 1 pickup/week. More cans or pickup
-                days increase your monthly cost.
+                Starts with one weekly pickup ({PRICING.includedCansPerPickup} cans included). Add
+                more pickup days, cans, or roll-in per day on the next screen.
               </p>
               <button type="submit" disabled={createAddressMutation.isPending}>
                 {createAddressMutation.isPending ? "Saving..." : "Save Location"}
@@ -847,13 +829,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         key={address.id}
         address={address}
         covered={covered}
-        onSaveConfig={(id, patch) => updateAddressMutation.mutate({ id, patch })}
-        savingConfig={
-          updateAddressMutation.isPending && updateAddressMutation.variables?.id === address.id
-        }
-        configError={
-          updateAddressMutation.isError ? getErrorMessage(updateAddressMutation.error) : null
-        }
         onRemove={(id) => {
           if (window.confirm("Remove this location? This also cancels its scheduled pickups.")) {
             deleteAddressMutation.mutate(id);
@@ -861,7 +836,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
           }
         }}
         removing={deleteAddressMutation.isPending && deleteAddressMutation.variables === address.id}
-        onSaveSchedule={(id, input) => scheduleMutation.mutate({ addressId: id, input })}
+        onSaveSchedule={(id, days) => scheduleMutation.mutate({ addressId: id, days })}
         savingSchedule={scheduleMutation.isPending}
         scheduleError={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
         scheduleSaved={scheduleMutation.isSuccess}
@@ -952,16 +927,16 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
 }
 
 function scheduleSummary(address: ServiceAddress): string {
-  const days = address.schedule?.pickupDaysOfWeek ?? [];
-  if (!address.schedule || days.length === 0) {
+  const days = address.schedules ?? [];
+  if (days.length === 0) {
     return "No pickup schedule set";
   }
   const labels = [...days]
-    .sort((a, b) => a - b)
-    .map((d) => (WEEKDAYS[d] ?? "—").slice(0, 3))
+    .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+    .map((d) => (WEEKDAYS[d.dayOfWeek] ?? "—").slice(0, 3))
     .join(", ");
-  const cadence = address.schedule.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly";
-  return `Pickup ${labels} · ${cadence}`;
+  const anyBiweekly = days.some((d) => d.cadence === "BIWEEKLY");
+  return `Pickup ${labels}${anyBiweekly ? " · some biweekly" : ""}`;
 }
 
 function AddressRow({
@@ -973,11 +948,7 @@ function AddressRow({
   covered: boolean | undefined;
   onOpen: (id: string) => void;
 }): JSX.Element {
-  const monthly = addressMonthlyCents({
-    canCount: address.canCount,
-    pickupsPerWeek: address.pickupsPerWeek,
-    rollIn: address.rollIn
-  });
+  const monthly = addressMonthlyCents((address.schedules ?? []).map(toPricingDay));
   const coverageClass = covered === undefined ? "" : covered ? " is-covered" : " is-uncovered";
 
   return (
@@ -1011,7 +982,8 @@ function AddressRow({
       </div>
       <div className="address-row-meta">
         <span className="address-row-summary">
-          {address.canCount} cans · {address.pickupsPerWeek}×/week
+          {(address.schedules ?? []).length} pickup
+          {(address.schedules ?? []).length === 1 ? "" : "s"}/week
           <span className="address-row-schedule">{scheduleSummary(address)}</span>
         </span>
         <span className="address-row-price">
@@ -1026,12 +998,17 @@ function AddressRow({
   );
 }
 
+type EditDay = {
+  dayOfWeek: number;
+  cadence: "WEEKLY" | "BIWEEKLY";
+  canCount: number;
+  rollIn: boolean;
+  biweeklyAnchorDate: string;
+};
+
 function LocationDetail({
   address,
   covered,
-  onSaveConfig,
-  savingConfig,
-  configError,
   onRemove,
   removing,
   onSaveSchedule,
@@ -1041,75 +1018,97 @@ function LocationDetail({
 }: {
   address: ServiceAddress;
   covered: boolean | undefined;
-  onSaveConfig: (id: string, patch: { canCount: number; rollIn: boolean }) => void;
-  savingConfig: boolean;
-  configError: string | null;
   onRemove: (id: string) => void;
   removing: boolean;
-  onSaveSchedule: (id: string, input: ServiceScheduleInput) => void;
+  onSaveSchedule: (id: string, days: PickupDayInput[]) => void;
   savingSchedule: boolean;
   scheduleError: string | null;
   scheduleSaved: boolean;
 }): JSX.Element {
-  const [cans, setCans] = useState(address.canCount);
-  const [rollIn, setRollIn] = useState(address.rollIn ?? true);
-  const initialDays =
-    address.schedule && address.schedule.pickupDaysOfWeek.length > 0
-      ? [...new Set(address.schedule.pickupDaysOfWeek)].sort((a, b) => a - b)
-      : DEFAULT_PICKUP_DAYS;
-  const [pickupDays, setPickupDays] = useState<number[]>(initialDays);
-  const [cadence, setCadence] = useState<"WEEKLY" | "BIWEEKLY">(
-    address.schedule?.cadence ?? "WEEKLY"
-  );
-  const [anchorDate, setAnchorDate] = useState<string>(
-    address.schedule?.biweeklyAnchorDate?.slice(0, 16) ?? ""
-  );
+  const initialDays: EditDay[] =
+    address.schedules.length > 0
+      ? [...address.schedules]
+          .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+          .map((s) => ({
+            dayOfWeek: s.dayOfWeek,
+            cadence: s.cadence,
+            canCount: s.canCount,
+            rollIn: s.rollIn,
+            biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
+          }))
+      : [
+          {
+            dayOfWeek: DEFAULT_PICKUP_DAYS[0]!,
+            cadence: "WEEKLY",
+            canCount: 2,
+            rollIn: true,
+            biweeklyAnchorDate: ""
+          }
+        ];
+  const [days, setDays] = useState<EditDay[]>(initialDays);
   const [submitted, setSubmitted] = useState(false);
 
-  const pickups = pickupDays.length;
-  const configValid = cans >= 1 && cans <= 20 && pickups >= 1;
-  const safeCans = Math.max(1, cans || 1);
-  const monthly = addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: pickups, rollIn });
-  const rollInCredit =
-    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: pickups, rollIn: true }) -
-    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: pickups, rollIn: false });
-
-  const savingAll = savingConfig || savingSchedule;
-  const saveError = configError ?? scheduleError;
-
-  const usedDays = new Set(pickupDays);
+  const usedDays = new Set(days.map((d) => d.dayOfWeek));
   const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
+  const primaryDayOfWeek = days.length ? Math.min(...days.map((d) => d.dayOfWeek)) : -1;
 
-  function updateDay(idx: number, value: number): void {
-    setPickupDays((prev) => prev.map((d, i) => (i === idx ? value : d)).sort((a, b) => a - b));
+  const valid =
+    days.length >= 1 &&
+    days.every(
+      (d) =>
+        d.canCount >= 1 &&
+        d.canCount <= 20 &&
+        (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
+    );
+  const monthly = addressMonthlyCents(
+    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn }))
+  );
+
+  // Enable Save only when the current config differs from what's saved.
+  const canonical = (list: EditDay[]): string =>
+    [...list]
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+      .map(
+        (d) =>
+          `${d.dayOfWeek}|${d.cadence}|${d.canCount}|${d.rollIn}|${
+            d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate : ""
+          }`
+      )
+      .join(";");
+  const dirty = canonical(days) !== canonical(initialDays);
+
+  function updateDay(idx: number, patch: Partial<EditDay>): void {
+    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
   }
   function removeDay(idx: number): void {
-    setPickupDays((prev) => prev.filter((_, i) => i !== idx));
+    setDays((prev) => prev.filter((_, i) => i !== idx));
   }
   function addDay(): void {
     if (firstAvailableDay === undefined) {
       return;
     }
-    setPickupDays((prev) => [...prev, firstAvailableDay].sort((a, b) => a - b));
+    setDays((prev) => [
+      ...prev,
+      { dayOfWeek: firstAvailableDay, cadence: "WEEKLY", canCount: 2, rollIn: true, biweeklyAnchorDate: "" }
+    ]);
   }
 
-  // One Save button persists everything on the page: the address config (cans,
-  // roll-in) and the pickup schedule (days + cadence). Pickups-per-week — and
-  // therefore price — is derived server-side from the chosen days.
   function handleSaveAll(event: FormEvent): void {
     event.preventDefault();
-    if (!configValid) {
+    if (!valid) {
       return;
     }
     setSubmitted(true);
-    onSaveConfig(address.id, { canCount: cans, rollIn });
-    onSaveSchedule(address.id, {
-      pickupDaysOfWeek: [...new Set(pickupDays)].sort((a, b) => a - b),
-      cadence,
-      biweeklyAnchorDate: anchorDate || undefined,
-      curbOutOffsetHours: address.schedule?.curbOutOffsetHours ?? -12,
-      curbInOffsetHours: address.schedule?.curbInOffsetHours ?? 8
-    });
+    onSaveSchedule(
+      address.id,
+      days.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        cadence: d.cadence,
+        biweeklyAnchorDate: d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate || undefined : undefined,
+        canCount: d.canCount,
+        rollIn: d.rollIn
+      }))
+    );
   }
 
   return (
@@ -1131,104 +1130,139 @@ function LocationDetail({
 
       <form onSubmit={handleSaveAll}>
         <article className="panel">
-          <h3>Cans &amp; options</h3>
-          <p className="subtext">
-            Billing updates to match — {formatUsd(monthly)}/mo for this location.
-          </p>
-          <label className="field-single">
-            Cans
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={cans}
-              onChange={(event) => setCans(Number(event.target.value))}
-            />
-          </label>
-          <label className="checkbox-field">
-            <input
-              type="checkbox"
-              checked={rollIn}
-              onChange={(event) => setRollIn(event.target.checked)}
-            />
-            <span>
-              <strong>Bring my cans back the next day (roll-in)</strong>
-              <span className="subtext">
-                {rollIn
-                  ? `Included. Turn off to save ${formatUsd(rollInCredit)}/mo — we'll only roll cans out.`
-                  : `You save ${formatUsd(rollInCredit)}/mo — we won't bring cans back.`}
-              </span>
-            </span>
-          </label>
-        </article>
-
-        <article className="panel">
-          <h3>Pickup schedule</h3>
-          <p className="subtext">
-            Add the weekdays you want pickup — {pickups} pickup{pickups === 1 ? "" : "s"}/week.
-          </p>
-          <ul className="pickup-day-list">
-            {pickupDays.map((day, idx) => (
-              <li className="pickup-day-row" key={`${day}-${idx}`}>
-                <select value={day} onChange={(event) => updateDay(idx, Number(event.target.value))}>
-                  {WEEKDAYS.map((label, value) => (
-                    <option key={label} value={value} disabled={value !== day && usedDays.has(value)}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="pickup-day-remove"
-                  onClick={() => removeDay(idx)}
-                  disabled={pickupDays.length <= 1}
-                  aria-label={`Remove ${WEEKDAYS[day]}`}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <button
-            type="button"
-            className="add-day-btn"
-            onClick={addDay}
-            disabled={firstAvailableDay === undefined}
-          >
-            + Add day
-          </button>
-
-          <label className="field-single">
-            Cadence
-            <select
-              value={cadence}
-              onChange={(event) => setCadence(event.target.value as "WEEKLY" | "BIWEEKLY")}
+          <div className="panel-head-row">
+            <div className="panel-head-text">
+              <h3>Pickup schedule</h3>
+              <span className="detail-total">{formatUsd(monthly)}/mo</span>
+            </div>
+            <button
+              type="button"
+              className="add-day-btn"
+              onClick={addDay}
+              disabled={firstAvailableDay === undefined}
             >
-              <option value="WEEKLY">Every week</option>
-              <option value="BIWEEKLY">Every 2 weeks</option>
-            </select>
-          </label>
-          {cadence === "BIWEEKLY" ? (
-            <label className="field-single">
-              First pickup date
-              <input
-                type="datetime-local"
-                value={anchorDate}
-                onChange={(event) => setAnchorDate(event.target.value)}
-              />
-            </label>
-          ) : null}
+              + Add day
+            </button>
+          </div>
+          <p className="subtext">
+            Each pickup day has its own cans, cadence, and roll-in. {days.length} pickup
+            {days.length === 1 ? "" : "s"}/week.
+          </p>
+
+          <ul className="pickup-day-list">
+            {days.map((day, idx) => {
+              const dayCost = pickupDayMonthlyCents(
+                { dayOfWeek: day.dayOfWeek, canCount: day.canCount, cadence: day.cadence, rollIn: day.rollIn },
+                day.dayOfWeek === primaryDayOfWeek
+              );
+              return (
+                <li className="pickup-day-card" key={idx}>
+                  <div className="pickup-day-top">
+                    <span className="pickup-day-icon" aria-hidden="true">
+                      🗓️
+                    </span>
+                    <label className="pickup-day-weekday-field">
+                      <span className="pickup-day-eyebrow">Pickup day</span>
+                      <select
+                        className="pickup-day-weekday"
+                        value={day.dayOfWeek}
+                        onChange={(event) => updateDay(idx, { dayOfWeek: Number(event.target.value) })}
+                      >
+                        {WEEKDAYS.map((label, value) => (
+                          <option
+                            key={label}
+                            value={value}
+                            disabled={value !== day.dayOfWeek && usedDays.has(value)}
+                          >
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <span className="pickup-day-cost">{formatUsd(dayCost)}/mo</span>
+                    <button
+                      type="button"
+                      className="pickup-day-remove"
+                      onClick={() => removeDay(idx)}
+                      disabled={days.length <= 1}
+                      aria-label={`Remove ${WEEKDAYS[day.dayOfWeek]}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="pickup-day-body">
+                    <div className="field-row">
+                      <label>
+                        Cadence
+                        <select
+                          value={day.cadence}
+                          onChange={(event) =>
+                            updateDay(idx, { cadence: event.target.value as "WEEKLY" | "BIWEEKLY" })
+                          }
+                        >
+                          <option value="WEEKLY">Every week</option>
+                          <option value="BIWEEKLY">Every 2 weeks</option>
+                        </select>
+                      </label>
+                      <label>
+                        Cans
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={day.canCount}
+                          onChange={(event) => updateDay(idx, { canCount: Number(event.target.value) })}
+                        />
+                      </label>
+                    </div>
+
+                    {day.cadence === "BIWEEKLY" ? (
+                      <label className="field-single">
+                        First pickup date
+                        <input
+                          type="datetime-local"
+                          value={day.biweeklyAnchorDate}
+                          onChange={(event) => updateDay(idx, { biweeklyAnchorDate: event.target.value })}
+                        />
+                      </label>
+                    ) : null}
+
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={day.rollIn}
+                        onChange={(event) => updateDay(idx, { rollIn: event.target.checked })}
+                      />
+                      <span>
+                        <strong>Bring cans back the next day (roll-in)</strong>
+                        <span className="subtext">
+                          {day.rollIn
+                            ? "Included — we return the cans the day after pickup."
+                            : `We'll only roll out — saves ${formatUsd(
+                                day.canCount * PRICING.rollInCreditMonthlyCentsPerCan
+                              )}/mo on this day.`}
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         </article>
 
         <div className="detail-save-row">
-          <button type="submit" className="cta-primary" disabled={!configValid || savingAll}>
-            {savingAll ? "Saving…" : "Save changes"}
-          </button>
-          {submitted && !savingAll && !saveError && scheduleSaved ? (
+          {dirty || savingSchedule ? (
+            <button type="submit" className="cta-primary" disabled={!valid || savingSchedule}>
+              {savingSchedule ? "Saving…" : "Update pickup schedule"}
+            </button>
+          ) : null}
+          {submitted && !savingSchedule && !scheduleError && scheduleSaved && !dirty ? (
             <span className="success-inline">All changes saved.</span>
           ) : null}
         </div>
-        {saveError ? <p className="error">{saveError}</p> : null}
+        {scheduleError ? <p className="error">{scheduleError}</p> : null}
       </form>
 
       <article className="panel">

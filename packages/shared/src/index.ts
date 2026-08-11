@@ -67,27 +67,32 @@ export const serviceAddressInputSchema = z.object({
   isActive: z.boolean().optional()
 });
 
-export const serviceScheduleInputSchema = z.object({
-  // One or more weekdays (0 = Sunday … 6 = Saturday) the customer wants pickup.
-  // The number of days drives pickups-per-week (and pricing).
-  pickupDaysOfWeek: z
-    .array(z.number().int().min(0).max(6))
-    .min(1)
-    .max(7)
-    .transform((days) => [...new Set(days)].sort((a, b) => a - b)),
+// A single pickup day carries its own weekday, cadence, cans, and roll-in — all
+// pricing/scheduling inputs live on the day, not the address.
+export const pickupDayInputSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
   cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
   biweeklyAnchorDate: z.string().datetime().optional(),
-  curbOutOffsetHours: z.number().int().min(-48).max(48).default(-12),
-  curbInOffsetHours: z.number().int().min(-48).max(48).default(8)
+  canCount: z.number().int().min(1).max(20),
+  rollIn: z.boolean().default(true)
 });
 
-export const serviceScheduleSchema = serviceScheduleInputSchema.extend({
+export const pickupDaySchema = pickupDayInputSchema.extend({
   id: z.string(),
   serviceAddressId: z.string(),
-  // Primary day (first of pickupDaysOfWeek), kept for convenience.
-  pickupDayOfWeek: z.number().int().min(0).max(6),
   createdAt: z.string(),
   updatedAt: z.string()
+});
+
+// The schedule PUT replaces the whole set of pickup days for a location.
+export const scheduleUpdateSchema = z.object({
+  days: z
+    .array(pickupDayInputSchema)
+    .min(1)
+    .max(7)
+    .refine((days) => new Set(days.map((d) => d.dayOfWeek)).size === days.length, {
+      message: "Each weekday can only appear once"
+    })
 });
 
 export const serviceAddressSchema = serviceAddressInputSchema.extend({
@@ -95,44 +100,55 @@ export const serviceAddressSchema = serviceAddressInputSchema.extend({
   userId: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
-  // The saved pickup schedule for this location, when one exists.
-  schedule: serviceScheduleSchema.nullable().optional()
+  // Every pickup day configured for this location.
+  schedules: z.array(pickupDaySchema).default([])
 });
 
 // --- Subscription pricing -------------------------------------------------
-// Cost is driven per address by cans serviced and pickup days per week.
+// Cost is a sum over pickup days: the earliest weekday is the location's base
+// pickup; each additional day is half the base price. Extra cans and roll-in
+// adjust a day; biweekly halves that day's monthly visits.
 // NOTE: placeholder rates — adjust to real pricing before launch.
 export const PRICING = {
-  includedCansPerAddress: 2,
+  includedCansPerPickup: 2,
   baseMonthlyCentsPerAddress: 4500,
   extraCanMonthlyCents: 400,
-  extraPickupDayMonthlyCents: 900,
-  // Credit per can when the customer opts out of roll-in (we don't bring that
-  // can back the next day). NOTE: placeholder rate — tune before launch.
+  // Credit per can when the customer opts out of roll-in on a day.
   rollInCreditMonthlyCentsPerCan: 300
 } as const;
 
-export function addressMonthlyCents(input: {
+// Each additional pickup day (beyond the first) costs half the base price.
+export const additionalPickupDayMonthlyCents = (): number =>
+  Math.round(PRICING.baseMonthlyCentsPerAddress / 2);
+
+export type PricingDay = {
+  dayOfWeek: number;
   canCount: number;
-  pickupsPerWeek: number;
+  cadence: "WEEKLY" | "BIWEEKLY";
   rollIn?: boolean;
-}): number {
-  const extraCans = Math.max(0, input.canCount - PRICING.includedCansPerAddress);
-  const extraDays = Math.max(0, input.pickupsPerWeek - 1);
-  const gross =
-    PRICING.baseMonthlyCentsPerAddress +
-    extraCans * PRICING.extraCanMonthlyCents +
-    extraDays * PRICING.extraPickupDayMonthlyCents;
-  // Opting out of roll-in credits every can we no longer bring back.
-  const rollInCredit =
-    input.rollIn === false ? input.canCount * PRICING.rollInCreditMonthlyCentsPerCan : 0;
-  return Math.max(0, gross - rollInCredit);
+};
+
+export function pickupDayMonthlyCents(day: PricingDay, isPrimary: boolean): number {
+  const slot = isPrimary
+    ? PRICING.baseMonthlyCentsPerAddress
+    : additionalPickupDayMonthlyCents();
+  const extraCans =
+    Math.max(0, day.canCount - PRICING.includedCansPerPickup) * PRICING.extraCanMonthlyCents;
+  const credit = day.rollIn === false ? day.canCount * PRICING.rollInCreditMonthlyCentsPerCan : 0;
+  let cents = slot + extraCans - credit;
+  if (day.cadence === "BIWEEKLY") {
+    cents = Math.round(cents / 2);
+  }
+  return Math.max(0, cents);
 }
 
-export function monthlyTotalCents(
-  addresses: Array<{ canCount: number; pickupsPerWeek: number; rollIn?: boolean }>
-): number {
-  return addresses.reduce((sum, address) => sum + addressMonthlyCents(address), 0);
+export function addressMonthlyCents(days: PricingDay[]): number {
+  const sorted = [...days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+  return sorted.reduce((sum, day, index) => sum + pickupDayMonthlyCents(day, index === 0), 0);
+}
+
+export function monthlyTotalCents(addresses: PricingDay[][]): number {
+  return addresses.reduce((sum, days) => sum + addressMonthlyCents(days), 0);
 }
 
 export function formatUsd(cents: number): string {
@@ -419,8 +435,9 @@ export type ProtectedMessage = z.infer<typeof protectedMessageSchema>;
 export type ServiceAreaCheckResponse = z.infer<typeof serviceAreaCheckResponseSchema>;
 export type ServiceAddressInput = z.infer<typeof serviceAddressInputSchema>;
 export type ServiceAddress = z.infer<typeof serviceAddressSchema>;
-export type ServiceScheduleInput = z.infer<typeof serviceScheduleInputSchema>;
-export type ServiceSchedule = z.infer<typeof serviceScheduleSchema>;
+export type PickupDayInput = z.infer<typeof pickupDayInputSchema>;
+export type PickupDay = z.infer<typeof pickupDaySchema>;
+export type ScheduleUpdateInput = z.infer<typeof scheduleUpdateSchema>;
 export type ServiceHoldInput = z.infer<typeof serviceHoldInputSchema>;
 export type ServiceHold = z.infer<typeof serviceHoldSchema>;
 export type ServiceJob = z.infer<typeof serviceJobSchema>;
