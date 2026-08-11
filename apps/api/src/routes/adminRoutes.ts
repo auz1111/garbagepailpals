@@ -4,7 +4,7 @@ import { adminRouteRequestSchema, adminRouteResponseSchema } from "@gpp/shared";
 import { env } from "../lib/env";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
-import { geocode } from "../services/geocoding";
+import { geocode, isGeocodingConfigured } from "../services/geocoding";
 
 const ORS_BASE = "https://api.openrouteservice.org";
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
@@ -41,6 +41,9 @@ export async function adminTodaysRouteHandler(
       async (req) => {
         if (!env.ORS_API_KEY) {
           throw new HttpError(400, "Routing is not configured (ORS_API_KEY missing).");
+        }
+        if (!isGeocodingConfigured()) {
+          throw new HttpError(400, "Geocoding is not configured (GOOGLE_GEOCODING_API_KEY missing).");
         }
         const apiKey = env.ORS_API_KEY;
         const input = await parseJson(req, adminRouteRequestSchema);

@@ -30,7 +30,8 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional(),
   NOTIFICATION_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
   NOTIFICATION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(50).max(5000).default(300),
-  ORS_API_KEY: z.string().optional()
+  ORS_API_KEY: z.string().optional(),
+  GOOGLE_GEOCODING_API_KEY: z.string().optional()
 });
 
 export const env = envSchema.parse(process.env);

@@ -1,35 +1,39 @@
 import { env } from "../lib/env";
 
-const ORS_BASE = "https://api.openrouteservice.org";
+const GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
 
 export type GeocodeResult = { lat: number; lng: number; label: string };
 
-// Resolve a free-text address to coordinates via OpenRouteService (Pelias).
-// Returns null on any failure so callers can fall back gracefully.
+export function isGeocodingConfigured(): boolean {
+  return Boolean(env.GOOGLE_GEOCODING_API_KEY);
+}
+
+// Resolve a free-text address to coordinates via the Google Geocoding API,
+// which has full US rooftop coverage. Returns null on any failure so callers
+// can fall back gracefully.
 export async function geocode(text: string): Promise<GeocodeResult | null> {
-  if (!env.ORS_API_KEY || !text.trim()) {
+  if (!env.GOOGLE_GEOCODING_API_KEY || !text.trim()) {
     return null;
   }
-  const url = `${ORS_BASE}/geocode/search?api_key=${env.ORS_API_KEY}&size=1&boundary.country=US&text=${encodeURIComponent(
-    text
-  )}`;
+  const url = `${GOOGLE_GEOCODE_URL}?components=country:US&address=${encodeURIComponent(text)}&key=${env.GOOGLE_GEOCODING_API_KEY}`;
   try {
     const response = await fetch(url);
     if (!response.ok) {
       return null;
     }
     const payload = (await response.json()) as {
-      features?: Array<{
-        geometry?: { coordinates?: [number, number] };
-        properties?: { label?: string };
+      status?: string;
+      results?: Array<{
+        formatted_address?: string;
+        geometry?: { location?: { lat: number; lng: number } };
       }>;
     };
-    const feature = payload.features?.[0];
-    const coords = feature?.geometry?.coordinates;
-    if (!coords) {
+    const top = payload.status === "OK" ? payload.results?.[0] : undefined;
+    const location = top?.geometry?.location;
+    if (!location) {
       return null;
     }
-    return { lat: coords[1], lng: coords[0], label: feature?.properties?.label ?? text };
+    return { lat: location.lat, lng: location.lng, label: top?.formatted_address ?? text };
   } catch {
     return null;
   }
