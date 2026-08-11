@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type { AdminIncident, AdminUserWithLocations, CurrentUser, Role } from "@gpp/shared";
@@ -342,85 +342,97 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       {!metrics ? (
         <p className="subtext">{metricsQuery.isLoading ? "Loading metrics..." : "No metrics available yet."}</p>
       ) : (
-        <div className="panel-grid">
-          <article className="panel">
-            <h3>Users</h3>
-            <ul className="meta-list compact">
-              <li>Total: {metrics.users.total}</li>
-              <li>Customers: {metrics.users.customers}</li>
-              <li>Operators: {metrics.users.operators}</li>
-              <li>Admins: {metrics.users.admins}</li>
-            </ul>
-          </article>
-
-          <article className="panel">
-            <h3>Service</h3>
-            <ul className="meta-list compact">
-              <li>Active addresses: {metrics.service.addresses}</li>
-              <li>Active subscriptions: {metrics.service.activeSubscriptions}</li>
-              <li>Active entitlements: {metrics.service.activeEntitlements}</li>
-            </ul>
-          </article>
-
-          <article className="panel">
-            <h3>Jobs</h3>
-            <ul className="meta-list compact">
-              <li>Scheduled next 7 days: {metrics.jobs.scheduledNext7Days}</li>
-              <li>Completed last 7 days: {metrics.jobs.completedLast7Days}</li>
-              <li>Failed last 7 days: {metrics.jobs.failedLast7Days}</li>
-            </ul>
-          </article>
-
-          <article className="panel">
-            <h3>Webhooks (24h)</h3>
-            <ul className="meta-list compact">
-              <li>Stripe events: {metrics.webhooks.stripeLast24h}</li>
-              <li>PayPal events: {metrics.webhooks.paypalLast24h}</li>
-            </ul>
-          </article>
-
-          <article className="panel">
-            <h3>Notifications (24h)</h3>
-            <ul className="meta-list compact">
-              <li>Reminders sent: {metrics.notifications.remindersSentLast24h}</li>
-              <li>Reminders failed: {metrics.notifications.remindersFailedLast24h}</li>
-              <li>Overdue sent: {metrics.notifications.overdueSentLast24h}</li>
-              <li>Overdue failed: {metrics.notifications.overdueFailedLast24h}</li>
-            </ul>
-          </article>
+        <div className="metric-grid">
+          <MetricCard
+            icon="👥"
+            title="Users"
+            to="/admin/users"
+            rows={[
+              ["Total", metrics.users.total],
+              ["Customers", metrics.users.customers],
+              ["Operators", metrics.users.operators],
+              ["Admins", metrics.users.admins]
+            ]}
+          />
+          <MetricCard
+            icon="🗑️"
+            title="Service"
+            rows={[
+              ["Active addresses", metrics.service.addresses],
+              ["Active subscriptions", metrics.service.activeSubscriptions],
+              ["Active entitlements", metrics.service.activeEntitlements]
+            ]}
+          />
+          <MetricCard
+            icon="🚚"
+            title="Jobs"
+            rows={[
+              ["Scheduled next 7 days", metrics.jobs.scheduledNext7Days],
+              ["Completed last 7 days", metrics.jobs.completedLast7Days],
+              ["Failed last 7 days", metrics.jobs.failedLast7Days]
+            ]}
+          />
+          <MetricCard
+            icon="🔌"
+            title="Webhooks (24h)"
+            rows={[
+              ["Stripe events", metrics.webhooks.stripeLast24h],
+              ["PayPal events", metrics.webhooks.paypalLast24h]
+            ]}
+          />
+          <MetricCard
+            icon="🔔"
+            title="Notifications (24h)"
+            rows={[
+              ["Reminders sent", metrics.notifications.remindersSentLast24h],
+              ["Reminders failed", metrics.notifications.remindersFailedLast24h],
+              ["Overdue sent", metrics.notifications.overdueSentLast24h],
+              ["Overdue failed", metrics.notifications.overdueFailedLast24h]
+            ]}
+          />
         </div>
       )}
 
       {metricsQuery.error ? <p className="error">{getErrorMessage(metricsQuery.error)}</p> : null}
 
       {runtimeMetrics ? (
-        <div className="panel-grid" style={{ marginTop: "1rem" }}>
-          <article className="panel">
-            <h3>Runtime</h3>
-            <ul className="meta-list compact">
-              <li>Started: {new Date(runtimeMetrics.runtime.startedAt).toLocaleString()}</li>
-              <li>Uptime: {runtimeMetrics.runtime.uptimeSeconds}s</li>
-              <li>Notification provider: {runtimeMetrics.notifications.provider}</li>
-            </ul>
-          </article>
-
-          <article className="panel">
-            <h3>Auth Throttle (process lifetime)</h3>
-            <ul className="meta-list compact">
-              <li>Window: {runtimeMetrics.authRateLimits.windowMs}ms</li>
-              <li>Register allowed/blocked: {runtimeMetrics.authRateLimits.register.allowed}/{runtimeMetrics.authRateLimits.register.blocked}</li>
-              <li>Login allowed/blocked: {runtimeMetrics.authRateLimits.login.allowed}/{runtimeMetrics.authRateLimits.login.blocked}</li>
-              <li>Refresh allowed/blocked: {runtimeMetrics.authRateLimits.refresh.allowed}/{runtimeMetrics.authRateLimits.refresh.blocked}</li>
-            </ul>
-          </article>
-
-          <article className="panel">
-            <h3>Notification Retry Config</h3>
-            <ul className="meta-list compact">
-              <li>Max retries: {runtimeMetrics.notifications.maxRetries}</li>
-              <li>Base retry delay: {runtimeMetrics.notifications.retryBaseDelayMs}ms</li>
-            </ul>
-          </article>
+        <div className="metric-grid" style={{ marginTop: "1rem" }}>
+          <MetricCard
+            icon="⚙️"
+            title="Runtime"
+            rows={[
+              ["Started", new Date(runtimeMetrics.runtime.startedAt).toLocaleString()],
+              ["Uptime", `${runtimeMetrics.runtime.uptimeSeconds}s`],
+              ["Notification provider", runtimeMetrics.notifications.provider]
+            ]}
+          />
+          <MetricCard
+            icon="🛡️"
+            title="Auth Throttle"
+            rows={[
+              ["Window", `${runtimeMetrics.authRateLimits.windowMs}ms`],
+              [
+                "Register allowed/blocked",
+                `${runtimeMetrics.authRateLimits.register.allowed}/${runtimeMetrics.authRateLimits.register.blocked}`
+              ],
+              [
+                "Login allowed/blocked",
+                `${runtimeMetrics.authRateLimits.login.allowed}/${runtimeMetrics.authRateLimits.login.blocked}`
+              ],
+              [
+                "Refresh allowed/blocked",
+                `${runtimeMetrics.authRateLimits.refresh.allowed}/${runtimeMetrics.authRateLimits.refresh.blocked}`
+              ]
+            ]}
+          />
+          <MetricCard
+            icon="🔁"
+            title="Notification Retry"
+            rows={[
+              ["Max retries", runtimeMetrics.notifications.maxRetries],
+              ["Base retry delay", `${runtimeMetrics.notifications.retryBaseDelayMs}ms`]
+            ]}
+          />
         </div>
       ) : (
         <p className="subtext" style={{ marginTop: "1rem" }}>
@@ -759,5 +771,45 @@ function AdminUserDetail({
         )}
       </article>
     </div>
+  );
+}
+
+function MetricCard({
+  icon,
+  title,
+  rows,
+  to
+}: {
+  icon: string;
+  title: string;
+  rows: Array<[string, ReactNode]>;
+  to?: string;
+}): JSX.Element {
+  const body = (
+    <>
+      <div className="metric-head">
+        <span className="metric-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <h3>{title}</h3>
+        {to ? <span className="metric-link-hint">View →</span> : null}
+      </div>
+      <ul className="metric-list">
+        {rows.map(([label, value]) => (
+          <li key={label}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+
+  return to ? (
+    <Link to={to} className="metric-card is-link">
+      {body}
+    </Link>
+  ) : (
+    <article className="metric-card">{body}</article>
   );
 }
