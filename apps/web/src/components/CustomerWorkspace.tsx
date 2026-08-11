@@ -680,7 +680,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
               ) : null}
               <label>
                 City
-                <input {...addressForm.register("city", { required: "City is required" })} placeholder="Portland" />
+                <input {...addressForm.register("city", { required: "City is required" })} placeholder="Bend" />
               </label>
               {addressForm.formState.errors.city ? (
                 <p className="error">{addressForm.formState.errors.city.message}</p>

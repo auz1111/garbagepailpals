@@ -13,7 +13,7 @@ import {
   type Role,
   type RegisterInput
 } from "@gpp/shared";
-import { getAdminLocations, getMe, login, refresh, register } from "./lib/api";
+import { getAdminLocations, getMe, getOperatorRoutes, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
@@ -177,6 +177,19 @@ export function App() {
   const unassignedLocationCount = (adminLocationsQuery.data?.locations ?? []).filter(
     (loc) => !loc.neighborhoodId
   ).length;
+
+  // Operator alert: routes assigned to me that I haven't accepted yet (drives
+  // the badge on the Operator nav link). Applies to operators and admins with
+  // operator access.
+  const canOperate = isOperator || (isAdmin && Boolean(user?.operatorAccess));
+  const operatorRoutesQuery = useQuery({
+    queryKey: ["operator-routes"],
+    queryFn: async () => getOperatorRoutes(accessToken as string),
+    enabled: canOperate && Boolean(accessToken)
+  });
+  const pendingRouteCount = (operatorRoutesQuery.data?.routes ?? []).filter(
+    (r) => r.status === "ASSIGNED"
+  ).length;
   const showDashboardMenu =
     isAuthenticated &&
     ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
@@ -266,10 +279,13 @@ export function App() {
               </div>
               <nav className="drawer-nav">
                 {dashboardNav.map((item) => {
+                  const isOperatorLink = item.to === "/operator" || item.to === "/admin/operator";
                   const badge =
                     item.to === "/admin/neighborhoods" && unassignedLocationCount > 0
                       ? unassignedLocationCount
-                      : null;
+                      : isOperatorLink && pendingRouteCount > 0
+                        ? pendingRouteCount
+                        : null;
                   return (
                     <NavLink
                       key={item.to}

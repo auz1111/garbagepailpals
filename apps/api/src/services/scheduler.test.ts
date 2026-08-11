@@ -90,7 +90,7 @@ describe("calculateJobsForAddress", () => {
       [],
       [
         {
-          municipality: "Portland",
+          municipality: "Bend",
           date: base.minus({ days: 1 }).toUTC().toJSDate(),
           shiftDays: 1
         }

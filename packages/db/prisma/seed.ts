@@ -117,7 +117,7 @@ async function seed() {
     data: [
       {
         region: "US-OR",
-        municipality: "Portland",
+        municipality: "Bend",
         date: new Date("2026-09-07T00:00:00.000Z"),
         shiftDays: 1
       }
@@ -129,7 +129,7 @@ async function seed() {
       data: {
         userId: customer1.id,
         line1: "123 Maple St",
-        city: "Portland",
+        city: "Bend",
         state: "OR",
         postalCode: "97201",
         lat: 45.5111,
@@ -146,7 +146,7 @@ async function seed() {
         userId: customer2.id,
         line1: "789 Alder Ave",
         line2: "Unit B",
-        city: "Portland",
+        city: "Bend",
         state: "OR",
         postalCode: "97202",
         lat: 45.489,
