@@ -411,6 +411,12 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         { to: "/customer/billing", label: "Review billing" }
       );
     }
+    // No issue: the reassuring "all set" banner only belongs on the dashboard —
+    // other pages stay clean unless there's something to act on.
+    const isDashboard = location.pathname === "/customer" || location.pathname === "/customer/";
+    if (!isDashboard) {
+      return null;
+    }
     return banner(
       "ok",
       "✅",
