@@ -66,7 +66,7 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
 export async function computeUserMonthlyCents(userId: string): Promise<number> {
   const addresses = await prisma.serviceAddress.findMany({
     where: { userId, isActive: true },
-    select: { canCount: true, pickupsPerWeek: true }
+    select: { canCount: true, pickupsPerWeek: true, rollIn: true }
   });
 
   return monthlyTotalCents(addresses);
@@ -88,7 +88,7 @@ export async function activateSubscriptionsForUser(
 ): Promise<void> {
   const addresses = await prisma.serviceAddress.findMany({
     where: { userId, isActive: true },
-    select: { id: true, canCount: true, pickupsPerWeek: true }
+    select: { id: true, canCount: true, pickupsPerWeek: true, rollIn: true }
   });
 
   const now = new Date();

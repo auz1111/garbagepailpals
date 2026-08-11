@@ -45,6 +45,7 @@ const defaultAddressValues: ServiceAddressInput = {
   accessNotes: "Leave can near driveway gate.",
   canCount: 2,
   pickupsPerWeek: 1,
+  rollIn: true,
   isActive: true
 };
 
@@ -54,6 +55,16 @@ const defaultScheduleValues: ServiceScheduleInput = {
   curbOutOffsetHours: -12,
   curbInOffsetHours: 8
 };
+
+const WEEKDAYS = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday"
+] as const;
 
 export const CUSTOMER_NAV = [
   { to: "/customer", label: "Dashboard", icon: "🧭", end: true },
@@ -184,23 +195,30 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: (input: ServiceScheduleInput) => {
-      if (!selectedAddressId) {
-        throw new Error("Choose an address before saving schedule");
+    mutationFn: ({ addressId, input }: { addressId: string; input: ServiceScheduleInput }) => {
+      if (!addressId) {
+        throw new Error("Choose a location before saving schedule");
+      }
+
+      // A datetime-local field yields "YYYY-MM-DDTHH:mm"; the API expects a full
+      // ISO-8601 timestamp, so normalize it (and drop blanks for weekly cadence).
+      const rawAnchor = input.biweeklyAnchorDate?.trim();
+      let anchor: string | undefined;
+      if (rawAnchor) {
+        const parsed = new Date(rawAnchor);
+        anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
       }
 
       const normalizedInput: ServiceScheduleInput = {
         ...input,
-        biweeklyAnchorDate:
-          input.biweeklyAnchorDate && input.biweeklyAnchorDate.trim().length > 0
-            ? input.biweeklyAnchorDate
-            : undefined
+        biweeklyAnchorDate: input.cadence === "BIWEEKLY" ? anchor : undefined
       };
 
-      return upsertAddressSchedule(selectedAddressId, normalizedInput, accessToken);
+      return upsertAddressSchedule(addressId, normalizedInput, accessToken);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
     }
   });
 
@@ -268,6 +286,12 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   // A successful job feed means the entitlement gate let us through.
   const subscriptionActive = upcomingJobsQuery.isSuccess;
   const monthlyTotal = monthlyTotalCents(addresses);
+
+  // The location-detail route lives under /customer/addresses/:id — the render
+  // functions run in this parent's scope (not the nested Route's), so read the id
+  // straight off the path rather than via useParams.
+  const detailMatch = location.pathname.match(/\/customer\/addresses\/([^/]+)$/);
+  const detailAddressId = detailMatch?.[1] ? decodeURIComponent(detailMatch[1]) : null;
 
   // When Stripe/PayPal redirect back after checkout, the activation webhook is
   // async — poll-refetch the session + queries so the UI reflects it without a
@@ -607,10 +631,11 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </>
           )}
           <p className="subtext">
-            Each address includes {PRICING.includedCansPerAddress} cans and 1 pickup/week
+            Each location includes {PRICING.includedCansPerAddress} cans and 1 pickup/week
             ({formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo). Extra cans add{" "}
             {formatUsd(PRICING.extraCanMonthlyCents)}/mo each; extra pickup days add{" "}
-            {formatUsd(PRICING.extraPickupDayMonthlyCents)}/mo each.
+            {formatUsd(PRICING.extraPickupDayMonthlyCents)}/mo each. Skipping roll-in credits{" "}
+            {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo per can.
           </p>
         </article>
       </div>
@@ -767,7 +792,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 </button>
               ) : null}
             </div>
-            <p className="subtext">Adjust cans and pickup days per location — billing updates to match.</p>
+            <p className="subtext">Select a location to set its pickup schedule, cans, and pickup days.</p>
             {summary && uncoveredCount > 0 ? (
               <p className="notice">
                 {uncoveredCount === 1 ? "1 location isn't" : `${uncoveredCount} locations aren't`} being
@@ -785,32 +810,73 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                   key={address.id}
                   address={address}
                   covered={summary ? (coverageById.get(address.id) ?? false) : undefined}
-                  saving={
-                    updateAddressMutation.isPending && updateAddressMutation.variables?.id === address.id
-                  }
-                  removing={
-                    deleteAddressMutation.isPending && deleteAddressMutation.variables === address.id
-                  }
-                  onSave={(id, patch) => updateAddressMutation.mutate({ id, patch })}
-                  onRemove={(id) => {
-                    if (window.confirm("Remove this location? This also cancels its scheduled pickups.")) {
-                      deleteAddressMutation.mutate(id);
-                    }
-                  }}
+                  onOpen={(id) => navigate(`/customer/addresses/${id}`)}
                 />
               ))}
             </ul>
-            {updateAddressMutation.isError ? (
-              <p className="error">{getErrorMessage(updateAddressMutation.error)}</p>
-            ) : null}
-            {deleteAddressMutation.isError ? (
-              <p className="error">{getErrorMessage(deleteAddressMutation.error)}</p>
-            ) : null}
             {addressesQuery.isError ? <p className="error">{getErrorMessage(addressesQuery.error)}</p> : null}
           </article>
           ) : null}
         </div>
       </div>
+    );
+  }
+
+  function renderLocationDetail(): JSX.Element {
+    const summary = billingSummaryQuery.data;
+    const coverageById = new Map((summary?.addresses ?? []).map((a) => [a.id, a.covered] as const));
+    const address = addresses.find((a) => a.id === detailAddressId);
+
+    if (addressesQuery.isLoading) {
+      return (
+        <div className="dash-page">
+          <article className="panel">
+            <p className="subtext">Loading location…</p>
+          </article>
+        </div>
+      );
+    }
+
+    if (!address) {
+      return (
+        <div className="dash-page">
+          <div className="dash-page-head">
+            <Link to="/customer/addresses" className="back-link">
+              ← Back to locations
+            </Link>
+            <h2>Location not found</h2>
+            <p className="subtext">This location may have been removed.</p>
+          </div>
+        </div>
+      );
+    }
+
+    const covered = summary ? (coverageById.get(address.id) ?? false) : undefined;
+
+    return (
+      <LocationDetail
+        key={address.id}
+        address={address}
+        covered={covered}
+        onSaveConfig={(id, patch) => updateAddressMutation.mutate({ id, patch })}
+        savingConfig={
+          updateAddressMutation.isPending && updateAddressMutation.variables?.id === address.id
+        }
+        configError={
+          updateAddressMutation.isError ? getErrorMessage(updateAddressMutation.error) : null
+        }
+        onRemove={(id) => {
+          if (window.confirm("Remove this location? This also cancels its scheduled pickups.")) {
+            deleteAddressMutation.mutate(id);
+            navigate("/customer/addresses");
+          }
+        }}
+        removing={deleteAddressMutation.isPending && deleteAddressMutation.variables === address.id}
+        onSaveSchedule={(id, input) => scheduleMutation.mutate({ addressId: id, input })}
+        savingSchedule={scheduleMutation.isPending}
+        scheduleError={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
+        scheduleSaved={scheduleMutation.isSuccess}
+      />
     );
   }
 
@@ -838,7 +904,14 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </select>
           </label>
 
-          <form onSubmit={scheduleForm.handleSubmit((values) => scheduleMutation.mutate(values))}>
+          <form
+            onSubmit={scheduleForm.handleSubmit((values) => {
+              if (!selectedAddressId) {
+                return;
+              }
+              scheduleMutation.mutate({ addressId: selectedAddressId, input: values });
+            })}
+          >
             <label>
               Pickup day (0-6)
               <input
@@ -942,6 +1015,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         <Route index element={renderOverview()} />
         <Route path="billing" element={renderBilling()} />
         <Route path="addresses" element={renderAddresses()} />
+        <Route path="addresses/:addressId" element={renderLocationDetail()} />
         <Route path="schedule" element={renderSchedule()} />
         <Route path="jobs" element={renderJobs()} />
         <Route path="history" element={renderHistory()} />
@@ -951,35 +1025,44 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   );
 }
 
+function scheduleSummary(address: ServiceAddress): string {
+  if (!address.schedule) {
+    return "No pickup schedule set";
+  }
+  const day = WEEKDAYS[address.schedule.pickupDayOfWeek] ?? "—";
+  const cadence = address.schedule.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly";
+  return `Pickup ${day} · ${cadence}`;
+}
+
 function AddressRow({
   address,
   covered,
-  saving,
-  removing,
-  onSave,
-  onRemove
+  onOpen
 }: {
   address: ServiceAddress;
   covered: boolean | undefined;
-  saving: boolean;
-  removing: boolean;
-  onSave: (id: string, patch: { canCount: number; pickupsPerWeek: number }) => void;
-  onRemove: (id: string) => void;
+  onOpen: (id: string) => void;
 }): JSX.Element {
-  const [cans, setCans] = useState(address.canCount);
-  const [days, setDays] = useState(address.pickupsPerWeek);
-  const dirty = cans !== address.canCount || days !== address.pickupsPerWeek;
-  const valid = cans >= 1 && cans <= 20 && days >= 1 && days <= 7;
   const monthly = addressMonthlyCents({
-    canCount: Math.max(1, cans || 1),
-    pickupsPerWeek: Math.max(1, days || 1)
+    canCount: address.canCount,
+    pickupsPerWeek: address.pickupsPerWeek,
+    rollIn: address.rollIn
   });
-
-  const coverageClass =
-    covered === undefined ? "" : covered ? " is-covered" : " is-uncovered";
+  const coverageClass = covered === undefined ? "" : covered ? " is-covered" : " is-uncovered";
 
   return (
-    <li className={`address-row${coverageClass}`}>
+    <li
+      className={`address-row is-clickable${coverageClass}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onOpen(address.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(address.id);
+        }
+      }}
+    >
       <div className="address-row-lead">
         <span className="address-row-icon" aria-hidden="true">
           🏠
@@ -996,37 +1079,202 @@ function AddressRow({
           ) : null}
         </div>
       </div>
-      <div className="address-row-controls">
-        <label className="field-mini">
-          Cans
-          <input type="number" min={1} max={20} value={cans} onChange={(event) => setCans(Number(event.target.value))} />
-        </label>
-        <label className="field-mini">
-          Days/wk
-          <input type="number" min={1} max={7} value={days} onChange={(event) => setDays(Number(event.target.value))} />
-        </label>
+      <div className="address-row-meta">
+        <span className="address-row-summary">
+          {address.canCount} cans · {address.pickupsPerWeek}×/week
+          <span className="address-row-schedule">{scheduleSummary(address)}</span>
+        </span>
         <span className="address-row-price">
           {formatUsd(monthly)}
           <span>/mo</span>
         </span>
+        <span className="address-row-chevron" aria-hidden="true">
+          ›
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function LocationDetail({
+  address,
+  covered,
+  onSaveConfig,
+  savingConfig,
+  configError,
+  onRemove,
+  removing,
+  onSaveSchedule,
+  savingSchedule,
+  scheduleError,
+  scheduleSaved
+}: {
+  address: ServiceAddress;
+  covered: boolean | undefined;
+  onSaveConfig: (
+    id: string,
+    patch: { canCount: number; pickupsPerWeek: number; rollIn: boolean }
+  ) => void;
+  savingConfig: boolean;
+  configError: string | null;
+  onRemove: (id: string) => void;
+  removing: boolean;
+  onSaveSchedule: (id: string, input: ServiceScheduleInput) => void;
+  savingSchedule: boolean;
+  scheduleError: string | null;
+  scheduleSaved: boolean;
+}): JSX.Element {
+  const [cans, setCans] = useState(address.canCount);
+  const [days, setDays] = useState(address.pickupsPerWeek);
+  const [rollIn, setRollIn] = useState(address.rollIn ?? true);
+  const configDirty =
+    cans !== address.canCount || days !== address.pickupsPerWeek || rollIn !== (address.rollIn ?? true);
+  const configValid = cans >= 1 && cans <= 20 && days >= 1 && days <= 7;
+  const safeCans = Math.max(1, cans || 1);
+  const safeDays = Math.max(1, days || 1);
+  const monthly = addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: safeDays, rollIn });
+  const rollInCredit =
+    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: safeDays, rollIn: true }) -
+    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: safeDays, rollIn: false });
+
+  const scheduleForm = useForm<ServiceScheduleInput>({
+    defaultValues: address.schedule
+      ? {
+          pickupDayOfWeek: address.schedule.pickupDayOfWeek,
+          cadence: address.schedule.cadence,
+          biweeklyAnchorDate: address.schedule.biweeklyAnchorDate?.slice(0, 16),
+          curbOutOffsetHours: address.schedule.curbOutOffsetHours,
+          curbInOffsetHours: address.schedule.curbInOffsetHours
+        }
+      : defaultScheduleValues
+  });
+  const cadence = scheduleForm.watch("cadence");
+
+  return (
+    <div className="dash-page">
+      <div className="dash-page-head">
+        <Link to="/customer/addresses" className="back-link">
+          ← Back to locations
+        </Link>
+        <h2>{address.line1}</h2>
+        <p className="subtext">
+          {address.city}, {address.state} {address.postalCode}
+          {covered !== undefined ? (
+            <span className={`coverage-badge ${covered ? "covered" : "uncovered"}`}>
+              {covered ? "✓ Serviced" : "Not serviced"}
+            </span>
+          ) : null}
+        </p>
+      </div>
+
+      <article className="panel">
+        <h3>Pickup schedule</h3>
+        <p className="subtext">Choose the day we roll your cans to the curb and back.</p>
+        <form
+          onSubmit={scheduleForm.handleSubmit((values) => onSaveSchedule(address.id, values))}
+        >
+          <div className="field-row">
+            <label>
+              Pickup day
+              <select {...scheduleForm.register("pickupDayOfWeek", { valueAsNumber: true })}>
+                {WEEKDAYS.map((label, value) => (
+                  <option key={label} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Cadence
+              <select {...scheduleForm.register("cadence")}>
+                <option value="WEEKLY">Every week</option>
+                <option value="BIWEEKLY">Every 2 weeks</option>
+              </select>
+            </label>
+          </div>
+          {cadence === "BIWEEKLY" ? (
+            <label>
+              First pickup date
+              <input
+                type="datetime-local"
+                {...scheduleForm.register("biweeklyAnchorDate")}
+              />
+            </label>
+          ) : null}
+          <button type="submit" disabled={savingSchedule}>
+            {savingSchedule ? "Saving…" : "Save schedule"}
+          </button>
+        </form>
+        {scheduleSaved && !savingSchedule ? (
+          <p className="success-inline">Schedule saved.</p>
+        ) : null}
+        {scheduleError ? <p className="error">{scheduleError}</p> : null}
+      </article>
+
+      <article className="panel">
+        <h3>Cans &amp; options</h3>
+        <p className="subtext">Billing updates to match — {formatUsd(monthly)}/mo for this location.</p>
+        <div className="field-row">
+          <label>
+            Cans
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={cans}
+              onChange={(event) => setCans(Number(event.target.value))}
+            />
+          </label>
+          <label>
+            Pickups per week
+            <input
+              type="number"
+              min={1}
+              max={7}
+              value={days}
+              onChange={(event) => setDays(Number(event.target.value))}
+            />
+          </label>
+        </div>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={rollIn}
+            onChange={(event) => setRollIn(event.target.checked)}
+          />
+          <span>
+            <strong>Bring my cans back the next day (roll-in)</strong>
+            <span className="subtext">
+              {rollIn
+                ? `Included. Turn off to save ${formatUsd(rollInCredit)}/mo — we'll only roll cans out.`
+                : `You save ${formatUsd(rollInCredit)}/mo — we won't bring cans back.`}
+            </span>
+          </span>
+        </label>
         <button
           type="button"
-          className="address-row-save"
-          disabled={!dirty || !valid || saving}
-          onClick={() => onSave(address.id, { canCount: cans, pickupsPerWeek: days })}
+          disabled={!configDirty || !configValid || savingConfig}
+          onClick={() => onSaveConfig(address.id, { canCount: cans, pickupsPerWeek: days, rollIn })}
         >
-          {saving ? "Saving..." : "Save"}
+          {savingConfig ? "Saving…" : "Save changes"}
         </button>
+        {configError ? <p className="error">{configError}</p> : null}
+      </article>
+
+      <article className="panel">
+        <h3>Remove location</h3>
+        <p className="subtext">
+          Removing this location cancels its scheduled pickups. This can't be undone.
+        </p>
         <button
           type="button"
           className="address-row-remove"
           disabled={removing}
-          aria-label="Remove address"
           onClick={() => onRemove(address.id)}
         >
-          {removing ? "Removing..." : "Remove"}
+          {removing ? "Removing…" : "Remove location"}
         </button>
-      </div>
-    </li>
+      </article>
+    </div>
   );
 }

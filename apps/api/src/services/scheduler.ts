@@ -10,6 +10,7 @@ type SchedulerAddress = {
   city: string;
   timezone: string;
   pickupsPerWeek: number;
+  rollIn: boolean;
   schedule: {
     pickupDayOfWeek: number;
     cadence: Cadence;
@@ -100,7 +101,8 @@ export function calculateJobsForAddress(
   holidays: HolidayRule[],
   lookaheadDays: number,
   referenceDate = new Date(),
-  pickupsPerWeek = 1
+  pickupsPerWeek = 1,
+  rollIn = true
 ): PendingJob[] {
   const start = DateTime.fromJSDate(referenceDate, { zone: timezone }).startOf("day");
   const jobs: PendingJob[] = [];
@@ -126,7 +128,6 @@ export function calculateJobsForAddress(
     }
 
     const curbOut = day.plus({ hours: schedule.curbOutOffsetHours });
-    const curbIn = day.plus({ hours: schedule.curbInOffsetHours });
 
     jobs.push({
       serviceAddressId,
@@ -135,12 +136,17 @@ export function calculateJobsForAddress(
       type: "CURB_OUT"
     });
 
-    jobs.push({
-      serviceAddressId,
-      subscriptionId,
-      scheduledDate: curbIn.toUTC().toJSDate(),
-      type: "CURB_IN"
-    });
+    // Roll-in is optional: when the customer keeps it, we bring the cans back the
+    // day after pickup. When they opt out, no roll-in job is generated.
+    if (rollIn) {
+      const curbIn = day.plus({ days: 1, hours: 8 });
+      jobs.push({
+        serviceAddressId,
+        subscriptionId,
+        scheduledDate: curbIn.toUTC().toJSDate(),
+        type: "CURB_IN"
+      });
+    }
   }
 
   return jobs;
@@ -202,7 +208,8 @@ export async function runNightlyJobGeneration(
       applicableHolidays,
       lookahead,
       now,
-      subscription.serviceAddress.pickupsPerWeek ?? 1
+      subscription.serviceAddress.pickupsPerWeek ?? 1,
+      subscription.serviceAddress.rollIn ?? true
     );
 
     for (const job of jobs) {

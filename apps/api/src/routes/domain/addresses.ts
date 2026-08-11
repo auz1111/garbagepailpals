@@ -26,9 +26,21 @@ function toAddressResponse(address: {
   gateCode: string | null;
   canCount: number;
   pickupsPerWeek: number;
+  rollIn: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  schedule?: {
+    id: string;
+    serviceAddressId: string;
+    pickupDayOfWeek: number;
+    cadence: string;
+    biweeklyAnchorDate: Date | null;
+    curbOutOffsetHours: number;
+    curbInOffsetHours: number;
+    createdAt: Date;
+    updatedAt: Date;
+  } | null;
 }) {
   return serviceAddressSchema.parse({
     ...address,
@@ -37,7 +49,20 @@ function toAddressResponse(address: {
     line2: address.line2 ?? undefined,
     gateCode: address.gateCode ?? undefined,
     createdAt: address.createdAt.toISOString(),
-    updatedAt: address.updatedAt.toISOString()
+    updatedAt: address.updatedAt.toISOString(),
+    schedule: address.schedule
+      ? {
+          id: address.schedule.id,
+          serviceAddressId: address.schedule.serviceAddressId,
+          pickupDayOfWeek: address.schedule.pickupDayOfWeek,
+          cadence: address.schedule.cadence,
+          biweeklyAnchorDate: address.schedule.biweeklyAnchorDate?.toISOString(),
+          curbOutOffsetHours: address.schedule.curbOutOffsetHours,
+          curbInOffsetHours: address.schedule.curbInOffsetHours,
+          createdAt: address.schedule.createdAt.toISOString(),
+          updatedAt: address.schedule.updatedAt.toISOString()
+        }
+      : null
   });
 }
 
@@ -114,7 +139,8 @@ export async function listAddressesHandler(
       async (_req, _ctx, auth) => {
         const rows = await prisma.serviceAddress.findMany({
           where: auth.role === "ADMIN" ? undefined : { userId: auth.sub },
-          orderBy: { createdAt: "desc" }
+          orderBy: { createdAt: "desc" },
+          include: { schedule: true }
         });
 
         return jsonResponse(200, {

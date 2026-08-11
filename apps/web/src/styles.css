@@ -421,8 +421,13 @@ a {
 }
 
 .address-row:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(10, 13, 21, 0.06), 0 12px 24px rgba(10, 13, 21, 0.1);
+  transform: translateY(-3px);
+  border-color: var(--teal-bright);
+  box-shadow: 0 4px 10px rgba(10, 13, 21, 0.08), 0 18px 36px rgba(5, 90, 95, 0.18);
+}
+
+.address-row:hover .address-row-icon {
+  transform: scale(1.08);
 }
 
 .address-row.is-covered {
@@ -451,6 +456,7 @@ a {
   line-height: 1;
   background: var(--teal-bright-wash);
   border: 1px solid var(--teal-wash);
+  transition: transform 0.12s ease, background 0.12s ease;
 }
 
 .address-row.is-covered .address-row-icon {
@@ -501,10 +507,94 @@ a {
   text-align: center;
 }
 
+.address-row.is-clickable {
+  cursor: pointer;
+}
+
+.address-row.is-clickable:focus-visible {
+  outline: 2px solid var(--teal-bright);
+  outline-offset: 2px;
+}
+
+.address-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.address-row-summary {
+  display: flex;
+  flex-direction: column;
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.address-row-schedule {
+  font-weight: 500;
+  color: var(--slate-2);
+}
+
+.address-row-chevron {
+  font-size: 1.7rem;
+  line-height: 1;
+  color: var(--teal-2);
+  transition: transform 0.12s ease;
+}
+
+.address-row.is-clickable:hover .address-row-chevron {
+  transform: translateX(3px);
+}
+
 .address-row-price {
   font-weight: 900;
   color: var(--ink);
   white-space: nowrap;
+}
+
+.checkbox-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0.9rem;
+  cursor: pointer;
+}
+
+.checkbox-field input[type="checkbox"] {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.15rem;
+  accent-color: var(--teal);
+  flex: none;
+}
+
+.checkbox-field > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.checkbox-field .subtext {
+  margin: 0;
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 0.4rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--teal-2);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.dash-page-head .coverage-badge {
+  margin-left: 0.5rem;
 }
 
 .address-row-price span {
