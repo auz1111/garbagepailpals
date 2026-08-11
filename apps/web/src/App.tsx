@@ -615,7 +615,9 @@ export function App() {
             <Route
               path="/admin/*"
               element={
-                user && accessToken ? <AdminWorkspace user={user} accessToken={accessToken} /> : null
+                user && accessToken ? (
+                  <AdminWorkspace user={user} accessToken={accessToken} refreshUser={refreshUser} />
+                ) : null
               }
             />
           </Route>

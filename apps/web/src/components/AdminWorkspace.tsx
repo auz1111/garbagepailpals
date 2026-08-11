@@ -22,6 +22,7 @@ import { OperatorDashboard } from "./OperatorDashboard";
 type AdminWorkspaceProps = {
   user: CurrentUser;
   accessToken: string;
+  refreshUser: () => Promise<void>;
 };
 
 export const ADMIN_NAV = [
@@ -42,7 +43,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.Element {
+export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspaceProps): JSX.Element {
   const queryClient = useQueryClient();
   const [stateFilter, setStateFilter] = useState<"ALL" | "OPEN" | "ACKNOWLEDGED" | "RESOLVED">("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "JOB" | "NOTIFICATION" | "WEBHOOK">("ALL");
@@ -101,6 +102,11 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     onSuccess: async (data) => {
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       queryClient.setQueryData(["admin-user", data.user.id], data);
+      // If we just edited our own account, refresh the session so role/operator
+      // access propagate to the nav and route guards immediately.
+      if (data.user.id === user.id) {
+        await refreshUser();
+      }
     }
   });
 
