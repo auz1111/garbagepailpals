@@ -36,6 +36,7 @@ type UserAggregateRow = {
   role: "CUSTOMER" | "OPERATOR" | "ADMIN";
   createdAt: Date;
   requestedServiceArea: string | null;
+  operatorAccess: boolean;
   serviceAddresses: AddressRow[];
   subscriptions: Array<{ status: string }>;
 };
@@ -62,6 +63,7 @@ function toAdminUser(row: UserAggregateRow) {
     role: row.role,
     createdAt: row.createdAt.toISOString(),
     requestedServiceArea: row.requestedServiceArea,
+    operatorAccess: row.operatorAccess,
     addressCount: row.serviceAddresses.length,
     activeSubscription: row.subscriptions.some((sub) => ACTIVE_SUB_STATUSES.includes(sub.status)),
     monthlyCents,
@@ -154,6 +156,9 @@ export async function adminUserByIdHandler(
               ...(input.role !== undefined ? { role: input.role } : {}),
               ...(input.requestedServiceArea !== undefined
                 ? { requestedServiceArea: input.requestedServiceArea }
+                : {}),
+              ...(input.operatorAccess !== undefined
+                ? { operatorAccess: input.operatorAccess }
                 : {})
             }
           });

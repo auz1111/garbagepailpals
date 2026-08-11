@@ -15,6 +15,7 @@ type AuthUser = {
   name: string;
   role: Role;
   requestedServiceArea: string | null;
+  operatorAccess: boolean;
 };
 
 export async function createUser(input: {
@@ -46,7 +47,8 @@ export async function createUser(input: {
     email: user.email,
     name: user.name,
     role: user.role,
-    requestedServiceArea: user.requestedServiceArea
+    requestedServiceArea: user.requestedServiceArea,
+    operatorAccess: user.operatorAccess
   };
 }
 
@@ -67,7 +69,8 @@ export async function authenticateUser(input: { email: string; password: string 
     email: user.email,
     name: user.name,
     role: user.role,
-    requestedServiceArea: user.requestedServiceArea
+    requestedServiceArea: user.requestedServiceArea,
+    operatorAccess: user.operatorAccess
   };
 }
 
@@ -138,7 +141,8 @@ export async function rotateRefreshToken(refreshToken: string): Promise<{
     email: existing.user.email,
     name: existing.user.name,
     role: existing.user.role,
-    requestedServiceArea: existing.user.requestedServiceArea
+    requestedServiceArea: existing.user.requestedServiceArea,
+    operatorAccess: existing.user.operatorAccess
   };
 
   const tokens = await issueSessionTokens(user);

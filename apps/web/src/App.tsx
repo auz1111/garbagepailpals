@@ -165,7 +165,11 @@ export function App() {
   const isAdmin = user?.role === "ADMIN";
   const showDashboardMenu =
     isAuthenticated && ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin);
-  const dashboardNav = isAdmin ? ADMIN_NAV : CUSTOMER_NAV;
+  const dashboardNav = isAdmin
+    ? user?.operatorAccess
+      ? [...ADMIN_NAV, { to: "/admin/operator", label: "Operator", icon: "🚛" }]
+      : ADMIN_NAV
+    : CUSTOMER_NAV;
   const dashboardMenuLabel = isAdmin ? "Admin" : "Dashboard";
 
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";

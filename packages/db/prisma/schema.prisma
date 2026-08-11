@@ -70,6 +70,7 @@ model User {
   paypalPayerId        String?
   revenueCatAppUserId  String?
   requestedServiceArea String?
+  operatorAccess       Boolean        @default(false)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   serviceAddresses     ServiceAddress[]

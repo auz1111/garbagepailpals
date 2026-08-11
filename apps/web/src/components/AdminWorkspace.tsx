@@ -16,6 +16,7 @@ import {
   resolveAdminIncident
 } from "../lib/api";
 import { TodaysRoute } from "./TodaysRoute";
+import { OperatorDashboard } from "./OperatorDashboard";
 
 type AdminWorkspaceProps = {
   user: CurrentUser;
@@ -582,6 +583,16 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       <Routes>
         <Route index element={renderDashboard()} />
         <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />
+        <Route
+          path="operator"
+          element={
+            user.operatorAccess ? (
+              <OperatorDashboard user={user} accessToken={accessToken} />
+            ) : (
+              <Navigate to="/admin" replace />
+            )
+          }
+        />
         <Route path="users" element={renderUsers()} />
         <Route path="users/:userId" element={renderUserDetail()} />
         <Route path="*" element={<Navigate to="/admin" replace />} />
@@ -606,6 +617,7 @@ function AdminUserDetail({
       phone: string | null;
       role: Role;
       requestedServiceArea: string | null;
+      operatorAccess: boolean;
     }
   ) => void;
   saving: boolean;
@@ -617,6 +629,7 @@ function AdminUserDetail({
   const [phone, setPhone] = useState(user.phone ?? "");
   const [role, setRole] = useState<Role>(user.role);
   const [area, setArea] = useState(user.requestedServiceArea ?? "");
+  const [operatorAccess, setOperatorAccess] = useState(user.operatorAccess);
   const [submitted, setSubmitted] = useState(false);
 
   const dirty =
@@ -624,7 +637,8 @@ function AdminUserDetail({
     email !== user.email ||
     phone !== (user.phone ?? "") ||
     role !== user.role ||
-    area !== (user.requestedServiceArea ?? "");
+    area !== (user.requestedServiceArea ?? "") ||
+    operatorAccess !== user.operatorAccess;
   const valid = name.trim().length > 0 && /.+@.+\..+/.test(email.trim());
 
   function handleSubmit(event: FormEvent): void {
@@ -638,7 +652,8 @@ function AdminUserDetail({
       email: email.trim(),
       phone: phone.trim() ? phone.trim() : null,
       role,
-      requestedServiceArea: area.trim() ? area.trim() : null
+      requestedServiceArea: area.trim() ? area.trim() : null,
+      operatorAccess: role === "ADMIN" ? operatorAccess : false
     });
   }
 
@@ -696,6 +711,21 @@ function AdminUserDetail({
               <option value="ADMIN">Admin</option>
             </select>
           </label>
+          {role === "ADMIN" ? (
+            <label className="checkbox-field">
+              <input
+                type="checkbox"
+                checked={operatorAccess}
+                onChange={(event) => setOperatorAccess(event.target.checked)}
+              />
+              <span>
+                <strong>Operator access</strong>
+                <span className="subtext">
+                  Adds an Operator dashboard to this admin's menu for servicing pickups.
+                </span>
+              </span>
+            </label>
+          ) : null}
           <label className="field-single">
             Name
             <input value={name} onChange={(event) => setName(event.target.value)} />

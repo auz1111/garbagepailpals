@@ -17,7 +17,7 @@ export async function meHandler(
     withAuth(async (_req, _ctx, auth) => {
       const dbUser = await prisma.user.findUnique({
         where: { id: auth.sub },
-        select: { requestedServiceArea: true }
+        select: { requestedServiceArea: true, operatorAccess: true }
       });
 
       const response = meResponseSchema.parse({
@@ -26,7 +26,8 @@ export async function meHandler(
           email: auth.email,
           name: auth.name,
           role: auth.role,
-          requestedServiceArea: dbUser?.requestedServiceArea ?? null
+          requestedServiceArea: dbUser?.requestedServiceArea ?? null,
+          operatorAccess: dbUser?.operatorAccess ?? false
         }
       });
 

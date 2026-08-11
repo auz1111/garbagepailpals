@@ -28,7 +28,9 @@ export const authResponseSchema = z.object({
     role: roleSchema,
     // Postal code the user requested service in when we don't operate there yet.
     // null/absent means no outstanding out-of-area request.
-    requestedServiceArea: z.string().nullable().optional()
+    requestedServiceArea: z.string().nullable().optional(),
+    // Admins can additionally be granted operator access (operator dashboard).
+    operatorAccess: z.boolean().optional().default(false)
   })
 });
 
@@ -343,6 +345,7 @@ export const adminUserSchema = z.object({
   role: roleSchema,
   createdAt: z.string(),
   requestedServiceArea: z.string().nullable(),
+  operatorAccess: z.boolean(),
   addressCount: z.number().int().nonnegative(),
   activeSubscription: z.boolean(),
   monthlyCents: z.number().int().nonnegative(),
@@ -385,7 +388,8 @@ export const adminUserUpdateSchema = z.object({
   email: z.string().email().max(200).optional(),
   phone: z.string().max(40).nullable().optional(),
   role: roleSchema.optional(),
-  requestedServiceArea: z.string().max(12).nullable().optional()
+  requestedServiceArea: z.string().max(12).nullable().optional(),
+  operatorAccess: z.boolean().optional()
 });
 
 // --- Today's route (admin) ------------------------------------------------
