@@ -643,6 +643,42 @@ a {
   display: none;
 }
 
+.panel.admin-summary {
+  background: linear-gradient(120deg, var(--teal), var(--teal-2));
+  border: 0;
+  color: #ffffff;
+  box-shadow: 0 10px 28px rgba(5, 90, 95, 0.28);
+}
+
+.admin-summary-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 2rem;
+}
+
+.admin-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.admin-summary .admin-stat-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gold-2);
+}
+
+.admin-summary .admin-stat strong {
+  font-size: 1.15rem;
+  color: #ffffff;
+}
+
+.admin-stat .coverage-badge {
+  align-self: flex-start;
+}
+
 .admin-loc-list {
   list-style: none;
   margin: 0.5rem 0 0;

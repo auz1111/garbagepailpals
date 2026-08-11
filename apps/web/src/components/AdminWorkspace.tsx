@@ -613,6 +613,39 @@ function AdminUserDetail({
         <p className="subtext">{user.email}</p>
       </div>
 
+      <article className="panel admin-summary">
+        <div className="admin-summary-stats">
+          <div className="admin-stat">
+            <span className="admin-stat-label">Role</span>
+            <strong>{ROLE_LABELS[user.role]}</strong>
+          </div>
+          <div className="admin-stat">
+            <span className="admin-stat-label">Locations</span>
+            <strong>{user.role === "CUSTOMER" ? user.addressCount : "—"}</strong>
+          </div>
+          <div className="admin-stat">
+            <span className="admin-stat-label">Plan</span>
+            {user.role === "CUSTOMER" ? (
+              <span
+                className={`coverage-badge ${user.activeSubscription ? "covered" : "uncovered"}`}
+              >
+                {user.activeSubscription ? "Active" : "None"}
+              </span>
+            ) : (
+              <strong>—</strong>
+            )}
+          </div>
+          <div className="admin-stat">
+            <span className="admin-stat-label">Monthly</span>
+            <strong>{user.role === "CUSTOMER" ? `${formatUsd(user.monthlyCents)}/mo` : "—"}</strong>
+          </div>
+          <div className="admin-stat">
+            <span className="admin-stat-label">Joined</span>
+            <strong>{new Date(user.createdAt).toLocaleDateString()}</strong>
+          </div>
+        </div>
+      </article>
+
       <form onSubmit={handleSubmit}>
         <article className="panel">
           <h3>Account information</h3>
@@ -661,22 +694,6 @@ function AdminUserDetail({
           {saveError ? <p className="error">{saveError}</p> : null}
         </article>
       </form>
-
-      <article className="panel">
-        <h3>Account summary</h3>
-        <ul className="meta-list compact">
-          <li>Role: {ROLE_LABELS[user.role]}</li>
-          <li>Locations: {user.role === "CUSTOMER" ? user.addressCount : "—"}</li>
-          <li>
-            Plan:{" "}
-            {user.role === "CUSTOMER" ? (user.activeSubscription ? "Active" : "None") : "—"}
-          </li>
-          <li>
-            Monthly: {user.role === "CUSTOMER" ? `${formatUsd(user.monthlyCents)}/mo` : "—"}
-          </li>
-          <li>Joined: {new Date(user.createdAt).toLocaleString()}</li>
-        </ul>
-      </article>
 
       <article className="panel">
         <div className="panel-head-row">
