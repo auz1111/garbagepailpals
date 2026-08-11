@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link, NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import {
   addressMonthlyCents,
@@ -13,7 +13,7 @@ import {
   type Role,
   type RegisterInput
 } from "@gpp/shared";
-import { getMe, login, refresh, register } from "./lib/api";
+import { getAdminLocations, getMe, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
@@ -167,6 +167,16 @@ export function App() {
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
   const isAdmin = user?.role === "ADMIN";
   const isOperator = user?.role === "OPERATOR";
+
+  // Admin alert: locations with no neighborhood assigned (drives the nav badge).
+  const adminLocationsQuery = useQuery({
+    queryKey: ["admin-locations"],
+    queryFn: async () => getAdminLocations(accessToken as string),
+    enabled: isAdmin && Boolean(accessToken)
+  });
+  const unassignedLocationCount = (adminLocationsQuery.data?.locations ?? []).filter(
+    (loc) => !loc.neighborhoodId
+  ).length;
   const showDashboardMenu =
     isAuthenticated &&
     ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
@@ -255,20 +265,31 @@ export function App() {
                 </button>
               </div>
               <nav className="drawer-nav">
-                {dashboardNav.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={"end" in item ? item.end : undefined}
-                    className={({ isActive }) => (isActive ? "drawer-link active" : "drawer-link")}
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <span className="drawer-link-icon" aria-hidden="true">
-                      {item.icon}
-                    </span>
-                    {item.label}
-                  </NavLink>
-                ))}
+                {dashboardNav.map((item) => {
+                  const badge =
+                    item.to === "/admin/neighborhoods" && unassignedLocationCount > 0
+                      ? unassignedLocationCount
+                      : null;
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={"end" in item ? item.end : undefined}
+                      className={({ isActive }) => (isActive ? "drawer-link active" : "drawer-link")}
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <span className="drawer-link-icon" aria-hidden="true">
+                        {item.icon}
+                      </span>
+                      {item.label}
+                      {badge !== null ? (
+                        <span className="drawer-link-badge" aria-label={`${badge} need attention`}>
+                          {badge}
+                        </span>
+                      ) : null}
+                    </NavLink>
+                  );
+                })}
               </nav>
             </aside>
           </div>

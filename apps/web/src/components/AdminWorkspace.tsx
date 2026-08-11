@@ -14,6 +14,7 @@ import {
   acknowledgeAdminIncident,
   assignAdminIncident,
   createAdminUser,
+  getAdminLocations,
   getAdminUser,
   getAdminUserAvailability,
   getAdminUsers,
@@ -75,6 +76,15 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
   const [sourceFilter, setSourceFilter] = useState<"ALL" | "JOB" | "NOTIFICATION" | "WEBHOOK">("ALL");
   const [severityFilter, setSeverityFilter] = useState<"ALL" | "WARN" | "CRITICAL">("ALL");
   const [ownerFilter, setOwnerFilter] = useState<"ALL" | "MINE" | "UNASSIGNED">("ALL");
+
+  // Locations with no neighborhood yet — surfaced as a banner on every admin page.
+  const adminLocationsQuery = useQuery({
+    queryKey: ["admin-locations"],
+    queryFn: async () => getAdminLocations(accessToken)
+  });
+  const unassignedLocationCount = (adminLocationsQuery.data?.locations ?? []).filter(
+    (loc) => !loc.neighborhoodId
+  ).length;
 
   const metricsQuery = useQuery({
     queryKey: ["admin-metrics"],
@@ -673,6 +683,23 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
 
   return (
     <section className="card role-shell customer-workspace">
+      {unassignedLocationCount > 0 ? (
+        <div className="update-banner is-warn" role="status">
+          <span className="update-banner-icon" aria-hidden="true">
+            🏘️
+          </span>
+          <div className="update-banner-text">
+            <strong>
+              {unassignedLocationCount} location{unassignedLocationCount === 1 ? "" : "s"} need a
+              neighborhood.
+            </strong>
+            <span>Assign each to a neighborhood so it can be added to routes.</span>
+          </div>
+          <Link to="/admin/neighborhoods" className="update-banner-cta">
+            Assign
+          </Link>
+        </div>
+      ) : null}
       <Routes>
         <Route index element={renderDashboard()} />
         <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />

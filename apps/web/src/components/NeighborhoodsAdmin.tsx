@@ -22,6 +22,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [locFilter, setLocFilter] = useState<"UNASSIGNED" | "ALL">("UNASSIGNED");
 
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
@@ -34,6 +35,8 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
 
   const neighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
   const locations = locationsQuery.data?.locations ?? [];
+  const unassignedLocations = locations.filter((loc) => !loc.neighborhoodId);
+  const visibleLocations = locFilter === "UNASSIGNED" ? unassignedLocations : locations;
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["neighborhoods"] });
@@ -177,17 +180,26 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
         )}
       </article>
 
-      <article className="panel">
-        <h3>Assign locations</h3>
-        <p className="subtext">Set which neighborhood each location belongs to.</p>
-        {locationsQuery.isLoading ? (
-          <p className="subtext">Loading locations…</p>
-        ) : locations.length === 0 ? (
-          <p className="subtext">No locations yet.</p>
-        ) : (
+      {unassignedLocations.length > 0 ? (
+        <article className="panel assign-attention">
+          <div className="panel-head-row">
+            <h3>
+              Locations needing a neighborhood
+              <span className="count-badge">{unassignedLocations.length}</span>
+            </h3>
+            <select
+              className="assign-loc-filter"
+              value={locFilter}
+              onChange={(event) => setLocFilter(event.target.value as "UNASSIGNED" | "ALL")}
+            >
+              <option value="UNASSIGNED">Unassigned only</option>
+              <option value="ALL">All locations</option>
+            </select>
+          </div>
+          <p className="subtext">Assign each location to a neighborhood so it can be added to routes.</p>
           <ul className="assign-loc-list">
-            {locations.map((loc) => (
-              <li className="assign-loc" key={loc.id}>
+            {visibleLocations.map((loc) => (
+              <li className={`assign-loc${loc.neighborhoodId ? "" : " is-unassigned"}`} key={loc.id}>
                 <div className="assign-loc-main">
                   <strong>{loc.line1}</strong>
                   <span className="admin-table-sub">
@@ -213,9 +225,9 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
               </li>
             ))}
           </ul>
-        )}
-        {assignMutation.isError ? <p className="error">{getErrorMessage(assignMutation.error)}</p> : null}
-      </article>
+          {assignMutation.isError ? <p className="error">{getErrorMessage(assignMutation.error)}</p> : null}
+        </article>
+      ) : null}
     </div>
   );
 }

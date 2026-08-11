@@ -1012,6 +1012,51 @@ a {
   flex-wrap: wrap;
 }
 
+/* Alert bubble on a drawer nav link (e.g. Neighborhoods needing assignment). */
+.drawer-link-badge {
+  margin-left: auto;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.35rem;
+  border-radius: var(--pill);
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* "Locations needing a neighborhood" — a prominent, attention-grabbing panel. */
+.assign-attention {
+  border-left: 5px solid var(--gold);
+  background: #fffdf5;
+}
+
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border-radius: var(--pill);
+  background: var(--gold);
+  color: var(--teal-deep);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.assign-loc-filter {
+  max-width: 12rem;
+}
+
+.assign-loc.is-unassigned {
+  border-left: 3px solid var(--gold);
+}
+
 /* Admin assigned-route row: expandable head + remove/lock action */
 .assigned-route-row {
   display: flex;
