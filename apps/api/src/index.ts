@@ -4,9 +4,9 @@ import { loginHandler, refreshHandler, registerHandler } from "./routes/auth";
 import { meHandler } from "./routes/protected";
 import { requestServiceAreaHandler, serviceAreaCheckHandler } from "./routes/domain/serviceAreas";
 import {
+  addressByIdHandler,
   addressHoldsHandler,
   addressesRootHandler,
-  updateAddressHandler,
   upsertScheduleHandler
 } from "./routes/domain/addresses";
 import { generateJobsHandler, historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
@@ -14,6 +14,7 @@ import { nightlySchedulerHandler } from "./timers/nightlyScheduler";
 import { reminderSweepHandler } from "./timers/reminders";
 import {
   billingSummaryHandler,
+  confirmPayPalSubscriptionHandler,
   createPayPalSubscriptionHandler,
   createStripeCheckoutHandler,
   createStripePortalHandler,
@@ -161,11 +162,11 @@ app.http("addresses", {
   handler: addressesRootHandler
 });
 
-app.http("address-update", {
+app.http("address-by-id", {
   route: "addresses/{addressId}",
-  methods: ["PATCH", "OPTIONS"],
+  methods: ["PATCH", "DELETE", "OPTIONS"],
   authLevel: "anonymous",
-  handler: updateAddressHandler
+  handler: addressByIdHandler
 });
 
 app.http("address-schedule-upsert", {
@@ -236,6 +237,13 @@ app.http("paypal-subscription", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: createPayPalSubscriptionHandler
+});
+
+app.http("paypal-subscription-confirm", {
+  route: "payments/paypal/confirm",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: confirmPayPalSubscriptionHandler
 });
 
 app.http("webhooks-stripe", {

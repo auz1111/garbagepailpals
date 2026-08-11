@@ -202,6 +202,52 @@ export async function revisePayPalSubscription(
   return { amountCents, approvalUrl };
 }
 
+// Verify a subscription directly with PayPal on return from approval, so we can
+// activate immediately instead of waiting for the (often delayed) webhook.
+export async function confirmPayPalSubscription(
+  userId: string,
+  subscriptionId: string
+): Promise<{ status: string; active: boolean }> {
+  const token = await getPayPalAccessToken();
+  const response = await fetch(`${getPayPalBaseUrl()}/v1/billing/subscriptions/${subscriptionId}`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!response.ok) {
+    throw new HttpError(400, `Could not verify PayPal subscription (${response.status})`);
+  }
+
+  const sub = (await response.json()) as {
+    status?: string;
+    custom_id?: string;
+    billing_info?: { next_billing_time?: string };
+  };
+
+  // Guard: the subscription must belong to this user.
+  if (sub.custom_id && sub.custom_id !== userId) {
+    throw new HttpError(403, "Subscription does not belong to this account");
+  }
+
+  const status = sub.status ?? "UNKNOWN";
+  const active = status === "ACTIVE" || status === "APPROVED";
+
+  if (active) {
+    await grantEntitlement(userId, "PAYPAL", subscriptionId, null, {
+      id: `paypal-confirm-${subscriptionId}`,
+      event_type: "CONFIRM_ON_RETURN",
+      resource: sub
+    });
+    await activateSubscriptionsForUser(userId, {
+      source: "PAYPAL",
+      externalSubscriptionId: subscriptionId,
+      currentPeriodEnd: sub.billing_info?.next_billing_time
+        ? new Date(sub.billing_info.next_billing_time)
+        : null
+    });
+  }
+
+  return { status, active };
+}
+
 export async function verifyPayPalWebhookSignature(args: {
   headers: Headers;
   body: unknown;

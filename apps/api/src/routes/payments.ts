@@ -1,4 +1,5 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { z } from "zod";
 import { prisma } from "@gpp/db";
 import {
   billingSummarySchema,
@@ -14,7 +15,13 @@ import {
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { getBillingSummary } from "../services/billing";
-import { createPayPalSubscription, revisePayPalSubscription } from "../services/paypal";
+import {
+  confirmPayPalSubscription,
+  createPayPalSubscription,
+  revisePayPalSubscription
+} from "../services/paypal";
+
+const paypalConfirmSchema = z.object({ subscriptionId: z.string().min(1) });
 import {
   createStripeCheckoutSession,
   createStripePortalSession,
@@ -122,6 +129,24 @@ export async function createStripePortalHandler(
       });
 
       return jsonResponse(200, stripePortalResponseSchema.parse(result));
+    })(request, context)
+  );
+}
+
+export async function confirmPayPalSubscriptionHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(async (req, _ctx, auth) => {
+      const { subscriptionId } = await parseJson(req, paypalConfirmSchema);
+      const result = await confirmPayPalSubscription(auth.sub, subscriptionId);
+      return jsonResponse(200, result);
     })(request, context)
   );
 }

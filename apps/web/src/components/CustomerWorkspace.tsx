@@ -8,6 +8,7 @@ import {
   ApiError,
   checkServiceArea,
   createAddress,
+  confirmPayPalSubscription,
   createPayPalSubscription,
   createStripeCheckout,
   createStripePortal,
@@ -18,6 +19,7 @@ import {
   listHistoryJobs,
   listUpcomingJobs,
   updateAddress,
+  deleteAddress,
   upsertAddressSchedule
 } from "../lib/api";
 
@@ -124,6 +126,15 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
+    }
+  });
+
+  const deleteAddressMutation = useMutation({
+    mutationFn: (id: string) => deleteAddress(id, accessToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
     }
   });
 
@@ -236,7 +247,9 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   // async — poll-refetch the session + queries so the UI reflects it without a
   // manual reload, then strip the marker from the URL.
   useEffect(() => {
-    const checkout = new URLSearchParams(location.search).get("checkout");
+    const params = new URLSearchParams(location.search);
+    const checkout = params.get("checkout");
+    const paypalSubscriptionId = params.get("subscription_id");
     if (!checkout) {
       return;
     }
@@ -248,6 +261,15 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     let cancelled = false;
     setFinalizingCheckout(true);
     void (async () => {
+      // PayPal returns a subscription_id — confirm it directly rather than waiting
+      // on the (often slow) webhook, so activation shows immediately.
+      if (paypalSubscriptionId) {
+        try {
+          await confirmPayPalSubscription(paypalSubscriptionId, accessToken);
+        } catch {
+          // Fall back to the poll below if confirmation fails transiently.
+        }
+      }
       for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
         await refreshUser();
         await Promise.all([
@@ -615,32 +637,75 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             <form onSubmit={addressForm.handleSubmit((values) => createAddressMutation.mutate(values))}>
               <label>
                 Line 1
-                <input {...addressForm.register("line1")} placeholder="123 Main St" />
+                <input
+                  {...addressForm.register("line1", { required: "Street address is required" })}
+                  placeholder="123 Main St"
+                />
               </label>
+              {addressForm.formState.errors.line1 ? (
+                <p className="error">{addressForm.formState.errors.line1.message}</p>
+              ) : null}
               <label>
                 City
-                <input {...addressForm.register("city")} placeholder="Portland" />
+                <input {...addressForm.register("city", { required: "City is required" })} placeholder="Portland" />
               </label>
+              {addressForm.formState.errors.city ? (
+                <p className="error">{addressForm.formState.errors.city.message}</p>
+              ) : null}
               <label>
                 State
-                <input {...addressForm.register("state")} placeholder="OR" />
+                <input
+                  {...addressForm.register("state", {
+                    required: "State is required",
+                    minLength: { value: 2, message: "Use the 2-letter state code" }
+                  })}
+                  placeholder="OR"
+                />
               </label>
+              {addressForm.formState.errors.state ? (
+                <p className="error">{addressForm.formState.errors.state.message}</p>
+              ) : null}
               <label>
                 Postal code
-                <input {...addressForm.register("postalCode")} placeholder="97702" />
+                <input
+                  {...addressForm.register("postalCode", {
+                    required: "Postal code is required",
+                    minLength: { value: 3, message: "Enter a valid postal code" }
+                  })}
+                  placeholder="97702"
+                />
               </label>
+              {addressForm.formState.errors.postalCode ? (
+                <p className="error">{addressForm.formState.errors.postalCode.message}</p>
+              ) : null}
               <label>
                 Timezone
-                <input {...addressForm.register("timezone")} placeholder="America/Los_Angeles" />
+                <input
+                  {...addressForm.register("timezone", { required: "Timezone is required" })}
+                  placeholder="America/Los_Angeles"
+                />
               </label>
               <label>
                 Access notes
-                <input {...addressForm.register("accessNotes")} placeholder="Gate opens inward" />
+                <input
+                  {...addressForm.register("accessNotes", { required: "Add a note for the operator" })}
+                  placeholder="Gate opens inward"
+                />
               </label>
               <div className="field-row">
                 <label>
                   Cans
-                  <input type="number" min={1} max={20} {...addressForm.register("canCount", { valueAsNumber: true })} />
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    {...addressForm.register("canCount", {
+                      valueAsNumber: true,
+                      required: "Required",
+                      min: { value: 1, message: "Min 1" },
+                      max: { value: 20, message: "Max 20" }
+                    })}
+                  />
                 </label>
                 <label>
                   Pickups per week
@@ -648,10 +713,21 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                     type="number"
                     min={1}
                     max={7}
-                    {...addressForm.register("pickupsPerWeek", { valueAsNumber: true })}
+                    {...addressForm.register("pickupsPerWeek", {
+                      valueAsNumber: true,
+                      required: "Required",
+                      min: { value: 1, message: "Min 1" },
+                      max: { value: 7, message: "Max 7" }
+                    })}
                   />
                 </label>
               </div>
+              {addressForm.formState.errors.canCount || addressForm.formState.errors.pickupsPerWeek ? (
+                <p className="error">
+                  {addressForm.formState.errors.canCount?.message ??
+                    addressForm.formState.errors.pickupsPerWeek?.message}
+                </p>
+              ) : null}
               <p className="subtext">
                 Defaults to {PRICING.includedCansPerAddress} cans, 1 pickup/week. More cans or pickup
                 days increase your monthly cost.
@@ -674,13 +750,24 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                   saving={
                     updateAddressMutation.isPending && updateAddressMutation.variables?.id === address.id
                   }
+                  removing={
+                    deleteAddressMutation.isPending && deleteAddressMutation.variables === address.id
+                  }
                   onSave={(id, patch) => updateAddressMutation.mutate({ id, patch })}
+                  onRemove={(id) => {
+                    if (window.confirm("Remove this address? This also cancels its scheduled pickups.")) {
+                      deleteAddressMutation.mutate(id);
+                    }
+                  }}
                 />
               ))}
             </ul>
             {!hasAddress ? <p className="subtext">No addresses yet — add your first one.</p> : null}
             {updateAddressMutation.isError ? (
               <p className="error">{getErrorMessage(updateAddressMutation.error)}</p>
+            ) : null}
+            {deleteAddressMutation.isError ? (
+              <p className="error">{getErrorMessage(deleteAddressMutation.error)}</p>
             ) : null}
             {addressesQuery.isError ? <p className="error">{getErrorMessage(addressesQuery.error)}</p> : null}
           </article>
@@ -830,11 +917,15 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
 function AddressRow({
   address,
   saving,
-  onSave
+  removing,
+  onSave,
+  onRemove
 }: {
   address: ServiceAddress;
   saving: boolean;
+  removing: boolean;
   onSave: (id: string, patch: { canCount: number; pickupsPerWeek: number }) => void;
+  onRemove: (id: string) => void;
 }): JSX.Element {
   const [cans, setCans] = useState(address.canCount);
   const [days, setDays] = useState(address.pickupsPerWeek);
@@ -873,6 +964,15 @@ function AddressRow({
           onClick={() => onSave(address.id, { canCount: cans, pickupsPerWeek: days })}
         >
           {saving ? "Saving..." : "Save"}
+        </button>
+        <button
+          type="button"
+          className="address-row-remove"
+          disabled={removing}
+          aria-label="Remove address"
+          onClick={() => onRemove(address.id)}
+        >
+          {removing ? "Removing..." : "Remove"}
         </button>
       </div>
     </li>

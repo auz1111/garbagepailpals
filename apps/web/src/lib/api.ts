@@ -50,7 +50,7 @@ export class ApiError extends Error {
 
 async function request<TBody, TResponse>(
   path: string,
-  method: "GET" | "POST" | "PATCH" | "PUT",
+  method: "GET" | "POST" | "PATCH" | "PUT" | "DELETE",
   body?: TBody,
   accessToken?: string
 ): Promise<TResponse> {
@@ -263,6 +263,10 @@ export function updateAddress(
   );
 }
 
+export function deleteAddress(addressId: string, accessToken: string): Promise<{ deleted: boolean }> {
+  return request<undefined, { deleted: boolean }>(`/addresses/${addressId}`, "DELETE", undefined, accessToken);
+}
+
 export function upsertAddressSchedule(
   addressId: string,
   input: ServiceScheduleInput,
@@ -324,6 +328,18 @@ export function createStripePortal(
     "/payments/stripe/customer-portal",
     "POST",
     input,
+    accessToken
+  );
+}
+
+export function confirmPayPalSubscription(
+  subscriptionId: string,
+  accessToken: string
+): Promise<{ status: string; active: boolean }> {
+  return request<{ subscriptionId: string }, { status: string; active: boolean }>(
+    "/payments/paypal/confirm",
+    "POST",
+    { subscriptionId },
     accessToken
   );
 }

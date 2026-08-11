@@ -8,7 +8,7 @@ import {
   serviceScheduleInputSchema,
   serviceScheduleSchema
 } from "@gpp/shared";
-import { handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
+import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
 
 function toAddressResponse(address: {
@@ -61,6 +61,17 @@ export async function createAddressHandler(
 
         if (!allowedArea?.isActive) {
           return jsonResponse(400, { message: "Address is outside the service area" });
+        }
+
+        const duplicate = await prisma.serviceAddress.findFirst({
+          where: {
+            userId: auth.sub,
+            postalCode: input.postalCode,
+            line1: { equals: input.line1.trim(), mode: "insensitive" }
+          }
+        });
+        if (duplicate) {
+          throw new HttpError(409, "You've already added this address.");
         }
 
         const created = await prisma.serviceAddress.create({
@@ -160,6 +171,53 @@ export async function updateAddressHandler(
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)
   );
+}
+
+export async function deleteAddressHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const addressId = req.params.addressId;
+        if (!addressId) {
+          return jsonResponse(400, { message: "addressId is required" });
+        }
+
+        const existing = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
+        if (!existing) {
+          return jsonResponse(404, { message: "Address not found" });
+        }
+        if (auth.role !== "ADMIN" && existing.userId !== auth.sub) {
+          return jsonResponse(403, { message: "Forbidden" });
+        }
+
+        // Schedule, holds, subscriptions, and jobs cascade-delete with the address.
+        await prisma.serviceAddress.delete({ where: { id: addressId } });
+
+        return jsonResponse(200, { deleted: true });
+      },
+      { roles: ["CUSTOMER", "ADMIN"] }
+    )(request, context)
+  );
+}
+
+// One Azure Functions route can't host two functions, so /addresses/{addressId}
+// is dispatched here by method.
+export async function addressByIdHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  if (request.method.toUpperCase() === "DELETE") {
+    return deleteAddressHandler(request, context);
+  }
+  return updateAddressHandler(request, context);
 }
 
 export async function upsertScheduleHandler(

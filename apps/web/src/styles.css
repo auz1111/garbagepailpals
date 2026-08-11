@@ -480,6 +480,26 @@ a {
   border-color: var(--ink);
 }
 
+.address-row-remove {
+  border: 1px solid var(--line-2);
+  border-radius: var(--pill);
+  padding: 0.5rem 0.9rem;
+  background: var(--surface);
+  color: var(--danger);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.address-row-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.address-row-remove:not(:disabled):hover {
+  border-color: var(--danger);
+  background: #fff1f0;
+}
+
 /* Billing price breakdown */
 .price-breakdown {
   list-style: none;

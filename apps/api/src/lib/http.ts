@@ -17,7 +17,7 @@ export function jsonResponse(status: number, body: unknown): HttpResponseInit {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": process.env.WEB_ORIGIN ?? "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,OPTIONS"
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS"
   };
 
   // 204/205/304 responses must not include a response body.
