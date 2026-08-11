@@ -364,6 +364,7 @@ export const adminUserLocationSchema = z.object({
   city: z.string(),
   state: z.string(),
   postalCode: z.string(),
+  neighborhoodId: z.string().nullable(),
   monthlyCents: z.number().int().nonnegative(),
   pickups: z.array(
     z.object({

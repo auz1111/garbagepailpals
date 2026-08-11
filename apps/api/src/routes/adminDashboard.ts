@@ -35,6 +35,7 @@ type AddressRow = {
   city: string;
   state: string;
   postalCode: string;
+  neighborhoodId: string | null;
   schedules: ScheduleRow[];
 };
 
@@ -92,6 +93,7 @@ function toAdminUserDetail(row: UserAggregateRow) {
       city: address.city,
       state: address.state,
       postalCode: address.postalCode,
+      neighborhoodId: address.neighborhoodId,
       monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
       pickups: [...address.schedules]
         .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)

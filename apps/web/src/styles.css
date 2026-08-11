@@ -903,6 +903,30 @@ a {
   margin-top: 0.75rem;
 }
 
+.admin-loc-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-loc-hood {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--pill);
+  background: var(--teal);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.admin-loc-hood-empty {
+  background: transparent;
+  color: var(--ink-soft);
+  border: 1px dashed var(--line-2);
+  font-weight: 600;
+}
+
 .admin-schedule-editor {
   margin-top: 0.75rem;
   padding-top: 0.75rem;

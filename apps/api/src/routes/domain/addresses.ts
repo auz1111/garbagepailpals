@@ -224,9 +224,29 @@ export async function updateAddressHandler(
           }
         }
 
+        // If any part of the street address changed, re-geocode so routing keeps
+        // accurate coordinates. Fall back to the existing lat/lng on lookup failure.
+        const addressChanged =
+          input.line1 !== undefined ||
+          input.city !== undefined ||
+          input.state !== undefined ||
+          input.postalCode !== undefined;
+        let coords: { lat: number; lng: number } | undefined;
+        if (addressChanged) {
+          const geocoded = await geocodeAddressParts({
+            line1: input.line1 ?? existing.line1,
+            city: input.city ?? existing.city,
+            state: input.state ?? existing.state,
+            postalCode: input.postalCode ?? existing.postalCode
+          });
+          if (geocoded) {
+            coords = { lat: geocoded.lat, lng: geocoded.lng };
+          }
+        }
+
         const updated = await prisma.serviceAddress.update({
           where: { id: addressId },
-          data: input,
+          data: { ...input, ...(coords ?? {}) },
           include: { schedules: true }
         });
 

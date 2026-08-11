@@ -17,7 +17,10 @@ import {
   getAdminUser,
   getAdminUserAvailability,
   getAdminUsers,
+  getNeighborhoods,
   setAdminUserAvailability,
+  setLocationNeighborhood,
+  updateAddress,
   updateAddressSchedule,
   updateAdminUser,
   getAdminDashboardMetrics,
@@ -918,15 +921,62 @@ function AdminLocationCard({
 }): JSX.Element {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
+
+  const neighborhoodsQuery = useQuery({
+    queryKey: ["neighborhoods"],
+    queryFn: async () => getNeighborhoods(accessToken)
+  });
+  const neighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
+  const neighborhoodName = loc.neighborhoodId
+    ? neighborhoods.find((n) => n.id === loc.neighborhoodId)?.name
+    : null;
+
+  const refreshLists = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["admin-user", userId] });
+    await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+  };
 
   const scheduleMutation = useMutation({
     mutationFn: (days: PickupDayInput[]) => updateAddressSchedule(loc.id, { days }, accessToken),
     onSuccess: async () => {
       // Schedule changes reprice the location, so refresh both the detail and
       // the users list (its monthly totals).
-      await queryClient.invalidateQueries({ queryKey: ["admin-user", userId] });
-      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      await refreshLists();
       setEditing(false);
+    }
+  });
+
+  const addressMutation = useMutation({
+    mutationFn: async (patch: {
+      line1: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      neighborhoodId: string | null;
+    }) => {
+      const addressChanged =
+        patch.line1 !== loc.line1 ||
+        patch.city !== loc.city ||
+        patch.state !== loc.state ||
+        patch.postalCode !== loc.postalCode;
+      if (addressChanged) {
+        await updateAddress(
+          loc.id,
+          { line1: patch.line1, city: patch.city, state: patch.state, postalCode: patch.postalCode },
+          accessToken
+        );
+      }
+      if (patch.neighborhoodId !== (loc.neighborhoodId ?? null)) {
+        await setLocationNeighborhood(loc.id, patch.neighborhoodId, accessToken);
+      }
+    },
+    onSuccess: async () => {
+      await refreshLists();
+      // Neighborhood counts changed, so refresh those views too.
+      await queryClient.invalidateQueries({ queryKey: ["neighborhoods"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
+      setEditingAddress(false);
     }
   });
 
@@ -934,13 +984,31 @@ function AdminLocationCard({
     <li className="admin-loc-card">
       <div className="admin-loc-head">
         <div>
-          <strong>{loc.line1}</strong>
+          <div className="admin-loc-title">
+            <strong>{loc.line1}</strong>
+            {loc.neighborhoodId ? (
+              <span className="admin-loc-hood">🏘️ {neighborhoodName ?? "Neighborhood"}</span>
+            ) : (
+              <span className="admin-loc-hood admin-loc-hood-empty">No neighborhood</span>
+            )}
+          </div>
           <span className="admin-table-sub">
             {loc.city}, {loc.state} {loc.postalCode}
           </span>
         </div>
         <span className="admin-loc-price">{formatUsd(loc.monthlyCents)}/mo</span>
       </div>
+
+      {editingAddress ? (
+        <AdminAddressEditorForm
+          loc={loc}
+          neighborhoods={neighborhoods}
+          saving={addressMutation.isPending}
+          error={addressMutation.isError ? getErrorMessage(addressMutation.error) : null}
+          onCancel={() => setEditingAddress(false)}
+          onSave={(patch) => addressMutation.mutate(patch)}
+        />
+      ) : null}
 
       {loc.pickups.length === 0 ? (
         <p className="subtext">No pickup schedule set.</p>
@@ -967,14 +1035,113 @@ function AdminLocationCard({
           onCancel={() => setEditing(false)}
           onSave={(days) => scheduleMutation.mutate(days)}
         />
-      ) : (
+      ) : editingAddress ? null : (
         <div className="admin-loc-actions">
           <button type="button" className="ghost-btn" onClick={() => setEditing(true)}>
             Edit schedule
           </button>
+          <button type="button" className="ghost-btn" onClick={() => setEditingAddress(true)}>
+            Edit address
+          </button>
         </div>
       )}
     </li>
+  );
+}
+
+function AdminAddressEditorForm({
+  loc,
+  neighborhoods,
+  saving,
+  error,
+  onCancel,
+  onSave
+}: {
+  loc: AdminLocation;
+  neighborhoods: { id: string; name: string }[];
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSave: (patch: {
+    line1: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    neighborhoodId: string | null;
+  }) => void;
+}): JSX.Element {
+  const [line1, setLine1] = useState(loc.line1);
+  const [city, setCity] = useState(loc.city);
+  const [state, setState] = useState(loc.state);
+  const [postalCode, setPostalCode] = useState(loc.postalCode);
+  const [neighborhoodId, setNeighborhoodId] = useState(loc.neighborhoodId ?? "");
+
+  const valid =
+    line1.trim().length > 0 &&
+    city.trim().length > 0 &&
+    state.trim().length >= 2 &&
+    postalCode.trim().length >= 3;
+  const dirty =
+    line1.trim() !== loc.line1 ||
+    city.trim() !== loc.city ||
+    state.trim() !== loc.state ||
+    postalCode.trim() !== loc.postalCode ||
+    (neighborhoodId || null) !== (loc.neighborhoodId ?? null);
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    if (!valid || !dirty) return;
+    onSave({
+      line1: line1.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      postalCode: postalCode.trim(),
+      neighborhoodId: neighborhoodId || null
+    });
+  }
+
+  return (
+    <form className="admin-schedule-editor" onSubmit={handleSubmit}>
+      <label className="field-single">
+        Street address
+        <input value={line1} onChange={(event) => setLine1(event.target.value)} />
+      </label>
+      <div className="field-row">
+        <label>
+          City
+          <input value={city} onChange={(event) => setCity(event.target.value)} />
+        </label>
+        <label>
+          State
+          <input value={state} onChange={(event) => setState(event.target.value)} />
+        </label>
+        <label>
+          ZIP
+          <input value={postalCode} onChange={(event) => setPostalCode(event.target.value)} />
+        </label>
+      </div>
+      <label className="field-single">
+        Neighborhood
+        <select value={neighborhoodId} onChange={(event) => setNeighborhoodId(event.target.value)}>
+          <option value="">Unassigned</option>
+          {neighborhoods.map((n) => (
+            <option key={n.id} value={n.id}>
+              {n.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="subtext">Saving re-checks the service area and updates map coordinates.</p>
+      <div className="admin-loc-actions">
+        <button type="submit" className="cta-primary" disabled={!valid || !dirty || saving}>
+          {saving ? "Saving…" : "Update address"}
+        </button>
+        <button type="button" className="ghost-btn" onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+      {error ? <p className="error">{error}</p> : null}
+    </form>
   );
 }
 
