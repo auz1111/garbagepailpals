@@ -58,7 +58,7 @@ const defaultScheduleValues: ServiceScheduleInput = {
 export const CUSTOMER_NAV = [
   { to: "/customer", label: "Overview", icon: "🏡", end: true },
   { to: "/customer/billing", label: "Billing", icon: "💳" },
-  { to: "/customer/addresses", label: "Addresses", icon: "🏠" },
+  { to: "/customer/addresses", label: "Locations", icon: "🏠" },
   { to: "/customer/schedule", label: "Schedule", icon: "🗓️" },
   { to: "/customer/jobs", label: "Upcoming Jobs", icon: "🚚" },
   { to: "/customer/history", label: "History", icon: "🕓" }
@@ -600,15 +600,15 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     return (
       <div className="dash-page">
         <div className="dash-page-head">
-          <h2>Addresses</h2>
-          <p className="subtext">Add a pickup location and review your saved addresses.</p>
+          <h2>Locations</h2>
+          <p className="subtext">Add a pickup location and review your saved locations.</p>
         </div>
 
         <div className={formOpen && hasAddress ? "panel-grid" : ""}>
           {formOpen ? (
           <article className="panel">
             <div className="panel-head-row">
-              <h3>Add Service Address</h3>
+              <h3>Add Service Location</h3>
               {hasAddress ? (
                 <button type="button" className="link-inline" onClick={closeAddressForm}>
                   Cancel
@@ -723,7 +723,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 days increase your monthly cost.
               </p>
               <button type="submit" disabled={createAddressMutation.isPending}>
-                {createAddressMutation.isPending ? "Saving..." : "Save Address"}
+                {createAddressMutation.isPending ? "Saving..." : "Save Location"}
               </button>
             </form>
             {createAddressMutation.isError ? <p className="error">{getErrorMessage(createAddressMutation.error)}</p> : null}
@@ -733,17 +733,17 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
           {hasAddress ? (
           <article className="panel">
             <div className="panel-head-row">
-              <h3>Your Addresses</h3>
+              <h3>Your Locations</h3>
               {!showAddressForm ? (
                 <button type="button" className="add-address-btn" onClick={() => setShowAddressForm(true)}>
-                  + Add Address
+                  + Add Location
                 </button>
               ) : null}
             </div>
-            <p className="subtext">Adjust cans and pickup days per address — billing updates to match.</p>
+            <p className="subtext">Adjust cans and pickup days per location — billing updates to match.</p>
             {summary && uncoveredCount > 0 ? (
               <p className="notice">
-                {uncoveredCount === 1 ? "1 address isn't" : `${uncoveredCount} addresses aren't`} being
+                {uncoveredCount === 1 ? "1 location isn't" : `${uncoveredCount} locations aren't`} being
                 serviced yet because {uncoveredCount === 1 ? "it isn't" : "they aren't"} included in
                 your billing.{" "}
                 <Link to="/customer/billing">
@@ -766,7 +766,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                   }
                   onSave={(id, patch) => updateAddressMutation.mutate({ id, patch })}
                   onRemove={(id) => {
-                    if (window.confirm("Remove this address? This also cancels its scheduled pickups.")) {
+                    if (window.confirm("Remove this location? This also cancels its scheduled pickups.")) {
                       deleteAddressMutation.mutate(id);
                     }
                   }}
