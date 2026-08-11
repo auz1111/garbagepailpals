@@ -56,7 +56,7 @@ const defaultScheduleValues: ServiceScheduleInput = {
 };
 
 export const CUSTOMER_NAV = [
-  { to: "/customer", label: "Overview", icon: "🏡", end: true },
+  { to: "/customer", label: "Dashboard", icon: "🧭", end: true },
   { to: "/customer/billing", label: "Billing", icon: "💳" },
   { to: "/customer/addresses", label: "Locations", icon: "🏠" },
   { to: "/customer/schedule", label: "Schedule", icon: "🗓️" },
@@ -344,7 +344,10 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       );
     }
 
-    const allOk = subscriptionActive && hasAddress;
+    const summary = billingSummaryQuery.data;
+    const uncoveredCount = summary?.uncoveredCount ?? 0;
+    const hasUncovered = Boolean(summary?.active) && uncoveredCount > 0;
+    const allOk = subscriptionActive && hasAddress && !hasUncovered;
 
     return (
       <div className={`account-status ${allOk ? "is-ok" : "is-warn"}`}>
@@ -374,16 +377,23 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
               }
             >
               {!subscriptionActive ? (
-                "Service address — activate your subscription first"
+                "Locations — activate your subscription first"
               ) : hasAddress ? (
-                `${addresses.length} service address${addresses.length === 1 ? "" : "es"} added`
+                `${addresses.length} location${addresses.length === 1 ? "" : "s"} added`
               ) : (
                 <>
-                  No service address yet — <Link to="/customer/addresses">add one</Link> so we can
-                  schedule pickups.
+                  No location yet — <Link to="/customer/addresses">add one</Link> so we can schedule
+                  pickups.
                 </>
               )}
             </li>
+            {hasUncovered ? (
+              <li className="bad">
+                {uncoveredCount === 1 ? "1 location isn't" : `${uncoveredCount} locations aren't`} on
+                your plan — <Link to="/customer/billing">update your subscription</Link> to service{" "}
+                {uncoveredCount === 1 ? "it" : "them"}.
+              </li>
+            ) : null}
           </ul>
         </div>
       </div>
@@ -414,100 +424,56 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     );
   }
 
-  function renderBillingStatus(summary: NonNullable<typeof billingSummaryQuery.data>): JSX.Element {
-    if (summary.pastDue) {
-      return (
-        <div className="account-status is-warn">
-          <span className="account-status-icon" aria-hidden="true">⚠️</span>
-          <div className="account-status-body">
-            <strong>Payment past due</strong>
-            <p className="subtext">Update your payment method to keep your pickups running.</p>
-          </div>
-        </div>
-      );
-    }
-    if (summary.active) {
-      return (
-        <div className="account-status is-ok">
-          <span className="account-status-icon" aria-hidden="true">✅</span>
-          <div className="account-status-body">
-            <strong>Subscription active — {formatUsd(summary.coveredMonthlyCents)}/mo</strong>
-            <p className="subtext">
-              Billed via {summary.source ?? "card"}
-              {summary.currentPeriodEnd
-                ? ` · renews ${new Date(summary.currentPeriodEnd).toLocaleDateString()}`
-                : ""}
-              .
-            </p>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="account-status is-warn">
-        <span className="account-status-icon" aria-hidden="true">⚠️</span>
-        <div className="account-status-body">
-          <strong>No active subscription yet</strong>
-          <p className="subtext">
-            {summary.addresses.length > 0
-              ? "Activate below to start service."
-              : "Add a service address, then activate."}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  function renderBilling(): JSX.Element {
-    const summary = billingSummaryQuery.data;
-    const extraCents = summary ? summary.totalMonthlyCents - summary.coveredMonthlyCents : 0;
+  function renderSubscriptionCard(summary: NonNullable<typeof billingSummaryQuery.data>): JSX.Element {
+    const tone = summary.pastDue || !summary.active ? "warn" : "ok";
+    const icon = summary.pastDue ? "⚠️" : summary.active ? "✅" : "🕓";
+    const headline = summary.pastDue
+      ? "Payment past due"
+      : summary.active
+        ? `Subscription active — ${formatUsd(summary.billedMonthlyCents)}/mo`
+        : "No active subscription";
+    const meta = summary.pastDue
+      ? "Update your payment method to keep your pickups running."
+      : summary.active
+        ? `Billed via ${summary.source ?? "card"}${
+            summary.currentPeriodEnd
+              ? ` · renews ${new Date(summary.currentPeriodEnd).toLocaleDateString()}`
+              : ""
+          }.`
+        : hasAddress
+          ? "Choose a payment method below to start service."
+          : "Add a location first, then choose a payment method.";
 
     return (
-      <div className="dash-page">
-        <div className="dash-page-head">
-          <h2>Billing</h2>
-          <p className="subtext">
-            Your plan is billed monthly based on the addresses, cans, and pickup days you set up.
-          </p>
+      <article className={`panel subscription-panel is-${tone}`}>
+        <div className="subscription-head">
+          <span className="subscription-badge" aria-hidden="true">
+            {icon}
+          </span>
+          <div className="subscription-head-text">
+            <strong>{headline}</strong>
+            <p className="subtext">{meta}</p>
+          </div>
         </div>
 
-        {finalizingCheckout ? (
-          <p className="notice">Finalizing your subscription — confirming payment…</p>
-        ) : null}
-
-        {billingSummaryQuery.isLoading ? (
-          <div className="account-status is-info">
-            <span className="account-status-icon" aria-hidden="true">⏳</span>
-            <div className="account-status-body">
-              <strong>Loading billing status…</strong>
-            </div>
+        {summary.active && summary.needsUpdate ? (
+          <div className="subscription-callout">
+            <strong>
+              {summary.uncoveredCount > 0
+                ? `${summary.uncoveredCount} location${summary.uncoveredCount === 1 ? "" : "s"} not on your plan`
+                : "Plan needs updating"}
+            </strong>
+            <span>
+              Your plan bills {formatUsd(summary.billedMonthlyCents)}/mo. Update to{" "}
+              {formatUsd(summary.totalMonthlyCents)}/mo to service{" "}
+              {summary.uncoveredCount === 1 ? "it" : "all your locations"} (prorated).
+            </span>
           </div>
-        ) : summary ? (
-          renderBillingStatus(summary)
         ) : null}
 
-        {summary && summary.active && summary.uncoveredCount > 0 ? (
-          <p className="notice">
-            {summary.uncoveredCount} address{summary.uncoveredCount === 1 ? "" : "es"} added since you
-            subscribed {summary.uncoveredCount === 1 ? "isn't" : "aren't"} on your plan yet
-            (+{formatUsd(extraCents)}/mo). Update your subscription to include{" "}
-            {summary.uncoveredCount === 1 ? "it" : "them"}.
-          </p>
-        ) : null}
-
-        <article className="panel">
-          <h3>{summary?.active ? "Manage subscription" : "Activate subscription"}</h3>
-          <p className="subtext">
-            {!hasAddress
-              ? "Add a service address to activate."
-              : summary?.active
-                ? summary.needsUpdate
-                  ? `Your plan bills ${formatUsd(summary.billedMonthlyCents)}/mo. Update to ${formatUsd(summary.totalMonthlyCents)}/mo to match your current addresses (prorated).`
-                  : "Your plan is up to date. Manage payment details in the billing portal."
-                : `You'll be billed ${formatUsd(summary?.totalMonthlyCents ?? 0)}/month via Stripe or PayPal.`}
-          </p>
-          {summary?.active ? (
-            <div className="manage-actions">
+        <div className="manage-actions">
+          {summary.active ? (
+            <>
               {summary.needsUpdate ? (
                 <button
                   type="button"
@@ -524,28 +490,71 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 onClick={() => stripePortalMutation.mutate()}
                 disabled={stripePortalMutation.isPending}
               >
-                {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
+                {stripePortalMutation.isPending ? "Opening…" : "Open Billing Portal"}
               </button>
-            </div>
+            </>
           ) : (
-            <div className="button-row">
-              <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
-                {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
+            <>
+              <button
+                type="button"
+                className="cta-primary"
+                onClick={() => stripeCheckoutMutation.mutate()}
+                disabled={stripeCheckoutMutation.isPending || !hasAddress}
+              >
+                {stripeCheckoutMutation.isPending ? "Redirecting…" : "Pay with Stripe"}
               </button>
-              <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending || !hasAddress}>
-                {paypalCheckoutMutation.isPending ? "Redirecting..." : "Pay with PayPal"}
+              <button
+                type="button"
+                className="cta-secondary"
+                onClick={() => paypalCheckoutMutation.mutate()}
+                disabled={paypalCheckoutMutation.isPending || !hasAddress}
+              >
+                {paypalCheckoutMutation.isPending ? "Redirecting…" : "Pay with PayPal"}
               </button>
-            </div>
+            </>
           )}
-          {updateSubscriptionMutation.isSuccess ? (
-            <p className="success-inline">
-              Subscription updated to {formatUsd(updateSubscriptionMutation.data.amountCents)}/mo.
-            </p>
-          ) : null}
-          {updateSubscriptionMutation.isError ? (
-            <p className="error">{getErrorMessage(updateSubscriptionMutation.error)}</p>
-          ) : null}
-        </article>
+        </div>
+
+        {updateSubscriptionMutation.isSuccess ? (
+          <p className="success-inline">
+            Subscription updated to {formatUsd(updateSubscriptionMutation.data.amountCents)}/mo.
+          </p>
+        ) : null}
+        {updateSubscriptionMutation.isError ? (
+          <p className="error">{getErrorMessage(updateSubscriptionMutation.error)}</p>
+        ) : null}
+      </article>
+    );
+  }
+
+  function renderBilling(): JSX.Element {
+    const summary = billingSummaryQuery.data;
+
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Billing</h2>
+          <p className="subtext">
+            Your plan is billed monthly based on the locations, cans, and pickup days you set up.
+          </p>
+        </div>
+
+        {finalizingCheckout ? (
+          <p className="notice">Finalizing your subscription — confirming payment…</p>
+        ) : null}
+
+        {billingSummaryQuery.isLoading ? (
+          <article className="panel subscription-panel">
+            <div className="subscription-head">
+              <span className="subscription-badge" aria-hidden="true">⏳</span>
+              <div className="subscription-head-text">
+                <strong>Loading billing status…</strong>
+              </div>
+            </div>
+          </article>
+        ) : summary ? (
+          renderSubscriptionCard(summary)
+        ) : null}
 
         <article className="panel">
           <h3>Addresses &amp; coverage</h3>
