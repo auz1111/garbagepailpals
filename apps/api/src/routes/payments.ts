@@ -18,6 +18,7 @@ import { getBillingSummary } from "../services/billing";
 import {
   confirmPayPalSubscription,
   createPayPalSubscription,
+  getPayPalManagementUrl,
   revisePayPalSubscription
 } from "../services/paypal";
 
@@ -123,6 +124,24 @@ export async function createStripePortalHandler(
   return withErrorBoundary(context, async () =>
     withAuth(async (req, _ctx, auth) => {
       const input = await parseJson(req, stripePortalRequestSchema);
+
+      // "Manage billing" is source-aware: Stripe subscribers get a hosted portal
+      // session; PayPal subscribers manage recurring payments in their own PayPal
+      // account (there is no merchant portal), so hand back the autopay page.
+      const active = await prisma.subscription.findFirst({
+        where: { userId: auth.sub, status: { in: ["ACTIVE", "TRIALING"] } }
+      });
+      if (!active) {
+        throw new HttpError(400, "No active subscription to manage yet.");
+      }
+
+      if (active.source === "PAYPAL") {
+        return jsonResponse(
+          200,
+          stripePortalResponseSchema.parse({ portalUrl: getPayPalManagementUrl() })
+        );
+      }
+
       const result = await createStripePortalSession({
         userId: auth.sub,
         returnUrl: input.returnUrl

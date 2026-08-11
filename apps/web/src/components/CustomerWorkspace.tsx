@@ -243,7 +243,14 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         accessToken
       ),
     onSuccess: (data) => {
-      window.location.assign(data.portalUrl);
+      // PayPal sends customers off to paypal.com to manage payments — open it in a
+      // new tab so they keep the dashboard. Stripe's portal returns here, so
+      // navigating in place is fine.
+      if (billingSummaryQuery.data?.source === "PAYPAL") {
+        window.open(data.portalUrl, "_blank", "noopener,noreferrer");
+      } else {
+        window.location.assign(data.portalUrl);
+      }
     }
   });
 
@@ -486,11 +493,15 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
               ) : null}
               <button
                 type="button"
-                className="cta-secondary"
+                className={summary.needsUpdate ? "cta-secondary" : "cta-primary"}
                 onClick={() => stripePortalMutation.mutate()}
                 disabled={stripePortalMutation.isPending}
               >
-                {stripePortalMutation.isPending ? "Opening…" : "Open Billing Portal"}
+                {stripePortalMutation.isPending
+                  ? "Opening…"
+                  : summary.source === "PAYPAL"
+                    ? "Manage on PayPal"
+                    : "Open Billing Portal"}
               </button>
             </>
           ) : (
@@ -522,6 +533,9 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         ) : null}
         {updateSubscriptionMutation.isError ? (
           <p className="error">{getErrorMessage(updateSubscriptionMutation.error)}</p>
+        ) : null}
+        {stripePortalMutation.isError ? (
+          <p className="error">{getErrorMessage(stripePortalMutation.error)}</p>
         ) : null}
       </article>
     );

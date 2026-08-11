@@ -21,6 +21,15 @@ function getPayPalBaseUrl(): string {
     : "https://api-m.sandbox.paypal.com";
 }
 
+// PayPal has no merchant-hosted billing portal like Stripe — customers manage
+// (or cancel) recurring payments from their own PayPal account. Send them to the
+// autopay page for the matching environment.
+export function getPayPalManagementUrl(): string {
+  return env.PAYPAL_ENV === "live"
+    ? "https://www.paypal.com/myaccount/autopay/"
+    : "https://www.sandbox.paypal.com/myaccount/autopay/";
+}
+
 async function getPayPalAccessToken(): Promise<string> {
   if (!env.PAYPAL_CLIENT_ID || !env.PAYPAL_CLIENT_SECRET) {
     throw new Error("PayPal client credentials are not configured");
