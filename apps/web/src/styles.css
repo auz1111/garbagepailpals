@@ -849,6 +849,58 @@ a {
   opacity: 0.8;
 }
 
+.assigned-route-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.assigned-route {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.assigned-route-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+}
+
+.assigned-route-head:hover {
+  background: var(--teal-bright-wash);
+}
+
+.assigned-route-chevron {
+  color: var(--teal-2);
+  font-size: 0.9rem;
+  flex: none;
+}
+
+.assigned-route-count {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--slate-2);
+  white-space: nowrap;
+}
+
+.assigned-route-detail {
+  padding: 0 0.9rem 0.8rem;
+}
+
 .route-leg-dot {
   display: inline-block;
   width: 0.8rem;

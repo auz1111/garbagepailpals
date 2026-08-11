@@ -3,6 +3,7 @@ import { prisma } from "@gpp/db";
 import {
   adminRouteRequestSchema,
   adminRouteResponseSchema,
+  assignedRoutesResponseSchema,
   availableOperatorsResponseSchema
 } from "@gpp/shared";
 import { env } from "../lib/env";
@@ -64,6 +65,69 @@ export async function adminAvailableOperatorsHandler(
         return jsonResponse(
           200,
           availableOperatorsResponseSchema.parse({ date: dateStr, operators })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Today's assigned routes, reconstructed from the persisted route-jobs.
+export async function adminAssignedRoutesHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async () => {
+        const now = new Date();
+        const routeJobDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 0, 0);
+
+        const jobs = await prisma.serviceJob.findMany({
+          where: { scheduledDate: routeJobDate, type: "CURB_OUT", assignedOperatorId: { not: null } },
+          include: {
+            serviceAddress: { include: { user: { select: { name: true } } } },
+            assignedOperator: { select: { id: true, name: true } }
+          },
+          orderBy: { routeSequence: "asc" }
+        });
+
+        const byOperator = new Map<
+          string,
+          { operatorId: string; operatorName: string; stops: unknown[] }
+        >();
+        for (const job of jobs) {
+          const op = job.assignedOperator;
+          if (!op) {
+            continue;
+          }
+          let route = byOperator.get(op.id);
+          if (!route) {
+            route = { operatorId: op.id, operatorName: op.name, stops: [] };
+            byOperator.set(op.id, route);
+          }
+          route.stops.push({
+            order: job.routeSequence ?? route.stops.length,
+            addressId: job.serviceAddress.id,
+            line1: job.serviceAddress.line1,
+            city: job.serviceAddress.city,
+            state: job.serviceAddress.state,
+            postalCode: job.serviceAddress.postalCode,
+            customerName: job.serviceAddress.user.name
+          });
+        }
+
+        return jsonResponse(
+          200,
+          assignedRoutesResponseSchema.parse({
+            date: now.toISOString(),
+            routes: [...byOperator.values()]
+          })
         );
       },
       { roles: ["ADMIN"] }

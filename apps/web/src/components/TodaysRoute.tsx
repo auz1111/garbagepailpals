@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { AdminRouteResponse, AdminRouteLeg } from "@gpp/shared";
-import { getAvailableOperators, getTodaysRoute } from "../lib/api";
+import { getAssignedRoutes, getAvailableOperators, getTodaysRoute } from "../lib/api";
 
 type TodaysRouteProps = {
   accessToken: string;
@@ -165,12 +165,20 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const [end, setEnd] = useState(cached?.end ?? "");
   const [route, setRoute] = useState<AdminRouteResponse | null>(cached?.response ?? null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expandedOperator, setExpandedOperator] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const operatorsQuery = useQuery({
     queryKey: ["available-operators", todayIso()],
     queryFn: async () => getAvailableOperators(todayIso(), accessToken)
   });
   const operators = operatorsQuery.data?.operators ?? [];
+
+  const assignedQuery = useQuery({
+    queryKey: ["assigned-routes"],
+    queryFn: async () => getAssignedRoutes(accessToken)
+  });
+  const assignedRoutes = assignedQuery.data?.routes ?? [];
 
   const routeMutation = useMutation({
     mutationFn: () =>
@@ -185,6 +193,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     onSuccess: (data) => {
       setRoute(data);
       saveCachedPlan({ start: start.trim(), end: end.trim(), response: data });
+      void queryClient.invalidateQueries({ queryKey: ["assigned-routes"] });
     }
   });
 
@@ -221,6 +230,55 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           Pick the operators working today, then assign each an optimized route of today's pickups.
         </p>
       </div>
+
+      <article className="panel">
+        <h3>Assigned routes</h3>
+        {assignedQuery.isLoading ? (
+          <p className="subtext">Loading…</p>
+        ) : assignedRoutes.length === 0 ? (
+          <p className="subtext">No routes are assigned for today yet.</p>
+        ) : (
+          <ul className="assigned-route-list">
+            {assignedRoutes.map((ar) => {
+              const open = expandedOperator === ar.operatorId;
+              return (
+                <li className="assigned-route" key={ar.operatorId}>
+                  <button
+                    type="button"
+                    className="assigned-route-head"
+                    aria-expanded={open}
+                    onClick={() => setExpandedOperator(open ? null : ar.operatorId)}
+                  >
+                    <span className="assigned-route-chevron">{open ? "▾" : "▸"}</span>
+                    <strong>{ar.operatorName}</strong>
+                    <span className="assigned-route-count">
+                      {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                  {open ? (
+                    <ol className="route-stop-list assigned-route-detail">
+                      {ar.stops.map((stop) => (
+                        <li className="route-stop" key={stop.addressId}>
+                          <span className="route-stop-num">{stop.order + 1}</span>
+                          <div>
+                            <strong>{stop.line1}</strong>
+                            <span className="admin-table-sub">
+                              {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {assignedQuery.isError ? (
+          <p className="error">{getErrorMessage(assignedQuery.error)}</p>
+        ) : null}
+      </article>
 
       <article className="panel">
         <form onSubmit={handleSubmit}>

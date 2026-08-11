@@ -31,7 +31,11 @@ import {
   adminUsersHandler,
   adminDashboardMetricsHandler
 } from "./routes/adminDashboard";
-import { adminAvailableOperatorsHandler, adminTodaysRouteHandler } from "./routes/adminRoutes";
+import {
+  adminAssignedRoutesHandler,
+  adminAvailableOperatorsHandler,
+  adminTodaysRouteHandler
+} from "./routes/adminRoutes";
 import { operatorAvailabilityHandler } from "./routes/operatorAvailability";
 import {
   adminAcknowledgeIncidentHandler,
@@ -131,6 +135,13 @@ app.http("admin-available-operators", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAvailableOperatorsHandler
+});
+
+app.http("admin-assigned-routes", {
+  route: "ops-admin/routes/assigned",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminAssignedRoutesHandler
 });
 
 app.http("operator-availability", {

@@ -462,6 +462,28 @@ export const adminRouteResponseSchema = z.object({
   assigned: z.boolean()
 });
 
+// Currently-assigned routes for a day, reconstructed from the DB.
+export const assignedRouteStopSchema = z.object({
+  order: z.number().int().nonnegative(),
+  addressId: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  customerName: z.string()
+});
+
+export const assignedRouteSchema = z.object({
+  operatorId: z.string(),
+  operatorName: z.string(),
+  stops: z.array(assignedRouteStopSchema)
+});
+
+export const assignedRoutesResponseSchema = z.object({
+  date: z.string(),
+  routes: z.array(assignedRouteSchema)
+});
+
 export const adminRuntimeMetricsSchema = z.object({
   runtime: z.object({
     startedAt: z.string().datetime(),
@@ -600,6 +622,8 @@ export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
 export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
 export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;
 export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
+export type AssignedRoute = z.infer<typeof assignedRouteSchema>;
+export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
 export type OperatorAvailabilityResponse = z.infer<typeof operatorAvailabilityResponseSchema>;
 export type OperatorAvailabilityUpdate = z.infer<typeof operatorAvailabilityUpdateSchema>;
 export type AvailableOperator = z.infer<typeof availableOperatorSchema>;

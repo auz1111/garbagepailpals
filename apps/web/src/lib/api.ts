@@ -15,6 +15,7 @@ import type {
   AdminUserUpdate,
   AdminRouteRequest,
   AdminRouteResponse,
+  AssignedRoutesResponse,
   AvailableOperatorsResponse,
   OperatorAvailabilityResponse,
   OperatorAvailabilityUpdate,
@@ -169,6 +170,15 @@ export function getTodaysRoute(
     "/ops-admin/routes/today",
     "POST",
     body,
+    accessToken
+  );
+}
+
+export function getAssignedRoutes(accessToken: string): Promise<AssignedRoutesResponse> {
+  return request<undefined, AssignedRoutesResponse>(
+    "/ops-admin/routes/assigned",
+    "GET",
+    undefined,
     accessToken
   );
 }
