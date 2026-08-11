@@ -163,13 +163,15 @@ export async function adminTodaysRouteHandler(
         if (!env.ORS_API_KEY) {
           throw new HttpError(400, "Routing is not configured (ORS_API_KEY missing).");
         }
-        if (!isGeocodingConfigured()) {
-          throw new HttpError(400, "Geocoding is not configured (GOOGLE_GEOCODING_API_KEY missing).");
-        }
         const apiKey = env.ORS_API_KEY;
         const input = await parseJson(req, adminRouteRequestSchema);
         const operatorIds = input.operatorIds ?? [];
         const assigning = operatorIds.length > 0;
+        const wantsStart = Boolean(input.start && input.start.trim());
+        const wantsEnd = Boolean(input.end && input.end.trim());
+        if ((wantsStart || wantsEnd) && !isGeocodingConfigured()) {
+          throw new HttpError(400, "Geocoding is not configured (GOOGLE_GEOCODING_API_KEY missing).");
+        }
 
         const now = new Date();
         const weekday = now.getDay();
@@ -179,9 +181,11 @@ export async function adminTodaysRouteHandler(
 
         // Today's pickups come from schedules (pickup day == today), not from the
         // offset curb-out/curb-in job times — so "today" means today's collections.
+        // Optionally scoped to a single neighborhood.
         const addresses = await prisma.serviceAddress.findMany({
           where: {
             isActive: true,
+            ...(input.neighborhoodId ? { neighborhoodId: input.neighborhoodId } : {}),
             subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
             schedules: { some: { pickupDayOfWeek: weekday } }
           },
@@ -216,8 +220,8 @@ export async function adminTodaysRouteHandler(
           });
         }
 
-        const start = await geocodeOrThrow(input.start);
-        const end = input.end && input.end.trim() ? await geocodeOrThrow(input.end.trim()) : start;
+        const geoStart = wantsStart ? await geocodeOrThrow((input.start as string).trim()) : null;
+        const geoEnd = wantsEnd ? await geocodeOrThrow((input.end as string).trim()) : null;
 
         // Resolve operator names for labelling assigned legs.
         const operatorUsers = assigning
@@ -228,34 +232,56 @@ export async function adminTodaysRouteHandler(
           : [];
         const operatorNameById = new Map(operatorUsers.map((u) => [u.id, u.name] as const));
 
-        const emptyResponse = () =>
-          adminRouteResponseSchema.parse({
-            date: now.toISOString(),
-            start,
-            end,
-            routes: [],
-            assigned: assigning
-          });
-
         if (stops.length === 0) {
-          return jsonResponse(200, emptyResponse());
+          return jsonResponse(
+            200,
+            adminRouteResponseSchema.parse({
+              date: now.toISOString(),
+              start: geoStart,
+              end: geoEnd,
+              routes: [],
+              assigned: assigning
+            })
+          );
         }
 
-        // One vehicle per operator (all from the shared depot); or a single
-        // preview vehicle when no operators are selected.
+        // ORS requires a start (or end) per vehicle, so when the admin leaves
+        // start blank we anchor to the stop nearest the cluster's centroid and
+        // leave the end open — the optimizer then picks the best last stop.
+        const cx = stops.reduce((sum, s) => sum + s.lng, 0) / stops.length;
+        const cy = stops.reduce((sum, s) => sum + s.lat, 0) / stops.length;
+        const anchor = stops.reduce((best, s) =>
+          (s.lng - cx) ** 2 + (s.lat - cy) ** 2 < (best.lng - cx) ** 2 + (best.lat - cy) ** 2 ? s : best
+        );
+        const start = geoStart ?? {
+          label: `Auto — near ${anchor.line1}`,
+          lat: anchor.lat,
+          lng: anchor.lng
+        };
+        // End: explicit if given; else round-trip to an explicit start; else open.
+        const end = geoEnd ?? (geoStart ? geoStart : null);
+
+        // One vehicle per operator (or a single preview vehicle). Capacity splits
+        // the stops into roughly equal portions across operators, each optimized.
         const vehicleCount = assigning ? operatorIds.length : 1;
+        const perVehicleCap = Math.ceil(stops.length / vehicleCount);
         const vehicles = Array.from({ length: vehicleCount }, (_, i) => ({
           id: i,
           profile: "driving-car",
+          capacity: [perVehicleCap],
           start: [start.lng, start.lat],
-          end: [end.lng, end.lat]
+          ...(end ? { end: [end.lng, end.lat] } : {})
         }));
 
         const optimizeRes = await fetch(`${ORS_BASE}/optimization`, {
           method: "POST",
           headers: { Authorization: apiKey, "Content-Type": "application/json" },
           body: JSON.stringify({
-            jobs: stops.map((stop, index) => ({ id: index, location: [stop.lng, stop.lat] })),
+            jobs: stops.map((stop, index) => ({
+              id: index,
+              location: [stop.lng, stop.lat],
+              amount: [1]
+            })),
             vehicles,
             options: { g: true }
           })

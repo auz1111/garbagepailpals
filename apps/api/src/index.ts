@@ -37,6 +37,12 @@ import {
   adminAvailableOperatorsHandler,
   adminTodaysRouteHandler
 } from "./routes/adminRoutes";
+import {
+  adminLocationByIdHandler,
+  adminLocationsHandler,
+  adminNeighborhoodByIdHandler,
+  adminNeighborhoodsHandler
+} from "./routes/neighborhoods";
 import { operatorAvailabilityHandler } from "./routes/operatorAvailability";
 import {
   adminAcknowledgeIncidentHandler,
@@ -150,6 +156,34 @@ app.http("admin-assigned-routes", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAssignedRoutesHandler
+});
+
+app.http("admin-neighborhoods", {
+  route: "ops-admin/neighborhoods",
+  methods: ["GET", "POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminNeighborhoodsHandler
+});
+
+app.http("admin-neighborhood-by-id", {
+  route: "ops-admin/neighborhoods/{neighborhoodId}",
+  methods: ["PATCH", "DELETE", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminNeighborhoodByIdHandler
+});
+
+app.http("admin-locations", {
+  route: "ops-admin/locations",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminLocationsHandler
+});
+
+app.http("admin-location-by-id", {
+  route: "ops-admin/locations/{addressId}",
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminLocationByIdHandler
 });
 
 app.http("operator-availability", {

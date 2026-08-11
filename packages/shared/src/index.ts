@@ -424,13 +424,49 @@ export const availableOperatorsResponseSchema = z.object({
   operators: z.array(availableOperatorSchema)
 });
 
+// --- Neighborhoods (admin) ------------------------------------------------
+export const neighborhoodSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  locationCount: z.number().int().nonnegative()
+});
+
+export const neighborhoodsResponseSchema = z.object({
+  neighborhoods: z.array(neighborhoodSchema)
+});
+
+export const neighborhoodCreateSchema = z.object({
+  name: z.string().min(1).max(80)
+});
+
+export const adminLocationSchema = z.object({
+  id: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  customerName: z.string(),
+  neighborhoodId: z.string().nullable()
+});
+
+export const adminLocationsResponseSchema = z.object({
+  locations: z.array(adminLocationSchema)
+});
+
+export const adminLocationNeighborhoodUpdateSchema = z.object({
+  neighborhoodId: z.string().nullable()
+});
+
 // --- Today's route (admin) ------------------------------------------------
 export const adminRouteRequestSchema = z.object({
-  start: z.string().min(1).max(200),
-  // Optional — when blank the route returns to the start (round trip).
+  // Both optional — when blank the optimizer picks the best start/end from the
+  // route's own stops (open routing).
+  start: z.string().max(200).optional(),
   end: z.string().max(200).optional(),
-  // When present, today's jobs are split into an optimized route per operator
-  // and assigned to them. When empty, a single unassigned preview route.
+  // Scope the route to a single neighborhood (recommended). Omit for all stops.
+  neighborhoodId: z.string().optional(),
+  // When present, jobs are split into a balanced optimized route per operator
+  // and assigned. When empty, a single unassigned preview route.
   operatorIds: z.array(z.string()).max(20).optional()
 });
 
@@ -465,8 +501,9 @@ export const adminRouteLegSchema = z.object({
 
 export const adminRouteResponseSchema = z.object({
   date: z.string(),
-  start: adminRoutePointSchema,
-  end: adminRoutePointSchema,
+  // Null when the admin left start/end blank (optimizer chose endpoints).
+  start: adminRoutePointSchema.nullable(),
+  end: adminRoutePointSchema.nullable(),
   routes: z.array(adminRouteLegSchema),
   // true when the jobs were assigned to operators (vs a preview).
   assigned: z.boolean()
@@ -635,6 +672,12 @@ export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;
 export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
 export type AssignedRoute = z.infer<typeof assignedRouteSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
+export type Neighborhood = z.infer<typeof neighborhoodSchema>;
+export type NeighborhoodsResponse = z.infer<typeof neighborhoodsResponseSchema>;
+export type NeighborhoodCreate = z.infer<typeof neighborhoodCreateSchema>;
+export type AdminLocation = z.infer<typeof adminLocationSchema>;
+export type AdminLocationsResponse = z.infer<typeof adminLocationsResponseSchema>;
+export type AdminLocationNeighborhoodUpdate = z.infer<typeof adminLocationNeighborhoodUpdateSchema>;
 export type OperatorAvailabilityResponse = z.infer<typeof operatorAvailabilityResponseSchema>;
 export type OperatorAvailabilityUpdate = z.infer<typeof operatorAvailabilityUpdateSchema>;
 export type AvailableOperator = z.infer<typeof availableOperatorSchema>;

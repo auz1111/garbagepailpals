@@ -17,6 +17,10 @@ import type {
   AdminRouteRequest,
   AdminRouteResponse,
   AssignedRoutesResponse,
+  NeighborhoodsResponse,
+  NeighborhoodCreate,
+  AdminLocationsResponse,
+  AdminLocationNeighborhoodUpdate,
   AvailableOperatorsResponse,
   OperatorAvailabilityResponse,
   OperatorAvailabilityUpdate,
@@ -178,6 +182,58 @@ export function getTodaysRoute(
     "/ops-admin/routes/today",
     "POST",
     body,
+    accessToken
+  );
+}
+
+export function getNeighborhoods(accessToken: string): Promise<NeighborhoodsResponse> {
+  return request<undefined, NeighborhoodsResponse>("/ops-admin/neighborhoods", "GET", undefined, accessToken);
+}
+
+export function createNeighborhood(name: string, accessToken: string): Promise<NeighborhoodsResponse> {
+  return request<NeighborhoodCreate, NeighborhoodsResponse>(
+    "/ops-admin/neighborhoods",
+    "POST",
+    { name },
+    accessToken
+  );
+}
+
+export function renameNeighborhood(
+  id: string,
+  name: string,
+  accessToken: string
+): Promise<NeighborhoodsResponse> {
+  return request<NeighborhoodCreate, NeighborhoodsResponse>(
+    `/ops-admin/neighborhoods/${id}`,
+    "PATCH",
+    { name },
+    accessToken
+  );
+}
+
+export function deleteNeighborhood(id: string, accessToken: string): Promise<NeighborhoodsResponse> {
+  return request<undefined, NeighborhoodsResponse>(
+    `/ops-admin/neighborhoods/${id}`,
+    "DELETE",
+    undefined,
+    accessToken
+  );
+}
+
+export function getAdminLocations(accessToken: string): Promise<AdminLocationsResponse> {
+  return request<undefined, AdminLocationsResponse>("/ops-admin/locations", "GET", undefined, accessToken);
+}
+
+export function setLocationNeighborhood(
+  addressId: string,
+  neighborhoodId: string | null,
+  accessToken: string
+): Promise<{ ok: boolean }> {
+  return request<AdminLocationNeighborhoodUpdate, { ok: boolean }>(
+    `/ops-admin/locations/${addressId}`,
+    "PATCH",
+    { neighborhoodId },
     accessToken
   );
 }

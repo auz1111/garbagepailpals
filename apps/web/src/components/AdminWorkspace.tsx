@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import type { AdminIncident, AdminUserWithLocations, CurrentUser, Role } from "@gpp/shared";
+import type { AdminIncident, AdminUserUpdate, AdminUserWithLocations, CurrentUser, Role } from "@gpp/shared";
 import { formatUsd } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
@@ -21,6 +21,7 @@ import {
 import { TodaysRoute } from "./TodaysRoute";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { AvailabilityCalendar } from "./AvailabilityCalendar";
+import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
 
 type AdminWorkspaceProps = {
   user: CurrentUser;
@@ -31,6 +32,7 @@ type AdminWorkspaceProps = {
 export const ADMIN_NAV = [
   { to: "/admin", label: "Dashboard", icon: "📊", end: true },
   { to: "/admin/routes", label: "Today's Routes", icon: "🗺️" },
+  { to: "/admin/neighborhoods", label: "Neighborhoods", icon: "🏘️" },
   { to: "/admin/users", label: "Users", icon: "👥" }
 ] as const;
 
@@ -389,7 +391,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
     }
     return (
       <AdminUserDetail
-        key={detail.id}
+        key={`${detail.id}:${detail.role}:${detail.operatorAccess}`}
         user={detail}
         onSave={(id, patch) => updateUserMutation.mutate({ id, patch })}
         saving={updateUserMutation.isPending}
@@ -652,6 +654,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
       <Routes>
         <Route index element={renderDashboard()} />
         <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />
+        <Route path="neighborhoods" element={<NeighborhoodsAdmin accessToken={accessToken} />} />
         <Route
           path="operator"
           element={
@@ -684,17 +687,7 @@ function AdminUserDetail({
   availabilitySaved
 }: {
   user: AdminUserWithLocations;
-  onSave: (
-    id: string,
-    patch: {
-      name: string;
-      email: string;
-      phone: string | null;
-      role: Role;
-      requestedServiceArea: string | null;
-      operatorAccess: boolean;
-    }
-  ) => void;
+  onSave: (id: string, patch: AdminUserUpdate) => void;
   saving: boolean;
   saveError: string | null;
   saved: boolean;
@@ -727,15 +720,25 @@ function AdminUserDetail({
     if (!valid || !dirty) {
       return;
     }
+    // Send ONLY the fields the user actually changed. The server treats an
+    // omitted field as "leave unchanged", so a partial patch can never silently
+    // clobber a value (e.g. operatorAccess) the admin didn't touch.
+    const patch: AdminUserUpdate = {};
+    if (name.trim() !== user.name) patch.name = name.trim();
+    if (email.trim() !== user.email) patch.email = email.trim();
+    const nextPhone = phone.trim() ? phone.trim() : null;
+    if (nextPhone !== (user.phone ?? null)) patch.phone = nextPhone;
+    if (role !== user.role) patch.role = role;
+    const nextArea = area.trim() ? area.trim() : null;
+    if (nextArea !== (user.requestedServiceArea ?? null)) patch.requestedServiceArea = nextArea;
+    const nextOperatorAccess = role === "ADMIN" ? operatorAccess : false;
+    if (nextOperatorAccess !== user.operatorAccess) patch.operatorAccess = nextOperatorAccess;
+
+    if (Object.keys(patch).length === 0) {
+      return;
+    }
     setSubmitted(true);
-    onSave(user.id, {
-      name: name.trim(),
-      email: email.trim(),
-      phone: phone.trim() ? phone.trim() : null,
-      role,
-      requestedServiceArea: area.trim() ? area.trim() : null,
-      operatorAccess: role === "ADMIN" ? operatorAccess : false
-    });
+    onSave(user.id, patch);
   }
 
   return (

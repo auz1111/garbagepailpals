@@ -849,6 +849,89 @@ a {
   opacity: 0.8;
 }
 
+.neighborhood-add {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin: 0.5rem 0 0.8rem;
+}
+
+.neighborhood-add input {
+  flex: 1;
+  max-width: 340px;
+}
+
+.neighborhood-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.neighborhood-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.neighborhood-row-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ghost-btn {
+  border: 1px solid var(--line-2);
+  border-radius: var(--pill);
+  padding: 0.5rem 0.9rem;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ghost-btn:hover {
+  border-color: var(--teal-bright);
+  background: var(--surface-2, #f5f7f8);
+}
+
+.assign-loc-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.assign-loc {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.assign-loc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.assign-loc select {
+  max-width: 220px;
+}
+
 .assigned-route-list {
   list-style: none;
   margin: 0.5rem 0 0;

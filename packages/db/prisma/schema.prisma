@@ -110,9 +110,11 @@ model ServiceAddress {
   pickupsPerWeek   Int               @default(1)
   rollIn           Boolean           @default(true)
   isActive         Boolean           @default(true)
+  neighborhoodId   String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  neighborhood     Neighborhood?     @relation(fields: [neighborhoodId], references: [id], onDelete: SetNull)
   schedules        ServiceSchedule[]
   subscriptions    Subscription[]
   jobs             ServiceJob[]
@@ -120,6 +122,15 @@ model ServiceAddress {
 
   @@index([postalCode])
   @@index([userId])
+  @@index([neighborhoodId])
+}
+
+model Neighborhood {
+  id        String           @id @default(cuid())
+  name      String           @unique
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  addresses ServiceAddress[]
 }
 
 model ServiceSchedule {

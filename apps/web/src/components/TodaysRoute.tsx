@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { AdminRouteResponse, AdminRouteLeg } from "@gpp/shared";
-import { getAssignedRoutes, getAvailableOperators, getTodaysRoute } from "../lib/api";
+import { getAssignedRoutes, getAvailableOperators, getNeighborhoods, getTodaysRoute } from "../lib/api";
 
 type TodaysRouteProps = {
   accessToken: string;
@@ -88,9 +88,9 @@ function formatMiles(meters: number): string {
 
 function legGoogleMapsUrl(route: AdminRouteResponse, leg: AdminRouteLeg): string {
   const points = [
-    `${route.start.lat},${route.start.lng}`,
+    ...(route.start ? [`${route.start.lat},${route.start.lng}`] : []),
     ...leg.stops.map((s) => `${s.lat},${s.lng}`),
-    `${route.end.lat},${route.end.lng}`
+    ...(route.end ? [`${route.end.lat},${route.end.lng}`] : [])
   ];
   return `https://www.google.com/maps/dir/${points.map(encodeURIComponent).join("/")}`;
 }
@@ -127,13 +127,18 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
 
     const bounds: Array<[number, number]> = [];
 
-    L.marker([route.start.lat, route.start.lng], { icon: pin("A", "#043e42") })
-      .bindPopup(`<strong>Start</strong><br>${route.start.label}`)
-      .addTo(layer);
-    L.marker([route.end.lat, route.end.lng], { icon: pin("B", "#b5750a") })
-      .bindPopup(`<strong>End</strong><br>${route.end.label}`)
-      .addTo(layer);
-    bounds.push([route.start.lat, route.start.lng], [route.end.lat, route.end.lng]);
+    if (route.start) {
+      L.marker([route.start.lat, route.start.lng], { icon: pin("A", "#043e42") })
+        .bindPopup(`<strong>Start</strong><br>${route.start.label}`)
+        .addTo(layer);
+      bounds.push([route.start.lat, route.start.lng]);
+    }
+    if (route.end) {
+      L.marker([route.end.lat, route.end.lng], { icon: pin("B", "#b5750a") })
+        .bindPopup(`<strong>End</strong><br>${route.end.label}`)
+        .addTo(layer);
+      bounds.push([route.end.lat, route.end.lng]);
+    }
 
     route.routes.forEach((leg, legIndex) => {
       const color = LEG_COLORS[legIndex % LEG_COLORS.length] ?? "#055a5f";
@@ -180,12 +185,20 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   });
   const assignedRoutes = assignedQuery.data?.routes ?? [];
 
+  const neighborhoodsQuery = useQuery({
+    queryKey: ["neighborhoods"],
+    queryFn: async () => getNeighborhoods(accessToken)
+  });
+  const neighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
+  const [neighborhoodId, setNeighborhoodId] = useState("");
+
   const routeMutation = useMutation({
     mutationFn: () =>
       getTodaysRoute(
         {
-          start: start.trim(),
+          start: start.trim() ? start.trim() : undefined,
           end: end.trim() ? end.trim() : undefined,
+          neighborhoodId: neighborhoodId || undefined,
           operatorIds: [...selected]
         },
         accessToken
@@ -208,7 +221,6 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
 
   function handleSubmit(event: FormEvent): void {
     event.preventDefault();
-    if (!start.trim()) return;
     routeMutation.mutate();
   }
 
@@ -282,21 +294,33 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
 
       <article className="panel">
         <form onSubmit={handleSubmit}>
+          <label className="field-single">
+            Neighborhood
+            <select value={neighborhoodId} onChange={(event) => setNeighborhoodId(event.target.value)}>
+              <option value="">All locations</option>
+              {neighborhoods.map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.name} ({n.locationCount})
+                </option>
+              ))}
+            </select>
+          </label>
+
           <div className="admin-filters">
             <label className="admin-filter-search">
-              Start location (depot)
+              Start location <span className="route-optional">(optional)</span>
               <input
                 value={start}
                 onChange={(event) => setStart(event.target.value)}
-                placeholder="e.g. 123 Depot Rd, Bend OR"
+                placeholder="Blank = optimizer picks the best start"
               />
             </label>
             <label className="admin-filter-search">
-              End location <span className="route-optional">(optional — defaults to start)</span>
+              End location <span className="route-optional">(optional)</span>
               <input
                 value={end}
                 onChange={(event) => setEnd(event.target.value)}
-                placeholder="Leave blank for a round trip"
+                placeholder="Blank = defaults to start / optimizer picks"
               />
             </label>
           </div>
@@ -328,7 +352,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           )}
 
           <div className="detail-save-row">
-            <button type="submit" className="cta-primary" disabled={!start.trim() || routeMutation.isPending}>
+            <button type="submit" className="cta-primary" disabled={routeMutation.isPending}>
               {routeMutation.isPending
                 ? assigning
                   ? "Assigning…"
