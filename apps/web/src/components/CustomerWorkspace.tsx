@@ -975,18 +975,26 @@ function AddressRow({
     pickupsPerWeek: Math.max(1, days || 1)
   });
 
+  const coverageClass =
+    covered === undefined ? "" : covered ? " is-covered" : " is-uncovered";
+
   return (
-    <li className="address-row">
-      <div className="address-row-main">
-        <strong>{address.line1}</strong>
-        <span className="subtext">
-          {address.city}, {address.state} {address.postalCode}
+    <li className={`address-row${coverageClass}`}>
+      <div className="address-row-lead">
+        <span className="address-row-icon" aria-hidden="true">
+          🏠
         </span>
-        {covered !== undefined ? (
-          <span className={`coverage-badge ${covered ? "covered" : "uncovered"}`}>
-            {covered ? "✓ Serviced" : "Not serviced"}
+        <div className="address-row-main">
+          <strong>{address.line1}</strong>
+          <span className="subtext">
+            {address.city}, {address.state} {address.postalCode}
           </span>
-        ) : null}
+          {covered !== undefined ? (
+            <span className={`coverage-badge ${covered ? "covered" : "uncovered"}`}>
+              {covered ? "✓ Serviced" : "Not serviced"}
+            </span>
+          ) : null}
+        </div>
       </div>
       <div className="address-row-controls">
         <label className="field-mini">

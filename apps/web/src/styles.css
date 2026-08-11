@@ -411,10 +411,56 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.8rem 0.9rem;
+  padding: 0.95rem 1.05rem;
   border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
   border-radius: var(--r-sm);
   background: var(--surface);
+  box-shadow: 0 1px 2px rgba(10, 13, 21, 0.04), 0 6px 16px rgba(10, 13, 21, 0.06);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.address-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(10, 13, 21, 0.06), 0 12px 24px rgba(10, 13, 21, 0.1);
+}
+
+.address-row.is-covered {
+  border-left-color: var(--ok);
+}
+
+.address-row.is-uncovered {
+  border-left-color: var(--gold);
+}
+
+.address-row-lead {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.address-row-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-size: 1.3rem;
+  line-height: 1;
+  background: var(--teal-bright-wash);
+  border: 1px solid var(--teal-wash);
+}
+
+.address-row.is-covered .address-row-icon {
+  background: var(--ok-wash);
+  border-color: var(--ok-wash);
+}
+
+.address-row.is-uncovered .address-row-icon {
+  background: var(--gold-wash);
+  border-color: var(--gold-wash);
 }
 
 .address-row-main {
