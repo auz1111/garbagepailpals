@@ -564,8 +564,12 @@ export const adminTodaysLocationSchema = z.object({
   customerName: z.string(),
   lat: z.number(),
   lng: z.number(),
-  // Whether this location is already on a route today.
+  // Whether this location is on a route today (assigned OR accepted).
   assigned: z.boolean(),
+  // The status of the route it's on: awaiting operator acceptance, accepted
+  // (locked), or null when not on any route yet.
+  routeStatus: routeStatusSchema.nullable(),
+  neighborhoodId: z.string().nullable(),
   neighborhoodName: z.string().nullable()
 });
 

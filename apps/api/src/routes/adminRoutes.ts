@@ -333,14 +333,11 @@ export async function adminTodaysLocationsHandler(
           }
         });
 
-        const routedAddressIds = new Set(
-          (
-            await prisma.routeStop.findMany({
-              where: { route: { serviceDate } },
-              select: { serviceAddressId: true }
-            })
-          ).map((r) => r.serviceAddressId)
-        );
+        const routeStopRows = await prisma.routeStop.findMany({
+          where: { route: { serviceDate } },
+          select: { serviceAddressId: true, route: { select: { status: true } } }
+        });
+        const statusByAddress = new Map(routeStopRows.map((r) => [r.serviceAddressId, r.route.status]));
 
         const locations = addresses
           .filter((a) => {
@@ -358,7 +355,9 @@ export async function adminTodaysLocationsHandler(
             customerName: a.user.name,
             lat: a.lat.toNumber(),
             lng: a.lng.toNumber(),
-            assigned: routedAddressIds.has(a.id),
+            assigned: statusByAddress.has(a.id),
+            routeStatus: statusByAddress.get(a.id) ?? null,
+            neighborhoodId: a.neighborhoodId,
             neighborhoodName: a.neighborhood?.name ?? null
           }));
 

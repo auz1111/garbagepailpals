@@ -8,7 +8,6 @@ import {
   getAssignedRoutes,
   getAvailableOperators,
   getNeighborhoods,
-  getRouteSummary,
   getTodaysLocations,
   getTodaysRoute
 } from "../lib/api";
@@ -17,9 +16,22 @@ type TodaysRouteProps = {
   accessToken: string;
 };
 
-// Pin colors for the serviceable-locations map.
-const COLOR_ASSIGNED = "#055a5f";
-const COLOR_UNASSIGNED = "#f7a81b";
+// Pin colors for the serviceable-locations map, by assignment state.
+const COLOR_UNASSIGNED = "#9aa5ad"; // gray — not on any route
+const COLOR_AWAITING = "#f7a81b"; // gold — assigned, awaiting operator acceptance
+const COLOR_ACCEPTED = "#055a5f"; // teal — accepted / locked
+
+function locationColor(loc: AdminTodaysLocation): string {
+  if (loc.routeStatus === "ACCEPTED") return COLOR_ACCEPTED;
+  if (loc.routeStatus === "ASSIGNED") return COLOR_AWAITING;
+  return COLOR_UNASSIGNED;
+}
+
+function locationStatusLabel(loc: AdminTodaysLocation): string {
+  if (loc.routeStatus === "ACCEPTED") return "Accepted";
+  if (loc.routeStatus === "ASSIGNED") return "Awaiting acceptance";
+  return "Unassigned";
+}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
@@ -64,11 +76,11 @@ function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.
 
     const bounds: Array<[number, number]> = [];
     locations.forEach((loc) => {
-      L.marker([loc.lat, loc.lng], { icon: pin(loc.assigned ? COLOR_ASSIGNED : COLOR_UNASSIGNED) })
+      L.marker([loc.lat, loc.lng], { icon: pin(locationColor(loc)) })
         .bindPopup(
-          `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br>${
-            loc.assigned ? "On a route" : "Unassigned"
-          }`
+          `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br>${locationStatusLabel(
+            loc
+          )}`
         )
         .addTo(layer);
       bounds.push([loc.lat, loc.lng]);
@@ -108,26 +120,41 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const [neighborhoodId, setNeighborhoodId] = useState("");
   const selectedHood = neighborhoods.find((n) => n.id === neighborhoodId) ?? null;
 
-  // Cheap counts for the selected scope so we can show the "nothing to assign"
-  // notice and disable the button before the admin clicks Assign.
-  const summaryQuery = useQuery({
-    queryKey: ["route-summary", neighborhoodId],
-    queryFn: async () => getRouteSummary(neighborhoodId || undefined, accessToken)
-  });
-  const summary = summaryQuery.data;
-  const nothingToAssign = Boolean(summary && summary.unassigned === 0);
-  const summaryReason = summary && summary.scheduledToday === 0 ? "none_scheduled" : "all_assigned";
-
-  // Every serviceable location scheduled today (for the map).
+  // Every serviceable location scheduled today (across all neighborhoods). Drives
+  // the map, the assignable counts, and which neighborhoods are already fully
+  // assigned — all from one fetch.
   const locationsQuery = useQuery({
-    queryKey: ["today-locations", neighborhoodId],
-    queryFn: async () => getTodaysLocations(neighborhoodId || undefined, accessToken)
+    queryKey: ["today-locations"],
+    queryFn: async () => getTodaysLocations(undefined, accessToken)
   });
-  const locations = locationsQuery.data?.locations ?? [];
-  const assignedCount = locations.filter((l) => l.assigned).length;
+  const allLocations = locationsQuery.data?.locations ?? [];
+
+  // Per-neighborhood today's-pickup counts, so a neighborhood whose pickups are
+  // all already on a route can be disabled in the dropdown.
+  const hoodStats = new Map<string, { total: number; unassigned: number }>();
+  for (const loc of allLocations) {
+    if (!loc.neighborhoodId) continue;
+    const stat = hoodStats.get(loc.neighborhoodId) ?? { total: 0, unassigned: 0 };
+    stat.total += 1;
+    if (!loc.assigned) stat.unassigned += 1;
+    hoodStats.set(loc.neighborhoodId, stat);
+  }
+  const isHoodFullyAssigned = (id: string): boolean => {
+    const stat = hoodStats.get(id);
+    return Boolean(stat && stat.total > 0 && stat.unassigned === 0);
+  };
+
+  // Locations in the selected scope (whole system or one neighborhood).
+  const scopeLocations = neighborhoodId
+    ? allLocations.filter((l) => l.neighborhoodId === neighborhoodId)
+    : allLocations;
+  const awaitingCount = scopeLocations.filter((l) => l.routeStatus === "ASSIGNED").length;
+  const acceptedCount = scopeLocations.filter((l) => l.routeStatus === "ACCEPTED").length;
+  const scopedUnassigned = scopeLocations.filter((l) => !l.assigned).length;
+  const nothingToAssign = scopedUnassigned === 0;
+  const summaryReason = scopeLocations.length === 0 ? "none_scheduled" : "all_assigned";
 
   const invalidateRouteViews = () => {
-    void queryClient.invalidateQueries({ queryKey: ["route-summary"] });
     void queryClient.invalidateQueries({ queryKey: ["today-locations"] });
   };
 
@@ -151,6 +178,9 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["assigned-routes"] });
       invalidateRouteViews();
+      // Clean slate for the next assignment.
+      setSelected(new Set());
+      setNeighborhoodId("");
     }
   });
 
@@ -172,7 +202,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const scope = selectedHood ? ` in ${selectedHood.name}` : "";
   const emptyMessage =
     summaryReason === "all_assigned"
-      ? `Every pickup${scope} today is already on a route. Remove a route above to free up its locations, then reassign.`
+      ? `Every pickup${scope} today is already assigned to a route (awaiting operator acceptance or accepted). Remove a route above to free up its locations, then reassign.`
       : `No pickups are scheduled for today${scope}.`;
   const emptyIcon = summaryReason === "all_assigned" ? "⚠️" : "🗓️";
 
@@ -280,21 +310,23 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                 onChange={(event) => setNeighborhoodId(event.target.value)}
               >
                 <option value="">All locations</option>
-                {neighborhoods.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.name} ({n.locationCount})
-                  </option>
-                ))}
+                {neighborhoods.map((n) => {
+                  const fullyAssigned = isHoodFullyAssigned(n.id);
+                  return (
+                    <option key={n.id} value={n.id} disabled={fullyAssigned}>
+                      {n.name} ({n.locationCount}){fullyAssigned ? " · assigned" : ""}
+                    </option>
+                  );
+                })}
               </select>
               {selectedHood && selectedHood.locationCount === 0 ? (
                 <p className="subtext route-hood-hint">
                   {selectedHood.name} has no locations assigned yet — add some on the Neighborhoods
                   page before assigning a route here.
                 </p>
-              ) : summary && summary.unassigned > 0 ? (
+              ) : scopedUnassigned > 0 ? (
                 <p className="assign-ready">
-                  {summary.unassigned} pickup{summary.unassigned === 1 ? "" : "s"} ready to assign
-                  {scope}.
+                  {scopedUnassigned} pickup{scopedUnassigned === 1 ? "" : "s"} ready to assign{scope}.
                 </p>
               ) : null}
             </li>
@@ -345,7 +377,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                   ? "Nothing to assign"
                   : !assigning
                     ? "Select an operator to assign"
-                    : `Assign ${summary?.unassigned ?? ""} pickup${summary?.unassigned === 1 ? "" : "s"} to ${selected.size} operator${selected.size === 1 ? "" : "s"}`}
+                    : `Assign ${scopedUnassigned} pickup${scopedUnassigned === 1 ? "" : "s"} to ${selected.size} operator${selected.size === 1 ? "" : "s"}`}
             </button>
           </div>
           {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}
@@ -367,24 +399,28 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         <div className="panel-head-row">
           <h3>Today's serviceable locations{scope}</h3>
           <span className="detail-total">
-            {locations.length} location{locations.length === 1 ? "" : "s"}
+            {scopeLocations.length} location{scopeLocations.length === 1 ? "" : "s"}
           </span>
         </div>
         {locationsQuery.isLoading ? (
           <p className="subtext">Loading…</p>
-        ) : locations.length === 0 ? (
+        ) : scopeLocations.length === 0 ? (
           <p className="subtext">No serviceable locations are scheduled for pickup today{scope}.</p>
         ) : (
           <>
-            <LocationsMap locations={locations} />
+            <LocationsMap locations={scopeLocations} />
             <div className="map-legend">
               <span>
                 <span className="legend-dot" style={{ background: COLOR_UNASSIGNED }} /> Unassigned (
-                {locations.length - assignedCount})
+                {scopedUnassigned})
               </span>
               <span>
-                <span className="legend-dot" style={{ background: COLOR_ASSIGNED }} /> On a route (
-                {assignedCount})
+                <span className="legend-dot" style={{ background: COLOR_AWAITING }} /> Awaiting
+                acceptance ({awaitingCount})
+              </span>
+              <span>
+                <span className="legend-dot" style={{ background: COLOR_ACCEPTED }} /> Accepted (
+                {acceptedCount})
               </span>
             </div>
           </>
