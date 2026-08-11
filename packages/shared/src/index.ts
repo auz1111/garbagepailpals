@@ -345,7 +345,9 @@ export const adminUserSchema = z.object({
   requestedServiceArea: z.string().nullable(),
   addressCount: z.number().int().nonnegative(),
   activeSubscription: z.boolean(),
-  monthlyCents: z.number().int().nonnegative()
+  monthlyCents: z.number().int().nonnegative(),
+  // Short address strings for this user, used for admin search.
+  locationLabels: z.array(z.string())
 });
 
 export const adminUsersResponseSchema = z.object({

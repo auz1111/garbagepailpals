@@ -74,6 +74,7 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
   const location = useLocation();
   const navigate = useNavigate();
   const [userRoleFilter, setUserRoleFilter] = useState<"ALL" | Role>("ALL");
+  const [userSearch, setUserSearch] = useState("");
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
     queryFn: async () => getAdminUsers(accessToken)
@@ -174,7 +175,16 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
 
   function renderUsers(): JSX.Element {
     const all = usersQuery.data?.users ?? [];
-    const rows = userRoleFilter === "ALL" ? all : all.filter((u) => u.role === userRoleFilter);
+    const term = userSearch.trim().toLowerCase();
+    const rows = all
+      .filter((u) => userRoleFilter === "ALL" || u.role === userRoleFilter)
+      .filter(
+        (u) =>
+          term === "" ||
+          u.name.toLowerCase().includes(term) ||
+          u.email.toLowerCase().includes(term) ||
+          u.locationLabels.some((label) => label.toLowerCase().includes(term))
+      );
     const counts = all.reduce<Record<string, number>>((acc, u) => {
       acc[u.role] = (acc[u.role] ?? 0) + 1;
       return acc;
@@ -189,18 +199,32 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
           </p>
         </div>
         <article className="panel">
-          <label className="field-single">
-            Filter by role
-            <select
-              value={userRoleFilter}
-              onChange={(event) => setUserRoleFilter(event.target.value as "ALL" | Role)}
-            >
-              <option value="ALL">All roles</option>
-              <option value="CUSTOMER">Customers</option>
-              <option value="OPERATOR">Operators</option>
-              <option value="ADMIN">Admins</option>
-            </select>
-          </label>
+          <div className="admin-filters">
+            <label className="admin-filter-search">
+              Search
+              <input
+                type="search"
+                value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                placeholder="Name, email, or location…"
+              />
+            </label>
+            <label className="admin-filter-role">
+              Role
+              <select
+                value={userRoleFilter}
+                onChange={(event) => setUserRoleFilter(event.target.value as "ALL" | Role)}
+              >
+                <option value="ALL">All roles</option>
+                <option value="CUSTOMER">Customers</option>
+                <option value="OPERATOR">Operators</option>
+                <option value="ADMIN">Admins</option>
+              </select>
+            </label>
+          </div>
+          <p className="subtext admin-filter-count">
+            Showing {rows.length} of {all.length}
+          </p>
 
           {usersQuery.isLoading ? (
             <p className="subtext">Loading users…</p>
@@ -650,6 +674,14 @@ function AdminUserDetail({
         <article className="panel">
           <h3>Account information</h3>
           <label className="field-single">
+            Role
+            <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
+              <option value="CUSTOMER">Customer</option>
+              <option value="OPERATOR">Operator</option>
+              <option value="ADMIN">Admin</option>
+            </select>
+          </label>
+          <label className="field-single">
             Name
             <input value={name} onChange={(event) => setName(event.target.value)} />
           </label>
@@ -665,24 +697,14 @@ function AdminUserDetail({
               placeholder="Optional"
             />
           </label>
-          <div className="field-row">
-            <label>
-              Role
-              <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
-                <option value="CUSTOMER">Customer</option>
-                <option value="OPERATOR">Operator</option>
-                <option value="ADMIN">Admin</option>
-              </select>
-            </label>
-            <label>
-              Requested area
-              <input
-                value={area}
-                onChange={(event) => setArea(event.target.value)}
-                placeholder="e.g. 97702"
-              />
-            </label>
-          </div>
+          <label className="field-single">
+            Requested area
+            <input
+              value={area}
+              onChange={(event) => setArea(event.target.value)}
+              placeholder="e.g. 97702"
+            />
+          </label>
           <div className="detail-save-row">
             <button type="submit" className="cta-primary" disabled={!valid || !dirty || saving}>
               {saving ? "Saving…" : "Save changes"}

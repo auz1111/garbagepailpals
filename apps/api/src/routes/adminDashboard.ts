@@ -64,7 +64,10 @@ function toAdminUser(row: UserAggregateRow) {
     requestedServiceArea: row.requestedServiceArea,
     addressCount: row.serviceAddresses.length,
     activeSubscription: row.subscriptions.some((sub) => ACTIVE_SUB_STATUSES.includes(sub.status)),
-    monthlyCents
+    monthlyCents,
+    locationLabels: row.serviceAddresses.map(
+      (address) => `${address.line1}, ${address.city} ${address.postalCode}`
+    )
   };
 }
 
