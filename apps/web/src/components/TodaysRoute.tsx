@@ -191,6 +191,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   });
   const neighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
   const [neighborhoodId, setNeighborhoodId] = useState("");
+  const selectedHood = neighborhoods.find((n) => n.id === neighborhoodId) ?? null;
 
   const routeMutation = useMutation({
     mutationFn: () =>
@@ -305,6 +306,12 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               ))}
             </select>
           </label>
+          {selectedHood && selectedHood.locationCount === 0 ? (
+            <p className="subtext route-hood-hint">
+              {selectedHood.name} has no locations assigned yet — add some on the Neighborhoods page
+              before assigning a route here.
+            </p>
+          ) : null}
 
           <div className="admin-filters">
             <label className="admin-filter-search">
@@ -363,13 +370,22 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
             </button>
           </div>
           {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}
+          {routeMutation.isSuccess && route && totals.stops === 0 ? (
+            <p className="subtext">
+              Nothing to assign — no pickups are scheduled for today
+              {selectedHood ? ` in ${selectedHood.name}` : ""}.
+            </p>
+          ) : null}
         </form>
       </article>
 
       {route ? (
         totals.stops === 0 ? (
           <article className="panel">
-            <p className="subtext">No locations are scheduled for pickup today.</p>
+            <p className="subtext">
+              No locations are scheduled for pickup today
+              {selectedHood ? ` in ${selectedHood.name}` : ""}.
+            </p>
           </article>
         ) : (
           <>

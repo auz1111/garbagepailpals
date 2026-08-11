@@ -185,6 +185,12 @@ a {
   color: var(--teal-2);
 }
 
+.brand-words {
+  /* Words use normal (tight) spacing rather than the flex gap that separates
+     the logo from the wordmark; a touch negative to snug them up. */
+  word-spacing: -0.06em;
+}
+
 .brand-garbage {
   color: var(--teal-bright);
 }
@@ -884,6 +890,23 @@ a {
 .neighborhood-row-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+.route-hood-hint {
+  margin-top: 0.4rem;
+  color: var(--danger);
+}
+
+.admin-loc-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.admin-schedule-editor {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
 }
 
 .ghost-btn {

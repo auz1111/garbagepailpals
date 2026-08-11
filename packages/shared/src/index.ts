@@ -370,7 +370,8 @@ export const adminUserLocationSchema = z.object({
       dayOfWeek: z.number().int().min(0).max(6),
       cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
       canCount: z.number().int().nonnegative(),
-      rollIn: z.boolean()
+      rollIn: z.boolean(),
+      biweeklyAnchorDate: z.string().optional()
     })
   )
 });

@@ -1,8 +1,15 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import type { AdminIncident, AdminUserUpdate, AdminUserWithLocations, CurrentUser, Role } from "@gpp/shared";
-import { formatUsd } from "@gpp/shared";
+import type {
+  AdminIncident,
+  AdminUserUpdate,
+  AdminUserWithLocations,
+  CurrentUser,
+  PickupDayInput,
+  Role
+} from "@gpp/shared";
+import { addressMonthlyCents, formatUsd, pickupDayMonthlyCents, PRICING } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
@@ -11,6 +18,7 @@ import {
   getAdminUserAvailability,
   getAdminUsers,
   setAdminUserAvailability,
+  updateAddressSchedule,
   updateAdminUser,
   getAdminDashboardMetrics,
   getAdminIncidents,
@@ -43,6 +51,16 @@ const ROLE_LABELS: Record<Role, string> = {
 };
 
 const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
+
+type AdminLocation = AdminUserWithLocations["locations"][number];
+type EditDay = {
+  dayOfWeek: number;
+  cadence: "WEEKLY" | "BIWEEKLY";
+  canCount: number;
+  rollIn: boolean;
+  biweeklyAnchorDate: string;
+};
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
@@ -393,6 +411,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
       <AdminUserDetail
         key={`${detail.id}:${detail.role}:${detail.operatorAccess}`}
         user={detail}
+        accessToken={accessToken}
         onSave={(id, patch) => updateUserMutation.mutate({ id, patch })}
         saving={updateUserMutation.isPending}
         saveError={updateUserMutation.isError ? getErrorMessage(updateUserMutation.error) : null}
@@ -675,6 +694,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
 
 function AdminUserDetail({
   user,
+  accessToken,
   onSave,
   saving,
   saveError,
@@ -687,6 +707,7 @@ function AdminUserDetail({
   availabilitySaved
 }: {
   user: AdminUserWithLocations;
+  accessToken: string;
   onSave: (id: string, patch: AdminUserUpdate) => void;
   saving: boolean;
   saveError: string | null;
@@ -872,38 +893,293 @@ function AdminUserDetail({
         ) : (
           <ul className="admin-loc-list">
             {user.locations.map((loc) => (
-              <li className="admin-loc-card" key={loc.id}>
-                <div className="admin-loc-head">
-                  <div>
-                    <strong>{loc.line1}</strong>
-                    <span className="admin-table-sub">
-                      {loc.city}, {loc.state} {loc.postalCode}
-                    </span>
-                  </div>
-                  <span className="admin-loc-price">{formatUsd(loc.monthlyCents)}/mo</span>
-                </div>
-                {loc.pickups.length === 0 ? (
-                  <p className="subtext">No pickup schedule set.</p>
-                ) : (
-                  <ul className="admin-loc-pickups">
-                    {loc.pickups.map((pickup, index) => (
-                      <li key={index}>
-                        <strong>{WEEKDAYS_SHORT[pickup.dayOfWeek]}</strong>
-                        <span>
-                          {pickup.canCount} can{pickup.canCount === 1 ? "" : "s"} ·{" "}
-                          {pickup.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly"} ·{" "}
-                          {pickup.rollIn ? "roll-in" : "roll-out only"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </li>
+              <AdminLocationCard
+                key={loc.id}
+                loc={loc}
+                userId={user.id}
+                accessToken={accessToken}
+              />
             ))}
           </ul>
         )}
       </article>
     </div>
+  );
+}
+
+function AdminLocationCard({
+  loc,
+  userId,
+  accessToken
+}: {
+  loc: AdminLocation;
+  userId: string;
+  accessToken: string;
+}): JSX.Element {
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+
+  const scheduleMutation = useMutation({
+    mutationFn: (days: PickupDayInput[]) => updateAddressSchedule(loc.id, { days }, accessToken),
+    onSuccess: async () => {
+      // Schedule changes reprice the location, so refresh both the detail and
+      // the users list (its monthly totals).
+      await queryClient.invalidateQueries({ queryKey: ["admin-user", userId] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      setEditing(false);
+    }
+  });
+
+  return (
+    <li className="admin-loc-card">
+      <div className="admin-loc-head">
+        <div>
+          <strong>{loc.line1}</strong>
+          <span className="admin-table-sub">
+            {loc.city}, {loc.state} {loc.postalCode}
+          </span>
+        </div>
+        <span className="admin-loc-price">{formatUsd(loc.monthlyCents)}/mo</span>
+      </div>
+
+      {loc.pickups.length === 0 ? (
+        <p className="subtext">No pickup schedule set.</p>
+      ) : (
+        <ul className="admin-loc-pickups">
+          {loc.pickups.map((pickup, index) => (
+            <li key={index}>
+              <strong>{WEEKDAYS_SHORT[pickup.dayOfWeek]}</strong>
+              <span>
+                {pickup.canCount} can{pickup.canCount === 1 ? "" : "s"} ·{" "}
+                {pickup.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly"} ·{" "}
+                {pickup.rollIn ? "roll-in" : "roll-out only"}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {editing ? (
+        <AdminScheduleEditorForm
+          loc={loc}
+          saving={scheduleMutation.isPending}
+          error={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
+          onCancel={() => setEditing(false)}
+          onSave={(days) => scheduleMutation.mutate(days)}
+        />
+      ) : (
+        <div className="admin-loc-actions">
+          <button type="button" className="ghost-btn" onClick={() => setEditing(true)}>
+            Edit schedule
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function AdminScheduleEditorForm({
+  loc,
+  saving,
+  error,
+  onCancel,
+  onSave
+}: {
+  loc: AdminLocation;
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSave: (days: PickupDayInput[]) => void;
+}): JSX.Element {
+  const initialDays: EditDay[] =
+    loc.pickups.length > 0
+      ? [...loc.pickups]
+          .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
+          .map((s) => ({
+            dayOfWeek: s.dayOfWeek,
+            cadence: s.cadence,
+            canCount: s.canCount,
+            rollIn: s.rollIn,
+            biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
+          }))
+      : [{ dayOfWeek: 2, cadence: "WEEKLY", canCount: 2, rollIn: true, biweeklyAnchorDate: "" }];
+  const [days, setDays] = useState<EditDay[]>(initialDays);
+
+  const usedDays = new Set(days.map((d) => d.dayOfWeek));
+  const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
+  const primaryDayOfWeek = days.length ? Math.min(...days.map((d) => d.dayOfWeek)) : -1;
+
+  const valid =
+    days.length >= 1 &&
+    days.every(
+      (d) =>
+        d.canCount >= 1 &&
+        d.canCount <= 20 &&
+        (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
+    );
+  const monthly = addressMonthlyCents(
+    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn }))
+  );
+
+  function updateDay(idx: number, patch: Partial<EditDay>): void {
+    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+  }
+  function removeDay(idx: number): void {
+    setDays((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function addDay(): void {
+    if (firstAvailableDay === undefined) return;
+    setDays((prev) => [
+      ...prev,
+      { dayOfWeek: firstAvailableDay, cadence: "WEEKLY", canCount: 2, rollIn: true, biweeklyAnchorDate: "" }
+    ]);
+  }
+
+  function handleSubmit(event: FormEvent): void {
+    event.preventDefault();
+    if (!valid) return;
+    onSave(
+      days.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        cadence: d.cadence,
+        // The API expects a full ISO-8601 datetime; the datetime-local input
+        // gives "YYYY-MM-DDTHH:mm", so normalize it before sending.
+        biweeklyAnchorDate:
+          d.cadence === "BIWEEKLY" && d.biweeklyAnchorDate
+            ? new Date(d.biweeklyAnchorDate).toISOString()
+            : undefined,
+        canCount: d.canCount,
+        rollIn: d.rollIn
+      }))
+    );
+  }
+
+  return (
+    <form className="admin-schedule-editor" onSubmit={handleSubmit}>
+      <div className="panel-head-row">
+        <span className="detail-total">{formatUsd(monthly)}/mo</span>
+        <button
+          type="button"
+          className="add-day-btn"
+          onClick={addDay}
+          disabled={firstAvailableDay === undefined}
+        >
+          + Add day
+        </button>
+      </div>
+
+      <ul className="pickup-day-list">
+        {days.map((day, idx) => {
+          const dayCost = pickupDayMonthlyCents(
+            { dayOfWeek: day.dayOfWeek, canCount: day.canCount, cadence: day.cadence, rollIn: day.rollIn },
+            day.dayOfWeek === primaryDayOfWeek
+          );
+          return (
+            <li className="pickup-day-card" key={idx}>
+              <div className="pickup-day-top">
+                <span className="pickup-day-icon" aria-hidden="true">
+                  🗓️
+                </span>
+                <label className="pickup-day-weekday-field">
+                  <span className="pickup-day-eyebrow">Pickup day</span>
+                  <select
+                    className="pickup-day-weekday"
+                    value={day.dayOfWeek}
+                    onChange={(event) => updateDay(idx, { dayOfWeek: Number(event.target.value) })}
+                  >
+                    {WEEKDAYS.map((label, value) => (
+                      <option
+                        key={label}
+                        value={value}
+                        disabled={value !== day.dayOfWeek && usedDays.has(value)}
+                      >
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="pickup-day-cost">{formatUsd(dayCost)}/mo</span>
+                <button
+                  type="button"
+                  className="pickup-day-remove"
+                  onClick={() => removeDay(idx)}
+                  disabled={days.length <= 1}
+                  aria-label={`Remove ${WEEKDAYS[day.dayOfWeek]}`}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="pickup-day-body">
+                <div className="field-row">
+                  <label>
+                    Cadence
+                    <select
+                      value={day.cadence}
+                      onChange={(event) =>
+                        updateDay(idx, { cadence: event.target.value as "WEEKLY" | "BIWEEKLY" })
+                      }
+                    >
+                      <option value="WEEKLY">Every week</option>
+                      <option value="BIWEEKLY">Every 2 weeks</option>
+                    </select>
+                  </label>
+                  <label>
+                    Cans
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={day.canCount}
+                      onChange={(event) => updateDay(idx, { canCount: Number(event.target.value) })}
+                    />
+                  </label>
+                </div>
+
+                {day.cadence === "BIWEEKLY" ? (
+                  <label className="field-single">
+                    First pickup date
+                    <input
+                      type="datetime-local"
+                      value={day.biweeklyAnchorDate}
+                      onChange={(event) => updateDay(idx, { biweeklyAnchorDate: event.target.value })}
+                    />
+                  </label>
+                ) : null}
+
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={day.rollIn}
+                    onChange={(event) => updateDay(idx, { rollIn: event.target.checked })}
+                  />
+                  <span>
+                    <strong>Bring cans back the next day (roll-in)</strong>
+                    <span className="subtext">
+                      {day.rollIn
+                        ? "Included — we return the cans the day after pickup."
+                        : `Roll-out only — saves ${formatUsd(
+                            day.canCount * PRICING.rollInCreditMonthlyCentsPerCan
+                          )}/mo on this day.`}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="admin-loc-actions">
+        <button type="submit" className="cta-primary" disabled={!valid || saving}>
+          {saving ? "Saving…" : "Update pickup schedule"}
+        </button>
+        <button type="button" className="ghost-btn" onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+      {error ? <p className="error">{error}</p> : null}
+    </form>
   );
 }
 

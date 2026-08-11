@@ -206,7 +206,10 @@ export function App() {
             <h1>
               <Link to="/" className="brand-link" aria-label="Garbage Pail Pals — home">
                 <img className="brand-logo" src="/logo-144.png" width={144} height={144} alt="" aria-hidden="true" />
-                <span className="brand-garbage">Garbage</span> <span className="brand-pail">Pail</span> <span className="brand-pals">Pals</span>
+                <span className="brand-words">
+                  <span className="brand-garbage">Garbage</span> <span className="brand-pail">Pail</span>{" "}
+                  <span className="brand-pals">Pals</span>
+                </span>
               </Link>
             </h1>
           </div>

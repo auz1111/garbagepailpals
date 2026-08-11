@@ -21,7 +21,13 @@ const USER_AGGREGATE_INCLUDE = {
   subscriptions: true
 } as const;
 
-type ScheduleRow = { pickupDayOfWeek: number; canCount: number; cadence: string; rollIn: boolean };
+type ScheduleRow = {
+  pickupDayOfWeek: number;
+  canCount: number;
+  cadence: string;
+  rollIn: boolean;
+  biweeklyAnchorDate: Date | null;
+};
 
 type AddressRow = {
   id: string;
@@ -93,7 +99,8 @@ function toAdminUserDetail(row: UserAggregateRow) {
           dayOfWeek: s.pickupDayOfWeek,
           cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
           canCount: s.canCount,
-          rollIn: s.rollIn
+          rollIn: s.rollIn,
+          biweeklyAnchorDate: s.biweeklyAnchorDate?.toISOString()
         }))
     }))
   };
