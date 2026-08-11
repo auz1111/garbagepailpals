@@ -17,11 +17,14 @@ import { getMe, login, refresh, register } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
-import { OperatorWorkspace } from "./components/OperatorWorkspace";
+import { OperatorDashboard } from "./components/OperatorDashboard";
 import { AdminWorkspace, ADMIN_NAV } from "./components/AdminWorkspace";
 
 type AuthMode = "LOGIN" | "REGISTER";
 const REFRESH_TOKEN_KEY = "gpp.refreshToken";
+
+// Sidebar links for an operator account.
+const OPERATOR_NAV = [{ to: "/operator", label: "Operator", icon: "🚛", end: true }] as const;
 
 // Marketing plan prices are derived from the same billing engine that bills
 // customers (packages/shared PRICING), so the landing page can never drift from
@@ -163,14 +166,18 @@ export function App() {
 
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
   const isAdmin = user?.role === "ADMIN";
+  const isOperator = user?.role === "OPERATOR";
   const showDashboardMenu =
-    isAuthenticated && ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin);
+    isAuthenticated &&
+    ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
   const dashboardNav = isAdmin
     ? user?.operatorAccess
       ? [...ADMIN_NAV, { to: "/admin/operator", label: "Operator", icon: "🚛" }]
       : ADMIN_NAV
-    : CUSTOMER_NAV;
-  const dashboardMenuLabel = isAdmin ? "Admin" : "Dashboard";
+    : isOperator
+      ? OPERATOR_NAV
+      : CUSTOMER_NAV;
+  const dashboardMenuLabel = isAdmin ? "Admin" : isOperator ? "Operator" : "Dashboard";
 
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
 
@@ -609,7 +616,7 @@ export function App() {
             <Route
               path="/operator"
               element={
-                user && accessToken ? <OperatorWorkspace user={user} accessToken={accessToken} /> : null
+                user && accessToken ? <OperatorDashboard user={user} accessToken={accessToken} /> : null
               }
             />
           </Route>
