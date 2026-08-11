@@ -126,7 +126,8 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
     }
 
     if (bounds.length > 0) {
-      map.fitBounds(L.latLngBounds(bounds), { padding: [30, 30], maxZoom: 15 });
+      // Fit to the tightest zoom that still shows the whole route.
+      map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24] });
     }
     // Recompute size in case the container just became visible.
     setTimeout(() => map.invalidateSize(), 0);
@@ -135,16 +136,53 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
   return <div className="route-map" ref={containerRef} />;
 }
 
+// The planned route is cached in localStorage keyed by today's date, so it
+// survives page refreshes and navigation. It's only discarded when the day
+// rolls over (a new day's route must be created fresh).
+const ROUTE_CACHE_KEY = "gpp.todaysRoute";
+type CachedPlan = { date: string; start: string; end: string; response: AdminRouteResponse };
+
+function localDateKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function loadCachedPlan(): CachedPlan | null {
+  try {
+    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as CachedPlan;
+    // Only reuse a plan that was created today.
+    return parsed.date === localDateKey() ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedPlan(plan: Omit<CachedPlan, "date">): void {
+  try {
+    localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify({ date: localDateKey(), ...plan }));
+  } catch {
+    // Ignore storage failures (private mode, quota) — cache is best-effort.
+  }
+}
+
 export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
+  const cached = loadCachedPlan();
+  const [start, setStart] = useState(cached?.start ?? "");
+  const [end, setEnd] = useState(cached?.end ?? "");
+  const [route, setRoute] = useState<AdminRouteResponse | null>(cached?.response ?? null);
 
   const routeMutation = useMutation({
     mutationFn: () =>
-      getTodaysRoute({ start: start.trim(), end: end.trim() ? end.trim() : undefined }, accessToken)
+      getTodaysRoute({ start: start.trim(), end: end.trim() ? end.trim() : undefined }, accessToken),
+    onSuccess: (data) => {
+      setRoute(data);
+      saveCachedPlan({ start: start.trim(), end: end.trim(), response: data });
+    }
   });
-
-  const route = routeMutation.data;
 
   function handleSubmit(event: FormEvent): void {
     event.preventDefault();
