@@ -388,6 +388,45 @@ export const adminUserUpdateSchema = z.object({
   requestedServiceArea: z.string().max(12).nullable().optional()
 });
 
+// --- Today's route (admin) ------------------------------------------------
+export const adminRouteRequestSchema = z.object({
+  start: z.string().min(1).max(200),
+  // Optional — when blank the route returns to the start (round trip).
+  end: z.string().max(200).optional()
+});
+
+export const adminRoutePointSchema = z.object({
+  label: z.string(),
+  lat: z.number(),
+  lng: z.number()
+});
+
+export const adminRouteStopSchema = z.object({
+  order: z.number().int().nonnegative(),
+  addressId: z.string(),
+  customerName: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  cans: z.number().int().nonnegative(),
+  rollIn: z.boolean(),
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"])
+});
+
+export const adminRouteResponseSchema = z.object({
+  date: z.string(),
+  start: adminRoutePointSchema,
+  end: adminRoutePointSchema,
+  stops: z.array(adminRouteStopSchema),
+  totalDistanceMeters: z.number().nonnegative(),
+  totalDurationSeconds: z.number().nonnegative(),
+  // Encoded polyline (precision 5) for drawing the route; null if unavailable.
+  geometry: z.string().nullable()
+});
+
 export const adminRuntimeMetricsSchema = z.object({
   runtime: z.object({
     startedAt: z.string().datetime(),
@@ -521,6 +560,10 @@ export type AdminUserResponse = z.infer<typeof adminUserResponseSchema>;
 export type AdminUserUpdate = z.infer<typeof adminUserUpdateSchema>;
 export type AdminUserLocation = z.infer<typeof adminUserLocationSchema>;
 export type AdminUserWithLocations = z.infer<typeof adminUserDetailSchema>;
+export type AdminRouteRequest = z.infer<typeof adminRouteRequestSchema>;
+export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
+export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
+export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
 export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;

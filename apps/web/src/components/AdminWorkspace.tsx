@@ -15,6 +15,7 @@ import {
   reopenAdminIncident,
   resolveAdminIncident
 } from "../lib/api";
+import { TodaysRoute } from "./TodaysRoute";
 
 type AdminWorkspaceProps = {
   user: CurrentUser;
@@ -23,6 +24,7 @@ type AdminWorkspaceProps = {
 
 export const ADMIN_NAV = [
   { to: "/admin", label: "Dashboard", icon: "📊", end: true },
+  { to: "/admin/routes", label: "Today's Routes", icon: "🗺️" },
   { to: "/admin/users", label: "Users", icon: "👥" }
 ] as const;
 
@@ -579,6 +581,7 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     <section className="card role-shell customer-workspace">
       <Routes>
         <Route index element={renderDashboard()} />
+        <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />
         <Route path="users" element={renderUsers()} />
         <Route path="users/:userId" element={renderUserDetail()} />
         <Route path="*" element={<Navigate to="/admin" replace />} />

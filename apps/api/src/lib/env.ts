@@ -29,7 +29,8 @@ const envSchema = z.object({
   NOTIFICATION_ESCALATION_EMAIL: z.string().email().optional(),
   RESEND_API_KEY: z.string().optional(),
   NOTIFICATION_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
-  NOTIFICATION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(50).max(5000).default(300)
+  NOTIFICATION_RETRY_BASE_DELAY_MS: z.coerce.number().int().min(50).max(5000).default(300),
+  ORS_API_KEY: z.string().optional()
 });
 
 export const env = envSchema.parse(process.env);

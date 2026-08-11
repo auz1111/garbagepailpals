@@ -31,6 +31,7 @@ import {
   adminUsersHandler,
   adminDashboardMetricsHandler
 } from "./routes/adminDashboard";
+import { adminTodaysRouteHandler } from "./routes/adminRoutes";
 import {
   adminAcknowledgeIncidentHandler,
   adminAssignIncidentHandler,
@@ -115,6 +116,13 @@ app.http("admin-user-by-id", {
   methods: ["GET", "PATCH", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminUserByIdHandler
+});
+
+app.http("admin-todays-route", {
+  route: "ops-admin/routes/today",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminTodaysRouteHandler
 });
 
 app.http("admin-runtime-metrics", {

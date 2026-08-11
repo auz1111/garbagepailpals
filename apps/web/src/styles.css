@@ -679,6 +679,102 @@ a {
   align-self: flex-start;
 }
 
+.route-optional {
+  font-weight: 500;
+  color: var(--slate-2);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.route-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 2rem;
+}
+
+.route-maps-link {
+  margin-left: auto;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.route-map {
+  height: 420px;
+  width: 100%;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  z-index: 0;
+}
+
+.route-pin-wrap {
+  background: transparent;
+  border: 0;
+}
+
+.route-pin {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.75rem;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.route-stop-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.route-stop {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.route-stop.is-endpoint {
+  background: var(--teal-bright-wash);
+  border-color: var(--teal-wash);
+}
+
+.route-stop-num {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #ffffff;
+  background: var(--teal);
+}
+
+.route-stop-start {
+  background: var(--teal-deep);
+}
+
+.route-stop-end {
+  background: var(--gold);
+  color: var(--teal-deep);
+}
+
+.route-stop strong {
+  display: block;
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

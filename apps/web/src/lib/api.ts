@@ -13,6 +13,8 @@ import type {
   AdminUsersResponse,
   AdminUserResponse,
   AdminUserUpdate,
+  AdminRouteRequest,
+  AdminRouteResponse,
   AuthResponse,
   LoginInput,
   OperatorJobClaimResponse,
@@ -154,6 +156,18 @@ export function getAdminUsers(accessToken: string): Promise<AdminUsersResponse> 
 
 export function getAdminUser(userId: string, accessToken: string): Promise<AdminUserResponse> {
   return request<undefined, AdminUserResponse>(`/ops-admin/users/${userId}`, "GET", undefined, accessToken);
+}
+
+export function getTodaysRoute(
+  body: AdminRouteRequest,
+  accessToken: string
+): Promise<AdminRouteResponse> {
+  return request<AdminRouteRequest, AdminRouteResponse>(
+    "/ops-admin/routes/today",
+    "POST",
+    body,
+    accessToken
+  );
 }
 
 export function updateAdminUser(

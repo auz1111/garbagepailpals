@@ -10,6 +10,7 @@ import {
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
+import { geocodeAddressParts } from "../../services/geocoding";
 
 type ScheduleRow = {
   id: string;
@@ -111,6 +112,15 @@ export async function createAddressHandler(
           throw new HttpError(409, "You've already added this address.");
         }
 
+        // Geocode the real street address so routing uses accurate coordinates;
+        // fall back to the client-provided lat/lng if the lookup is unavailable.
+        const geocoded = await geocodeAddressParts({
+          line1: input.line1,
+          city: input.city,
+          state: input.state,
+          postalCode: input.postalCode
+        });
+
         // Seed a sensible default pickup day (Tuesday, weekly) from the form's
         // cans/roll-in, so a new location has a schedule and a price immediately.
         const created = await prisma.serviceAddress.create({
@@ -121,8 +131,8 @@ export async function createAddressHandler(
             city: input.city,
             state: input.state,
             postalCode: input.postalCode,
-            lat: input.lat,
-            lng: input.lng,
+            lat: geocoded?.lat ?? input.lat,
+            lng: geocoded?.lng ?? input.lng,
             timezone: input.timezone,
             accessNotes: input.accessNotes,
             gateCode: input.gateCode,
