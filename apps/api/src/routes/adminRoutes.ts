@@ -305,15 +305,20 @@ export async function adminTodaysRouteHandler(
         });
 
         const stops: StopBuild[] = [];
+        // Count addresses that actually have a pickup today (biweekly-aware, with
+        // an active sub) regardless of whether they're already routed, so we can
+        // distinguish "nothing scheduled" from "all already assigned".
+        let scheduledTodayCount = 0;
         for (const a of addresses) {
-          if (routedAddressIds.has(a.id)) {
-            continue;
-          }
           const pickups = a.schedules.filter(
             (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
           );
           const subscriptionId = a.subscriptions[0]?.id;
           if (pickups.length === 0 || !subscriptionId) {
+            continue;
+          }
+          scheduledTodayCount += 1;
+          if (routedAddressIds.has(a.id)) {
             continue;
           }
           const jobTypes = pickups.some((p) => p.rollIn) ? ["CURB_IN", "CURB_OUT"] : ["CURB_OUT"];
@@ -351,7 +356,8 @@ export async function adminTodaysRouteHandler(
               start: geoStart,
               end: geoEnd,
               routes: [],
-              assigned: assigning
+              assigned: assigning,
+              emptyReason: scheduledTodayCount === 0 ? "none_scheduled" : "all_assigned"
             })
           );
         }
@@ -493,7 +499,8 @@ export async function adminTodaysRouteHandler(
             start,
             end,
             routes: legs,
-            assigned: assigning
+            assigned: assigning,
+            emptyReason: null
           })
         );
       },

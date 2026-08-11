@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "7209572430330526013"
+      "templateHash": "11219387608079779311"
     }
   },
   "parameters": {
@@ -94,6 +94,91 @@
       "defaultValue": "10.30.2.0/24",
       "metadata": {
         "description": "CIDR for Function App integration subnet."
+      }
+    },
+    "jwtAccessSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Secret for signing access tokens."
+      }
+    },
+    "jwtRefreshSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Secret for signing refresh tokens."
+      }
+    },
+    "stripeSecretKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Stripe secret API key."
+      }
+    },
+    "stripeWebhookSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Stripe webhook signing secret."
+      }
+    },
+    "paypalClientId": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "PayPal REST app client id."
+      }
+    },
+    "paypalClientSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "PayPal REST app client secret."
+      }
+    },
+    "paypalWebhookId": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "PayPal webhook id (for signature verification)."
+      }
+    },
+    "orsApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "OpenRouteService API key."
+      }
+    },
+    "googleGeocodingApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Google Geocoding API key."
+      }
+    },
+    "paypalEnv": {
+      "type": "string",
+      "defaultValue": "sandbox",
+      "allowedValues": [
+        "sandbox",
+        "live"
+      ],
+      "metadata": {
+        "description": "PayPal environment: sandbox or live."
+      }
+    },
+    "devFakeEntitlement": {
+      "type": "string",
+      "defaultValue": "false",
+      "allowedValues": [
+        "true",
+        "false"
+      ],
+      "metadata": {
+        "description": "When \"true\", the API fakes an active entitlement for every user (dev only)."
       }
     }
   },
@@ -739,7 +824,40 @@
             "value": "[parameters('postgresAdminPassword')]"
           },
           "keyVaultUri": "[if(parameters('cheapMode'), createObject('value', ''), createObject('value', reference('keyVault').outputs.vaultUri.value))]",
-          "functionSubnetId": "[if(equals(variables('effectivePostgresNetworkMode'), 'Private'), createObject('value', variables('functionSubnetResourceId')), createObject('value', ''))]"
+          "functionSubnetId": "[if(equals(variables('effectivePostgresNetworkMode'), 'Private'), createObject('value', variables('functionSubnetResourceId')), createObject('value', ''))]",
+          "jwtAccessSecret": {
+            "value": "[parameters('jwtAccessSecret')]"
+          },
+          "jwtRefreshSecret": {
+            "value": "[parameters('jwtRefreshSecret')]"
+          },
+          "stripeSecretKey": {
+            "value": "[parameters('stripeSecretKey')]"
+          },
+          "stripeWebhookSecret": {
+            "value": "[parameters('stripeWebhookSecret')]"
+          },
+          "paypalClientId": {
+            "value": "[parameters('paypalClientId')]"
+          },
+          "paypalClientSecret": {
+            "value": "[parameters('paypalClientSecret')]"
+          },
+          "paypalWebhookId": {
+            "value": "[parameters('paypalWebhookId')]"
+          },
+          "orsApiKey": {
+            "value": "[parameters('orsApiKey')]"
+          },
+          "googleGeocodingApiKey": {
+            "value": "[parameters('googleGeocodingApiKey')]"
+          },
+          "paypalEnv": {
+            "value": "[parameters('paypalEnv')]"
+          },
+          "devFakeEntitlement": {
+            "value": "[parameters('devFakeEntitlement')]"
+          }
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -748,7 +866,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "4014598847528161784"
+              "templateHash": "5091528879088261805"
             }
           },
           "parameters": {
@@ -798,12 +916,63 @@
               "metadata": {
                 "description": "Optional subnet ID for VNet integration."
               }
+            },
+            "jwtAccessSecret": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "jwtRefreshSecret": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "stripeSecretKey": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "stripeWebhookSecret": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "paypalClientId": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "paypalClientSecret": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "paypalWebhookId": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "orsApiKey": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "googleGeocodingApiKey": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "paypalEnv": {
+              "type": "string",
+              "defaultValue": "sandbox",
+              "metadata": {
+                "description": "PayPal environment: sandbox or live."
+              }
+            },
+            "devFakeEntitlement": {
+              "type": "string",
+              "defaultValue": "false",
+              "metadata": {
+                "description": "When \"true\", the API fakes an active entitlement for every user (dev only)."
+              }
             }
           },
           "variables": {
             "functionPlanSku": "[if(parameters('cheapMode'), createObject('tier', 'Dynamic', 'name', 'Y1'), createObject('tier', 'ElasticPremium', 'name', 'EP1'))]",
             "functionPlanProperties": "[if(parameters('cheapMode'), createObject('reserved', true()), createObject('maximumElasticWorkerCount', 20, 'reserved', true()))]",
-            "optionalAppSettings": "[concat(if(empty(parameters('appInsightsConnectionString')), createArray(), createArray(createObject('name', 'APPINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')))), if(empty(parameters('keyVaultUri')), createArray(), createArray(createObject('name', 'KEY_VAULT_URI', 'value', parameters('keyVaultUri')))))]"
+            "optionalAppSettings": "[concat(if(empty(parameters('appInsightsConnectionString')), createArray(), createArray(createObject('name', 'APPINSIGHTS_CONNECTION_STRING', 'value', parameters('appInsightsConnectionString')))), if(empty(parameters('keyVaultUri')), createArray(), createArray(createObject('name', 'KEY_VAULT_URI', 'value', parameters('keyVaultUri')))))]",
+            "configAppSettings": "[concat(if(empty(parameters('jwtAccessSecret')), createArray(), createArray(createObject('name', 'JWT_ACCESS_SECRET', 'value', parameters('jwtAccessSecret')))), if(empty(parameters('jwtRefreshSecret')), createArray(), createArray(createObject('name', 'JWT_REFRESH_SECRET', 'value', parameters('jwtRefreshSecret')))), if(empty(parameters('stripeSecretKey')), createArray(), createArray(createObject('name', 'STRIPE_SECRET_KEY', 'value', parameters('stripeSecretKey')))), if(empty(parameters('stripeWebhookSecret')), createArray(), createArray(createObject('name', 'STRIPE_WEBHOOK_SECRET', 'value', parameters('stripeWebhookSecret')))), if(empty(parameters('paypalClientId')), createArray(), createArray(createObject('name', 'PAYPAL_CLIENT_ID', 'value', parameters('paypalClientId')))), if(empty(parameters('paypalClientSecret')), createArray(), createArray(createObject('name', 'PAYPAL_CLIENT_SECRET', 'value', parameters('paypalClientSecret')))), if(empty(parameters('paypalWebhookId')), createArray(), createArray(createObject('name', 'PAYPAL_WEBHOOK_ID', 'value', parameters('paypalWebhookId')))), if(empty(parameters('orsApiKey')), createArray(), createArray(createObject('name', 'ORS_API_KEY', 'value', parameters('orsApiKey')))), if(empty(parameters('googleGeocodingApiKey')), createArray(), createArray(createObject('name', 'GOOGLE_GEOCODING_API_KEY', 'value', parameters('googleGeocodingApiKey')))), createArray(createObject('name', 'PAYPAL_ENV', 'value', parameters('paypalEnv'))), createArray(createObject('name', 'DEV_FAKE_ENTITLEMENT', 'value', parameters('devFakeEntitlement'))))]"
           },
           "resources": [
             {
@@ -828,7 +997,7 @@
                 "clientAffinityEnabled": false,
                 "siteConfig": {
                   "linuxFxVersion": "NODE|22",
-                  "appSettings": "[concat(createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'node'), createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~22'), createObject('name', 'AzureWebJobsFeatureFlags', 'value', 'EnableWorkerIndexing'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1'), createObject('name', 'POSTGRES_HOST', 'value', parameters('postgresFqdn')), createObject('name', 'POSTGRES_DB', 'value', parameters('postgresDatabaseName')), createObject('name', 'DATABASE_URL', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'), parameters('postgresDatabaseName'))), createObject('name', 'DIRECT_URL', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'), parameters('postgresDatabaseName'))), createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value))), variables('optionalAppSettings'))]",
+                  "appSettings": "[concat(createArray(createObject('name', 'FUNCTIONS_EXTENSION_VERSION', 'value', '~4'), createObject('name', 'FUNCTIONS_WORKER_RUNTIME', 'value', 'node'), createObject('name', 'WEBSITE_NODE_DEFAULT_VERSION', 'value', '~22'), createObject('name', 'AzureWebJobsFeatureFlags', 'value', 'EnableWorkerIndexing'), createObject('name', 'WEBSITE_RUN_FROM_PACKAGE', 'value', '1'), createObject('name', 'POSTGRES_HOST', 'value', parameters('postgresFqdn')), createObject('name', 'POSTGRES_DB', 'value', parameters('postgresDatabaseName')), createObject('name', 'DATABASE_URL', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'), parameters('postgresDatabaseName'))), createObject('name', 'DIRECT_URL', 'value', format('postgresql://{0}:{1}@{2}:5432/{3}?sslmode=require', parameters('postgresAdminLogin'), parameters('postgresAdminPassword'), parameters('postgresFqdn'), parameters('postgresDatabaseName'))), createObject('name', 'AzureWebJobsStorage', 'value', format('DefaultEndpointsProtocol=https;AccountName={0};EndpointSuffix={1};AccountKey={2}', parameters('storageAccountName'), environment().suffixes.storage, listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName')), '2023-05-01').keys[0].value))), variables('optionalAppSettings'), variables('configAppSettings'))]",
                   "ftpsState": "Disabled",
                   "vnetRouteAllEnabled": "[not(equals(parameters('functionSubnetId'), ''))]"
                 },

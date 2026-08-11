@@ -48,6 +48,25 @@ jobs:
         env:
           POSTGRES_ADMIN_PASSWORD_DEV: ${{ secrets.POSTGRES_ADMIN_PASSWORD_DEV }}
           POSTGRES_ADMIN_PASSWORD_PROD: ${{ secrets.POSTGRES_ADMIN_PASSWORD_PROD }}
+          # API configuration — secrets survive deploys because they flow through Bicep.
+          JWT_ACCESS_SECRET_PROD: ${{ secrets.JWT_ACCESS_SECRET_PROD }}
+          JWT_REFRESH_SECRET_PROD: ${{ secrets.JWT_REFRESH_SECRET_PROD }}
+          STRIPE_SECRET_KEY_PROD: ${{ secrets.STRIPE_SECRET_KEY_PROD }}
+          STRIPE_WEBHOOK_SECRET_PROD: ${{ secrets.STRIPE_WEBHOOK_SECRET_PROD }}
+          PAYPAL_CLIENT_ID_PROD: ${{ secrets.PAYPAL_CLIENT_ID_PROD }}
+          PAYPAL_CLIENT_SECRET_PROD: ${{ secrets.PAYPAL_CLIENT_SECRET_PROD }}
+          PAYPAL_WEBHOOK_ID_PROD: ${{ secrets.PAYPAL_WEBHOOK_ID_PROD }}
+          ORS_API_KEY_PROD: ${{ secrets.ORS_API_KEY_PROD }}
+          GOOGLE_GEOCODING_API_KEY_PROD: ${{ secrets.GOOGLE_GEOCODING_API_KEY_PROD }}
+          JWT_ACCESS_SECRET_DEV: ${{ secrets.JWT_ACCESS_SECRET_DEV }}
+          JWT_REFRESH_SECRET_DEV: ${{ secrets.JWT_REFRESH_SECRET_DEV }}
+          STRIPE_SECRET_KEY_DEV: ${{ secrets.STRIPE_SECRET_KEY_DEV }}
+          STRIPE_WEBHOOK_SECRET_DEV: ${{ secrets.STRIPE_WEBHOOK_SECRET_DEV }}
+          PAYPAL_CLIENT_ID_DEV: ${{ secrets.PAYPAL_CLIENT_ID_DEV }}
+          PAYPAL_CLIENT_SECRET_DEV: ${{ secrets.PAYPAL_CLIENT_SECRET_DEV }}
+          PAYPAL_WEBHOOK_ID_DEV: ${{ secrets.PAYPAL_WEBHOOK_ID_DEV }}
+          ORS_API_KEY_DEV: ${{ secrets.ORS_API_KEY_DEV }}
+          GOOGLE_GEOCODING_API_KEY_DEV: ${{ secrets.GOOGLE_GEOCODING_API_KEY_DEV }}
         run: |
           if [[ "${{ github.event.inputs.environment || 'prod' }}" == "dev" ]]; then
             az deployment group create \

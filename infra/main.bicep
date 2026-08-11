@@ -46,6 +46,47 @@ param postgresSubnetPrefix string = '10.30.1.0/24'
 @description('CIDR for Function App integration subnet.')
 param functionSubnetPrefix string = '10.30.2.0/24'
 
+// --- API application configuration (passed through to the Function App) -------
+@description('Secret for signing access tokens.')
+@secure()
+param jwtAccessSecret string = ''
+@description('Secret for signing refresh tokens.')
+@secure()
+param jwtRefreshSecret string = ''
+@description('Stripe secret API key.')
+@secure()
+param stripeSecretKey string = ''
+@description('Stripe webhook signing secret.')
+@secure()
+param stripeWebhookSecret string = ''
+@description('PayPal REST app client id.')
+@secure()
+param paypalClientId string = ''
+@description('PayPal REST app client secret.')
+@secure()
+param paypalClientSecret string = ''
+@description('PayPal webhook id (for signature verification).')
+@secure()
+param paypalWebhookId string = ''
+@description('OpenRouteService API key.')
+@secure()
+param orsApiKey string = ''
+@description('Google Geocoding API key.')
+@secure()
+param googleGeocodingApiKey string = ''
+@description('PayPal environment: sandbox or live.')
+@allowed([
+  'sandbox'
+  'live'
+])
+param paypalEnv string = 'sandbox'
+@description('When "true", the API fakes an active entitlement for every user (dev only).')
+@allowed([
+  'true'
+  'false'
+])
+param devFakeEntitlement string = 'false'
+
 var suffix = '${namePrefix}-${environment}'
 var storageAccountName = toLower('stgpp${environment}')
 var postgresServerName = 'psql-gpp-${environment}'
@@ -183,6 +224,17 @@ module functionApp './modules/functionapp.bicep' = {
     postgresAdminPassword: postgresAdminPassword
     keyVaultUri: cheapMode ? '' : keyVault!.outputs.vaultUri
     functionSubnetId: effectivePostgresNetworkMode == 'Private' ? functionSubnetResourceId : ''
+    jwtAccessSecret: jwtAccessSecret
+    jwtRefreshSecret: jwtRefreshSecret
+    stripeSecretKey: stripeSecretKey
+    stripeWebhookSecret: stripeWebhookSecret
+    paypalClientId: paypalClientId
+    paypalClientSecret: paypalClientSecret
+    paypalWebhookId: paypalWebhookId
+    orsApiKey: orsApiKey
+    googleGeocodingApiKey: googleGeocodingApiKey
+    paypalEnv: paypalEnv
+    devFakeEntitlement: devFakeEntitlement
   }
 }
 

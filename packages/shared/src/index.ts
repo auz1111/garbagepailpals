@@ -508,7 +508,10 @@ export const adminRouteResponseSchema = z.object({
   end: adminRoutePointSchema.nullable(),
   routes: z.array(adminRouteLegSchema),
   // true when the jobs were assigned to operators (vs a preview).
-  assigned: z.boolean()
+  assigned: z.boolean(),
+  // When `routes` is empty, explains why: nothing scheduled today, or every
+  // scheduled pickup is already on another route. Null when routes is non-empty.
+  emptyReason: z.enum(["none_scheduled", "all_assigned"]).nullable().default(null)
 });
 
 // A persisted route assigned to an operator for a service day. Operators can

@@ -239,6 +239,11 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   }
 
   const assigning = selected.size > 0;
+  const scope = selectedHood ? ` in ${selectedHood.name}` : "";
+  const emptyMessage =
+    route?.emptyReason === "all_assigned"
+      ? `Every pickup${scope} today is already on a route. Remove a route above to free up its locations, then reassign.`
+      : `No pickups are scheduled for today${scope}.`;
   const totals = useMemo(() => {
     const r = route?.routes ?? [];
     return {
@@ -412,10 +417,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           </div>
           {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}
           {routeMutation.isSuccess && route && totals.stops === 0 ? (
-            <p className="subtext">
-              Nothing to assign — no pickups are scheduled for today
-              {selectedHood ? ` in ${selectedHood.name}` : ""}.
-            </p>
+            <p className="subtext">{emptyMessage}</p>
           ) : null}
         </form>
       </article>
@@ -423,10 +425,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
       {route ? (
         totals.stops === 0 ? (
           <article className="panel">
-            <p className="subtext">
-              No locations are scheduled for pickup today
-              {selectedHood ? ` in ${selectedHood.name}` : ""}.
-            </p>
+            <p className="subtext">{emptyMessage}</p>
           </article>
         ) : (
           <>
