@@ -10,6 +10,7 @@ import type {
   AdminIncidentResolveResponse,
   AdminRuntimeMetrics,
   AdminDashboardMetrics,
+  AdminUsersResponse,
   AuthResponse,
   LoginInput,
   OperatorJobClaimResponse,
@@ -143,6 +144,10 @@ export function updateOperatorJobStatus(
 
 export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDashboardMetrics> {
   return request<undefined, AdminDashboardMetrics>("/ops-admin/dashboard", "GET", undefined, accessToken);
+}
+
+export function getAdminUsers(accessToken: string): Promise<AdminUsersResponse> {
+  return request<undefined, AdminUsersResponse>("/ops-admin/users", "GET", undefined, accessToken);
 }
 
 export function getAdminRuntimeMetrics(accessToken: string): Promise<AdminRuntimeMetrics> {

@@ -335,6 +335,22 @@ export const adminDashboardMetricsSchema = z.object({
   })
 });
 
+export const adminUserSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  role: roleSchema,
+  createdAt: z.string(),
+  requestedServiceArea: z.string().nullable(),
+  addressCount: z.number().int().nonnegative(),
+  activeSubscription: z.boolean(),
+  monthlyCents: z.number().int().nonnegative()
+});
+
+export const adminUsersResponseSchema = z.object({
+  users: z.array(adminUserSchema)
+});
+
 export const adminRuntimeMetricsSchema = z.object({
   runtime: z.object({
     startedAt: z.string().datetime(),
@@ -462,6 +478,8 @@ export type OperatorJobClaimResponse = z.infer<typeof operatorJobClaimResponseSc
 export type OperatorJobStatusUpdate = z.infer<typeof operatorJobStatusUpdateSchema>;
 export type OperatorJobStatusResponse = z.infer<typeof operatorJobStatusResponseSchema>;
 export type AdminDashboardMetrics = z.infer<typeof adminDashboardMetricsSchema>;
+export type AdminUser = z.infer<typeof adminUserSchema>;
+export type AdminUsersResponse = z.infer<typeof adminUsersResponseSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
 export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;

@@ -1,8 +1,70 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
-import { adminDashboardMetricsSchema } from "@gpp/shared";
+import {
+  addressMonthlyCents,
+  adminUsersResponseSchema,
+  adminDashboardMetricsSchema
+} from "@gpp/shared";
 import { handleOptions, jsonResponse, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
+
+const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
+
+export async function adminUsersHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async () => {
+        const rows = await prisma.user.findMany({
+          orderBy: { createdAt: "desc" },
+          include: {
+            serviceAddresses: { where: { isActive: true }, include: { schedules: true } },
+            subscriptions: true
+          }
+        });
+
+        const users = rows.map((row) => {
+          const monthlyCents = row.serviceAddresses.reduce(
+            (sum, address) =>
+              sum +
+              addressMonthlyCents(
+                address.schedules.map((s) => ({
+                  dayOfWeek: s.pickupDayOfWeek,
+                  canCount: s.canCount,
+                  cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+                  rollIn: s.rollIn
+                }))
+              ),
+            0
+          );
+          return {
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            role: row.role,
+            createdAt: row.createdAt.toISOString(),
+            requestedServiceArea: row.requestedServiceArea,
+            addressCount: row.serviceAddresses.length,
+            activeSubscription: row.subscriptions.some((sub) =>
+              ACTIVE_SUB_STATUSES.includes(sub.status)
+            ),
+            monthlyCents
+          };
+        });
+
+        return jsonResponse(200, adminUsersResponseSchema.parse({ users }));
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
 
 export async function adminDashboardMetricsHandler(
   request: HttpRequest,

@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminIncident, CurrentUser } from "@gpp/shared";
+import { Navigate, Route, Routes } from "react-router-dom";
+import type { AdminIncident, CurrentUser, Role } from "@gpp/shared";
+import { formatUsd } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
+  getAdminUsers,
   getAdminDashboardMetrics,
   getAdminIncidents,
   getAdminRuntimeMetrics,
@@ -14,6 +17,17 @@ import {
 type AdminWorkspaceProps = {
   user: CurrentUser;
   accessToken: string;
+};
+
+export const ADMIN_NAV = [
+  { to: "/admin", label: "Dashboard", icon: "📊", end: true },
+  { to: "/admin/users", label: "Users", icon: "👥" }
+] as const;
+
+const ROLE_LABELS: Record<Role, string> = {
+  CUSTOMER: "Customer",
+  OPERATOR: "Operator",
+  ADMIN: "Admin"
 };
 
 function getErrorMessage(error: unknown): string {
@@ -51,6 +65,12 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
               ? "__unassigned"
               : undefined
       })
+  });
+
+  const [userRoleFilter, setUserRoleFilter] = useState<"ALL" | Role>("ALL");
+  const usersQuery = useQuery({
+    queryKey: ["admin-users"],
+    queryFn: async () => getAdminUsers(accessToken)
   });
 
   const metrics = metricsQuery.data;
@@ -127,9 +147,96 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
     });
   }, [incidents]);
 
-  return (
-    <section className="card role-shell customer-workspace">
-      <h2>Admin Dashboard</h2>
+  function renderUsers(): JSX.Element {
+    const all = usersQuery.data?.users ?? [];
+    const rows = userRoleFilter === "ALL" ? all : all.filter((u) => u.role === userRoleFilter);
+    const counts = all.reduce<Record<string, number>>((acc, u) => {
+      acc[u.role] = (acc[u.role] ?? 0) + 1;
+      return acc;
+    }, {});
+    return (
+      <div className="dash-page">
+        <div className="dash-page-head">
+          <h2>Users</h2>
+          <p className="subtext">
+            {all.length} total · {counts.CUSTOMER ?? 0} customers · {counts.OPERATOR ?? 0} operators ·{" "}
+            {counts.ADMIN ?? 0} admins
+          </p>
+        </div>
+        <article className="panel">
+          <label className="field-single">
+            Filter by role
+            <select
+              value={userRoleFilter}
+              onChange={(event) => setUserRoleFilter(event.target.value as "ALL" | Role)}
+            >
+              <option value="ALL">All roles</option>
+              <option value="CUSTOMER">Customers</option>
+              <option value="OPERATOR">Operators</option>
+              <option value="ADMIN">Admins</option>
+            </select>
+          </label>
+
+          {usersQuery.isLoading ? (
+            <p className="subtext">Loading users…</p>
+          ) : usersQuery.isError ? (
+            <p className="error">{getErrorMessage(usersQuery.error)}</p>
+          ) : rows.length === 0 ? (
+            <p className="subtext">No users match this filter.</p>
+          ) : (
+            <div className="admin-table-scroll">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Locations</th>
+                    <th>Plan</th>
+                    <th>Monthly</th>
+                    <th>Area</th>
+                    <th>Joined</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>
+                        <strong>{entry.name}</strong>
+                        <span className="admin-table-sub">{entry.email}</span>
+                      </td>
+                      <td>{ROLE_LABELS[entry.role]}</td>
+                      <td>{entry.role === "CUSTOMER" ? entry.addressCount : "—"}</td>
+                      <td>
+                        {entry.role === "CUSTOMER" ? (
+                          <span
+                            className={`coverage-badge ${
+                              entry.activeSubscription ? "covered" : "uncovered"
+                            }`}
+                          >
+                            {entry.activeSubscription ? "Active" : "None"}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td>{entry.role === "CUSTOMER" ? `${formatUsd(entry.monthlyCents)}/mo` : "—"}</td>
+                      <td>{entry.requestedServiceArea ?? "—"}</td>
+                      <td>{new Date(entry.createdAt).toLocaleDateString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
+      </div>
+    );
+  }
+
+  function renderDashboard(): JSX.Element {
+    return (
+      <>
+        <h2>Admin Dashboard</h2>
       <p className="subtext">Signed in as {user.name}. Metrics refresh on page load.</p>
 
       {!metrics ? (
@@ -352,6 +459,17 @@ export function AdminWorkspace({ user, accessToken }: AdminWorkspaceProps): JSX.
       {assignMutation.error ? <p className="error">{getErrorMessage(assignMutation.error)}</p> : null}
       {resolveMutation.error ? <p className="error">{getErrorMessage(resolveMutation.error)}</p> : null}
       {reopenMutation.error ? <p className="error">{getErrorMessage(reopenMutation.error)}</p> : null}
+      </>
+    );
+  }
+
+  return (
+    <section className="card role-shell customer-workspace">
+      <Routes>
+        <Route index element={renderDashboard()} />
+        <Route path="users" element={renderUsers()} />
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Routes>
     </section>
   );
 }

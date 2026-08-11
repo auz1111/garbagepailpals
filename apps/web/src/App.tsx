@@ -18,7 +18,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
 import { OperatorWorkspace } from "./components/OperatorWorkspace";
-import { AdminWorkspace } from "./components/AdminWorkspace";
+import { AdminWorkspace, ADMIN_NAV } from "./components/AdminWorkspace";
 
 type AuthMode = "LOGIN" | "REGISTER";
 const REFRESH_TOKEN_KEY = "gpp.refreshToken";
@@ -162,7 +162,11 @@ export function App() {
   }
 
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
-  const showDashboardMenu = isAuthenticated && user?.role === "CUSTOMER" && !customerBlocked;
+  const isAdmin = user?.role === "ADMIN";
+  const showDashboardMenu =
+    isAuthenticated && ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin);
+  const dashboardNav = isAdmin ? ADMIN_NAV : CUSTOMER_NAV;
+  const dashboardMenuLabel = isAdmin ? "Admin" : "Dashboard";
 
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
 
@@ -226,7 +230,7 @@ export function App() {
             <div className="drawer-backdrop" onClick={() => setMenuOpen(false)} />
             <aside className="drawer" aria-label="Dashboard navigation">
               <div className="drawer-head">
-                <span>Dashboard</span>
+                <span>{dashboardMenuLabel}</span>
                 <button
                   type="button"
                   className="drawer-close"
@@ -237,7 +241,7 @@ export function App() {
                 </button>
               </div>
               <nav className="drawer-nav">
-                {CUSTOMER_NAV.map((item) => (
+                {dashboardNav.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
@@ -605,7 +609,7 @@ export function App() {
 
           <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["ADMIN"]} />}>
             <Route
-              path="/admin"
+              path="/admin/*"
               element={
                 user && accessToken ? <AdminWorkspace user={user} accessToken={accessToken} /> : null
               }

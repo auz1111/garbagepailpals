@@ -554,6 +554,48 @@ a {
   white-space: nowrap;
 }
 
+.admin-table-scroll {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-2);
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 0.65rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-table td strong {
+  display: block;
+}
+
+.admin-table-sub {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--slate-2);
+}
+
 .update-banner {
   display: flex;
   align-items: center;
