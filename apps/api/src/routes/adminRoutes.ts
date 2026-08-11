@@ -39,6 +39,87 @@ function operatorWhere() {
   };
 }
 
+// Today's service day as a date-only (UTC midnight) key, matching how routes
+// are stored/queried by day.
+export function todayServiceDate(now: Date): Date {
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+}
+
+// Prisma include shape shared by every query that serializes a DailyRoute.
+export const DAILY_ROUTE_INCLUDE = {
+  operator: { select: { name: true } },
+  stops: {
+    orderBy: { sequence: "asc" as const },
+    include: { serviceAddress: { include: { user: { select: { name: true } } } } }
+  }
+} as const;
+
+export type DailyRouteRow = {
+  id: string;
+  operatorId: string;
+  operator: { name: string };
+  status: "ASSIGNED" | "ACCEPTED";
+  label: string | null;
+  startLabel: string | null;
+  startLat: number | null;
+  startLng: number | null;
+  endLabel: string | null;
+  endLat: number | null;
+  endLng: number | null;
+  distanceMeters: number | null;
+  durationSeconds: number | null;
+  geometry: string | null;
+  acceptedAt: Date | null;
+  stops: Array<{
+    sequence: number;
+    serviceAddressId: string;
+    jobTypes: string;
+    serviceAddress: {
+      line1: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      lat: { toNumber: () => number };
+      lng: { toNumber: () => number };
+      user: { name: string };
+    };
+  }>;
+};
+
+export function serializeDailyRoute(route: DailyRouteRow) {
+  return {
+    id: route.id,
+    operatorId: route.operatorId,
+    operatorName: route.operator.name,
+    status: route.status,
+    label: route.label,
+    start:
+      route.startLat != null && route.startLng != null
+        ? { label: route.startLabel ?? "Start", lat: route.startLat, lng: route.startLng }
+        : null,
+    end:
+      route.endLat != null && route.endLng != null
+        ? { label: route.endLabel ?? "End", lat: route.endLat, lng: route.endLng }
+        : null,
+    totalDistanceMeters: route.distanceMeters ?? 0,
+    totalDurationSeconds: route.durationSeconds ?? 0,
+    geometry: route.geometry,
+    acceptedAt: route.acceptedAt ? route.acceptedAt.toISOString() : null,
+    stops: route.stops.map((s) => ({
+      order: s.sequence,
+      addressId: s.serviceAddressId,
+      customerName: s.serviceAddress.user.name,
+      line1: s.serviceAddress.line1,
+      city: s.serviceAddress.city,
+      state: s.serviceAddress.state,
+      postalCode: s.serviceAddress.postalCode,
+      lat: s.serviceAddress.lat.toNumber(),
+      lng: s.serviceAddress.lng.toNumber(),
+      jobTypes: s.jobTypes.split(",").filter(Boolean)
+    }))
+  };
+}
+
 // Operators marked available on a given date.
 export async function adminAvailableOperatorsHandler(
   request: HttpRequest,
@@ -86,47 +167,65 @@ export async function adminAssignedRoutesHandler(
     withAuth(
       async () => {
         const now = new Date();
-        const routeJobDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 0, 0);
+        const serviceDate = todayServiceDate(now);
 
-        const jobs = await prisma.serviceJob.findMany({
-          where: { scheduledDate: routeJobDate, type: "CURB_OUT", assignedOperatorId: { not: null } },
-          include: {
-            serviceAddress: { include: { user: { select: { name: true } } } },
-            assignedOperator: { select: { id: true, name: true } }
-          },
-          orderBy: { routeSequence: "asc" }
+        const routes = await prisma.dailyRoute.findMany({
+          where: { serviceDate },
+          include: DAILY_ROUTE_INCLUDE,
+          orderBy: [{ operator: { name: "asc" } }, { createdAt: "asc" }]
         });
-
-        const byOperator = new Map<
-          string,
-          { operatorId: string; operatorName: string; stops: unknown[] }
-        >();
-        for (const job of jobs) {
-          const op = job.assignedOperator;
-          if (!op) {
-            continue;
-          }
-          let route = byOperator.get(op.id);
-          if (!route) {
-            route = { operatorId: op.id, operatorName: op.name, stops: [] };
-            byOperator.set(op.id, route);
-          }
-          route.stops.push({
-            order: job.routeSequence ?? route.stops.length,
-            addressId: job.serviceAddress.id,
-            line1: job.serviceAddress.line1,
-            city: job.serviceAddress.city,
-            state: job.serviceAddress.state,
-            postalCode: job.serviceAddress.postalCode,
-            customerName: job.serviceAddress.user.name
-          });
-        }
 
         return jsonResponse(
           200,
           assignedRoutesResponseSchema.parse({
             date: now.toISOString(),
-            routes: [...byOperator.values()]
+            routes: routes.map((r) => serializeDailyRoute(r as unknown as DailyRouteRow))
+          })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Admin removes an un-accepted route for the day, freeing its locations to be
+// assigned to another operator. Accepted (locked) routes can't be removed.
+export async function adminDeleteRouteHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const routeId = req.params.routeId;
+        if (!routeId) {
+          throw new HttpError(400, "routeId is required");
+        }
+        const route = await prisma.dailyRoute.findUnique({ where: { id: routeId } });
+        if (!route) {
+          throw new HttpError(404, "Route not found");
+        }
+        if (route.status === "ACCEPTED") {
+          throw new HttpError(409, "This route has been accepted by the operator and is locked.");
+        }
+        await prisma.dailyRoute.delete({ where: { id: routeId } });
+
+        const now = new Date();
+        const routes = await prisma.dailyRoute.findMany({
+          where: { serviceDate: todayServiceDate(now) },
+          include: DAILY_ROUTE_INCLUDE,
+          orderBy: [{ operator: { name: "asc" } }, { createdAt: "asc" }]
+        });
+        return jsonResponse(
+          200,
+          assignedRoutesResponseSchema.parse({
+            date: now.toISOString(),
+            routes: routes.map((r) => serializeDailyRoute(r as unknown as DailyRouteRow))
           })
         );
       },
@@ -175,9 +274,18 @@ export async function adminTodaysRouteHandler(
 
         const now = new Date();
         const weekday = now.getDay();
-        // Route-job time = end of today (local), so it stays "today" and ahead of
-        // the operator queue's "from now" window through the day.
-        const routeJobDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 0, 0);
+        const serviceDate = todayServiceDate(now);
+
+        // Locations already on a route today (any operator, assigned or accepted)
+        // are spoken for — one operator per location — so exclude them.
+        const routedAddressIds = new Set(
+          (
+            await prisma.routeStop.findMany({
+              where: { route: { serviceDate } },
+              select: { serviceAddressId: true }
+            })
+          ).map((r) => r.serviceAddressId)
+        );
 
         // Today's pickups come from schedules (pickup day == today), not from the
         // offset curb-out/curb-in job times — so "today" means today's collections.
@@ -198,6 +306,9 @@ export async function adminTodaysRouteHandler(
 
         const stops: StopBuild[] = [];
         for (const a of addresses) {
+          if (routedAddressIds.has(a.id)) {
+            continue;
+          }
           const pickups = a.schedules.filter(
             (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
           );
@@ -332,48 +443,46 @@ export async function adminTodaysRouteHandler(
           };
         });
 
-        // Persist the assignment as one route-job per stop (CURB_OUT at end of
-        // today), so each operator owns their stops and sees them on their
-        // dashboard. Re-running replaces the day's assignments.
+        // Persist each operator's leg as a new DailyRoute (accumulating — prior
+        // routes, especially accepted ones, are never disturbed). Because we
+        // excluded already-routed locations above, no location lands on two
+        // routes. The operator accepts a route to lock it.
         if (assigning) {
-          const stopById = new Map(stops.map((stop) => [stop.addressId, stop] as const));
-          await prisma.serviceJob.updateMany({
-            where: { scheduledDate: routeJobDate, type: "CURB_OUT" },
-            data: { assignedOperatorId: null, routeSequence: null }
-          });
+          const neighborhood = input.neighborhoodId
+            ? await prisma.neighborhood.findUnique({
+                where: { id: input.neighborhoodId },
+                select: { name: true }
+              })
+            : null;
           for (const leg of legs) {
-            if (!leg.operatorId) {
+            if (!leg.operatorId || leg.stops.length === 0) {
               continue;
             }
-            for (const stop of leg.stops) {
-              const build = stopById.get(stop.addressId);
-              if (!build) {
-                continue;
-              }
-              await prisma.serviceJob.upsert({
-                where: {
-                  serviceAddressId_scheduledDate_type: {
+            await prisma.dailyRoute.create({
+              data: {
+                serviceDate,
+                operatorId: leg.operatorId,
+                status: "ASSIGNED",
+                label: neighborhood?.name ?? null,
+                neighborhoodId: input.neighborhoodId ?? null,
+                startLabel: start.label,
+                startLat: start.lat,
+                startLng: start.lng,
+                endLabel: end?.label ?? null,
+                endLat: end?.lat ?? null,
+                endLng: end?.lng ?? null,
+                distanceMeters: Math.round(leg.totalDistanceMeters),
+                durationSeconds: Math.round(leg.totalDurationSeconds),
+                geometry: leg.geometry,
+                stops: {
+                  create: leg.stops.map((stop) => ({
                     serviceAddressId: stop.addressId,
-                    scheduledDate: routeJobDate,
-                    type: "CURB_OUT"
-                  }
-                },
-                create: {
-                  serviceAddressId: stop.addressId,
-                  subscriptionId: build.subscriptionId,
-                  scheduledDate: routeJobDate,
-                  type: "CURB_OUT",
-                  status: "SCHEDULED",
-                  assignedOperatorId: leg.operatorId,
-                  routeSequence: stop.order
-                },
-                update: {
-                  assignedOperatorId: leg.operatorId,
-                  routeSequence: stop.order,
-                  status: "SCHEDULED"
+                    sequence: stop.order,
+                    jobTypes: [...stop.jobTypes].sort().join(",")
+                  }))
                 }
-              });
-            }
+              }
+            });
           }
         }
 

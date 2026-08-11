@@ -58,6 +58,11 @@ enum PlanInterval {
   YEARLY
 }
 
+enum RouteStatus {
+  ASSIGNED
+  ACCEPTED
+}
+
 model User {
   id                   String         @id @default(cuid())
   email                String         @unique
@@ -80,6 +85,7 @@ model User {
   refreshTokens        RefreshToken[]
   auditLogs            AuditLog[]     @relation("AuditActorLogs")
   availability         OperatorAvailability[]
+  routes               DailyRoute[]   @relation("OperatorRoutes")
 }
 
 model OperatorAvailability {
@@ -119,6 +125,7 @@ model ServiceAddress {
   subscriptions    Subscription[]
   jobs             ServiceJob[]
   holds            ServiceHold[]
+  routeStops       RouteStop[]
 
   @@index([postalCode])
   @@index([userId])
@@ -302,4 +309,45 @@ model RefreshToken {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
+}
+
+// A route the admin assigns to a single operator for a given service day. An
+// operator can hold several routes per day; each is accepted independently.
+model DailyRoute {
+  id              String      @id @default(cuid())
+  serviceDate     DateTime    @db.Date
+  operatorId      String
+  status          RouteStatus @default(ASSIGNED)
+  label           String?
+  neighborhoodId  String?
+  startLabel      String?
+  startLat        Float?
+  startLng        Float?
+  endLabel        String?
+  endLat          Float?
+  endLng          Float?
+  distanceMeters  Int?
+  durationSeconds Int?
+  geometry        String?
+  acceptedAt      DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  operator        User        @relation("OperatorRoutes", fields: [operatorId], references: [id], onDelete: Cascade)
+  stops           RouteStop[]
+
+  @@index([serviceDate])
+  @@index([operatorId, serviceDate])
+}
+
+model RouteStop {
+  id               String         @id @default(cuid())
+  routeId          String
+  serviceAddressId String
+  sequence         Int
+  jobTypes         String
+  route            DailyRoute     @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  serviceAddress   ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
+
+  @@index([routeId])
+  @@index([serviceAddressId, routeId])
 }

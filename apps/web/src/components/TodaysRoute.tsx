@@ -3,7 +3,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { AdminRouteResponse, AdminRouteLeg } from "@gpp/shared";
-import { getAssignedRoutes, getAvailableOperators, getNeighborhoods, getTodaysRoute } from "../lib/api";
+import {
+  deleteRoute,
+  getAssignedRoutes,
+  getAvailableOperators,
+  getNeighborhoods,
+  getTodaysRoute
+} from "../lib/api";
 
 type TodaysRouteProps = {
   accessToken: string;
@@ -185,6 +191,13 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   });
   const assignedRoutes = assignedQuery.data?.routes ?? [];
 
+  const deleteMutation = useMutation({
+    mutationFn: (routeId: string) => deleteRoute(routeId, accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["assigned-routes"], data);
+    }
+  });
+
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
     queryFn: async () => getNeighborhoods(accessToken)
@@ -253,21 +266,46 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         ) : (
           <ul className="assigned-route-list">
             {assignedRoutes.map((ar) => {
-              const open = expandedOperator === ar.operatorId;
+              const open = expandedOperator === ar.id;
+              const accepted = ar.status === "ACCEPTED";
               return (
-                <li className="assigned-route" key={ar.operatorId}>
-                  <button
-                    type="button"
-                    className="assigned-route-head"
-                    aria-expanded={open}
-                    onClick={() => setExpandedOperator(open ? null : ar.operatorId)}
-                  >
-                    <span className="assigned-route-chevron">{open ? "▾" : "▸"}</span>
-                    <strong>{ar.operatorName}</strong>
-                    <span className="assigned-route-count">
-                      {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"}
-                    </span>
-                  </button>
+                <li className="assigned-route" key={ar.id}>
+                  <div className="assigned-route-row">
+                    <button
+                      type="button"
+                      className="assigned-route-head"
+                      aria-expanded={open}
+                      onClick={() => setExpandedOperator(open ? null : ar.id)}
+                    >
+                      <span className="assigned-route-chevron">{open ? "▾" : "▸"}</span>
+                      <strong>{ar.operatorName}</strong>
+                      {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
+                      <span className="assigned-route-count">
+                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"}
+                      </span>
+                      <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
+                        {accepted ? "✓ Accepted" : "Awaiting accept"}
+                      </span>
+                    </button>
+                    {accepted ? (
+                      <span className="assigned-route-lock" title="Locked — operator accepted this route">
+                        🔒
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="address-row-remove"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Remove ${ar.operatorName}'s route? Its locations become assignable again.`)) {
+                            deleteMutation.mutate(ar.id);
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
                   {open ? (
                     <ol className="route-stop-list assigned-route-detail">
                       {ar.stops.map((stop) => (
@@ -290,6 +328,9 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         )}
         {assignedQuery.isError ? (
           <p className="error">{getErrorMessage(assignedQuery.error)}</p>
+        ) : null}
+        {deleteMutation.isError ? (
+          <p className="error">{getErrorMessage(deleteMutation.error)}</p>
         ) : null}
       </article>
 

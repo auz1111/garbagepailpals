@@ -30,6 +30,7 @@ import type {
   OperatorJobStatusResponse,
   OperatorJobStatusUpdate,
   OperatorQueueResponse,
+  OperatorRoutesResponse,
   PayPalCreateSubscriptionRequest,
   PayPalCreateSubscriptionResponse,
   BillingSummary,
@@ -242,6 +243,31 @@ export function getAssignedRoutes(accessToken: string): Promise<AssignedRoutesRe
   return request<undefined, AssignedRoutesResponse>(
     "/ops-admin/routes/assigned",
     "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function deleteRoute(routeId: string, accessToken: string): Promise<AssignedRoutesResponse> {
+  return request<undefined, AssignedRoutesResponse>(
+    `/ops-admin/routes/${routeId}`,
+    "DELETE",
+    undefined,
+    accessToken
+  );
+}
+
+export function getOperatorRoutes(accessToken: string): Promise<OperatorRoutesResponse> {
+  return request<undefined, OperatorRoutesResponse>("/operator/routes", "GET", undefined, accessToken);
+}
+
+export function acceptOperatorRoute(
+  routeId: string,
+  accessToken: string
+): Promise<OperatorRoutesResponse> {
+  return request<undefined, OperatorRoutesResponse>(
+    `/operator/routes/${routeId}/accept`,
+    "POST",
     undefined,
     accessToken
   );

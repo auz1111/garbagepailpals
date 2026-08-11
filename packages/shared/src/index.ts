@@ -511,26 +511,48 @@ export const adminRouteResponseSchema = z.object({
   assigned: z.boolean()
 });
 
-// Currently-assigned routes for a day, reconstructed from the DB.
-export const assignedRouteStopSchema = z.object({
+// A persisted route assigned to an operator for a service day. Operators can
+// hold several per day; each is accepted independently, and accepting locks it.
+export const routeStatusSchema = z.enum(["ASSIGNED", "ACCEPTED"]);
+
+export const dailyRouteStopSchema = z.object({
   order: z.number().int().nonnegative(),
   addressId: z.string(),
+  customerName: z.string(),
   line1: z.string(),
   city: z.string(),
   state: z.string(),
   postalCode: z.string(),
-  customerName: z.string()
+  lat: z.number(),
+  lng: z.number(),
+  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"]))
 });
 
-export const assignedRouteSchema = z.object({
+export const dailyRouteSchema = z.object({
+  id: z.string(),
   operatorId: z.string(),
   operatorName: z.string(),
-  stops: z.array(assignedRouteStopSchema)
+  status: routeStatusSchema,
+  label: z.string().nullable(),
+  start: adminRoutePointSchema.nullable(),
+  end: adminRoutePointSchema.nullable(),
+  totalDistanceMeters: z.number().nonnegative(),
+  totalDurationSeconds: z.number().nonnegative(),
+  geometry: z.string().nullable(),
+  acceptedAt: z.string().nullable(),
+  stops: z.array(dailyRouteStopSchema)
 });
 
+// Admin view of every route assigned for the day (all operators).
 export const assignedRoutesResponseSchema = z.object({
   date: z.string(),
-  routes: z.array(assignedRouteSchema)
+  routes: z.array(dailyRouteSchema)
+});
+
+// Operator view of the routes assigned to them for the day.
+export const operatorRoutesResponseSchema = z.object({
+  date: z.string(),
+  routes: z.array(dailyRouteSchema)
 });
 
 export const adminRuntimeMetricsSchema = z.object({
@@ -672,8 +694,11 @@ export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
 export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
 export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;
 export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
-export type AssignedRoute = z.infer<typeof assignedRouteSchema>;
+export type RouteStatus = z.infer<typeof routeStatusSchema>;
+export type DailyRoute = z.infer<typeof dailyRouteSchema>;
+export type DailyRouteStop = z.infer<typeof dailyRouteStopSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
+export type OperatorRoutesResponse = z.infer<typeof operatorRoutesResponseSchema>;
 export type Neighborhood = z.infer<typeof neighborhoodSchema>;
 export type NeighborhoodsResponse = z.infer<typeof neighborhoodsResponseSchema>;
 export type NeighborhoodCreate = z.infer<typeof neighborhoodCreateSchema>;

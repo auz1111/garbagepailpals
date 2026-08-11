@@ -1,13 +1,33 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CurrentUser, OperatorQueueJob } from "@gpp/shared";
+import type { CurrentUser, DailyRoute, OperatorQueueJob } from "@gpp/shared";
 import {
+  acceptOperatorRoute,
   claimOperatorJob,
   getOperatorAvailability,
   getOperatorQueue,
+  getOperatorRoutes,
   setOperatorAvailability,
   updateOperatorJobStatus
 } from "../lib/api";
+
+function routeMapsUrl(route: DailyRoute): string {
+  const points = [
+    ...(route.start ? [`${route.start.lat},${route.start.lng}`] : []),
+    ...route.stops.map((s) => `${s.lat},${s.lng}`),
+    ...(route.end ? [`${route.end.lat},${route.end.lng}`] : [])
+  ];
+  return `https://www.google.com/maps/dir/${points.map(encodeURIComponent).join("/")}`;
+}
+
+function formatMiles(meters: number): string {
+  return `${(meters / 1609.34).toFixed(1)} mi`;
+}
+
+function formatDuration(seconds: number): string {
+  const mins = Math.round(seconds / 60);
+  return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+}
 
 type OperatorDashboardProps = {
   user: CurrentUser;
@@ -20,16 +40,6 @@ function getErrorMessage(error: unknown): string {
 
 function dayKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
 }
 
 const NEXT_30_DAYS: Date[] = Array.from({ length: 30 }, (_, i) => {
@@ -45,6 +55,19 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
   const queueQuery = useQuery({
     queryKey: ["operator-queue"],
     queryFn: async () => getOperatorQueue(accessToken)
+  });
+
+  const routesQuery = useQuery({
+    queryKey: ["operator-routes"],
+    queryFn: async () => getOperatorRoutes(accessToken)
+  });
+  const myRoutes = routesQuery.data?.routes ?? [];
+
+  const acceptMutation = useMutation({
+    mutationFn: (routeId: string) => acceptOperatorRoute(routeId, accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["operator-routes"], data);
+    }
   });
 
   const availabilityQuery = useQuery({
@@ -77,13 +100,6 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
   });
 
   const jobs = queueQuery.data?.jobs ?? [];
-
-  // Jobs assigned to me for today, in route order.
-  const myRoute = useMemo(() => {
-    return jobs
-      .filter((j) => j.assignedOperatorId === user.id && isToday(j.scheduledDate))
-      .sort((a, b) => (a.routeSequence ?? 999) - (b.routeSequence ?? 999));
-  }, [jobs, user.id]);
 
   const availabilityDirty = useMemo(() => {
     const saved = new Set(availabilityQuery.data?.dates ?? []);
@@ -178,28 +194,79 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
       </article>
 
       <article className="panel">
-        <h3>My route today</h3>
-        {myRoute.length === 0 ? (
-          <p className="subtext">No route assigned to you today yet. An admin assigns routes each day.</p>
+        <h3>My routes today</h3>
+        <p className="subtext">
+          Accept a route to lock it to you. Once accepted, its stops can't be reassigned.
+        </p>
+        {routesQuery.isLoading ? (
+          <p className="subtext">Loading…</p>
+        ) : myRoutes.length === 0 ? (
+          <p className="subtext">No routes assigned to you today yet. An admin assigns routes each day.</p>
         ) : (
-          <ol className="route-stop-list">
-            {myRoute.map((job, i) => (
-              <li className="route-stop" key={job.id}>
-                <span className="route-stop-num">{(job.routeSequence ?? i) + 1}</span>
-                <div>
-                  <strong>{job.addressLine1}</strong>
-                  <span className="admin-table-sub">
-                    {job.city}, {job.state} {job.postalCode} · {job.customerName}
-                  </span>
-                  <span className="admin-table-sub">
-                    {job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"} · {job.status}
-                  </span>
-                </div>
-                {jobActions(job)}
-              </li>
-            ))}
-          </ol>
+          <ul className="operator-route-list">
+            {myRoutes.map((route) => {
+              const accepted = route.status === "ACCEPTED";
+              return (
+                <li className={`operator-route${accepted ? " is-accepted" : ""}`} key={route.id}>
+                  <div className="operator-route-head">
+                    <div>
+                      <strong>{route.label ?? "Route"}</strong>
+                      <span className="admin-table-sub">
+                        {route.stops.length} stop{route.stops.length === 1 ? "" : "s"} ·{" "}
+                        {formatMiles(route.totalDistanceMeters)} · {formatDuration(route.totalDurationSeconds)}
+                      </span>
+                    </div>
+                    <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
+                      {accepted ? "✓ Accepted" : "Assigned"}
+                    </span>
+                  </div>
+                  <ol className="route-stop-list">
+                    {route.stops.map((stop) => (
+                      <li className="route-stop" key={stop.addressId}>
+                        <span className="route-stop-num">{stop.order + 1}</span>
+                        <div>
+                          <strong>{stop.line1}</strong>
+                          <span className="admin-table-sub">
+                            {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                          </span>
+                          <span className="admin-table-sub">
+                            {stop.jobTypes
+                              .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                              .join(" + ")}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="button-row">
+                    <a
+                      className="cta-secondary"
+                      href={routeMapsUrl(route)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Open in Maps
+                    </a>
+                    {accepted ? (
+                      <span className="operator-route-lock">🔒 Locked to you</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="cta-primary"
+                        onClick={() => acceptMutation.mutate(route.id)}
+                        disabled={acceptMutation.isPending}
+                      >
+                        {acceptMutation.isPending ? "Accepting…" : "Accept route"}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
+        {routesQuery.isError ? <p className="error">{getErrorMessage(routesQuery.error)}</p> : null}
+        {acceptMutation.isError ? <p className="error">{getErrorMessage(acceptMutation.error)}</p> : null}
       </article>
 
       <article className="panel">

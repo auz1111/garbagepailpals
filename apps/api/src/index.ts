@@ -35,8 +35,10 @@ import {
 import {
   adminAssignedRoutesHandler,
   adminAvailableOperatorsHandler,
+  adminDeleteRouteHandler,
   adminTodaysRouteHandler
 } from "./routes/adminRoutes";
+import { operatorAcceptRouteHandler, operatorRoutesHandler } from "./routes/operatorRoutes";
 import {
   adminLocationByIdHandler,
   adminLocationsHandler,
@@ -156,6 +158,27 @@ app.http("admin-assigned-routes", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAssignedRoutesHandler
+});
+
+app.http("admin-delete-route", {
+  route: "ops-admin/routes/{routeId}",
+  methods: ["DELETE", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminDeleteRouteHandler
+});
+
+app.http("operator-routes", {
+  route: "operator/routes",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: operatorRoutesHandler
+});
+
+app.http("operator-routes-accept", {
+  route: "operator/routes/{routeId}/accept",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: operatorAcceptRouteHandler
 });
 
 app.http("admin-neighborhoods", {
