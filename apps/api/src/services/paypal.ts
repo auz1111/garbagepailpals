@@ -111,18 +111,38 @@ export async function createPayPalSubscription(args: {
   };
 }
 
-// Build a product + plan for a given monthly amount (shared by create + revise).
-async function createPayPalPlan(token: string, amountValue: string): Promise<string> {
-  const product = await paypalPost<{ id?: string }>("/v1/catalogs/products", token, {
-    name: "Garbage Pail Pals curbside service",
-    type: "SERVICE"
+async function paypalGet<T>(path: string, token: string): Promise<T> {
+  const response = await fetch(`${getPayPalBaseUrl()}${path}`, {
+    headers: { Authorization: `Bearer ${token}` }
   });
-  if (!product.id) {
-    throw new Error("PayPal product creation returned no id");
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`PayPal GET ${path} failed (${response.status}): ${detail.slice(0, 300)}`);
+  }
+  return (await response.json()) as T;
+}
+
+// Build a plan for a given monthly amount. Reuses an existing product when
+// provided (required for revise: the new plan must share the old plan's product).
+async function createPayPalPlan(
+  token: string,
+  amountValue: string,
+  existingProductId?: string
+): Promise<string> {
+  let productId = existingProductId;
+  if (!productId) {
+    const product = await paypalPost<{ id?: string }>("/v1/catalogs/products", token, {
+      name: "Garbage Pail Pals curbside service",
+      type: "SERVICE"
+    });
+    if (!product.id) {
+      throw new Error("PayPal product creation returned no id");
+    }
+    productId = product.id;
   }
 
   const plan = await paypalPost<{ id?: string }>("/v1/billing/plans", token, {
-    product_id: product.id,
+    product_id: productId,
     name: `GPP Monthly ${amountValue} USD`,
     billing_cycles: [
       {
@@ -172,7 +192,23 @@ export async function revisePayPalSubscription(
   const amountValue = (amountCents / 100).toFixed(2);
 
   const token = await getPayPalAccessToken();
-  const planId = await createPayPalPlan(token, amountValue);
+
+  // PayPal requires the revised plan to belong to the same product as the
+  // current one, so look up the existing subscription's plan → product.
+  const currentSub = await paypalGet<{ plan_id?: string }>(
+    `/v1/billing/subscriptions/${active.externalSubscriptionId}`,
+    token
+  );
+  let productId: string | undefined;
+  if (currentSub.plan_id) {
+    const currentPlan = await paypalGet<{ product_id?: string }>(
+      `/v1/billing/plans/${currentSub.plan_id}`,
+      token
+    );
+    productId = currentPlan.product_id;
+  }
+
+  const planId = await createPayPalPlan(token, amountValue, productId);
 
   const revision = await paypalPost<{ links?: Array<{ rel?: string; href?: string }> }>(
     `/v1/billing/subscriptions/${active.externalSubscriptionId}/revise`,

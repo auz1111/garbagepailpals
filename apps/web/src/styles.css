@@ -850,6 +850,22 @@ a {
   transform: translateY(-2px);
 }
 
+.cta-primary:disabled,
+.cta-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Prominent action row for the Manage subscription panel */
+.manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-top: 0.3rem;
+}
+
 .hero-logo {
   display: block;
   width: clamp(190px, 30vw, 300px);

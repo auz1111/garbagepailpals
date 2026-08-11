@@ -496,6 +496,58 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         ) : null}
 
         <article className="panel">
+          <h3>{summary?.active ? "Manage subscription" : "Activate subscription"}</h3>
+          <p className="subtext">
+            {!hasAddress
+              ? "Add a service address to activate."
+              : summary?.active
+                ? summary.needsUpdate
+                  ? `Your plan bills ${formatUsd(summary.billedMonthlyCents)}/mo. Update to ${formatUsd(summary.totalMonthlyCents)}/mo to match your current addresses (prorated).`
+                  : "Your plan is up to date. Manage payment details in the billing portal."
+                : `You'll be billed ${formatUsd(summary?.totalMonthlyCents ?? 0)}/month via Stripe or PayPal.`}
+          </p>
+          {summary?.active ? (
+            <div className="manage-actions">
+              {summary.needsUpdate ? (
+                <button
+                  type="button"
+                  className="cta-primary"
+                  onClick={() => updateSubscriptionMutation.mutate()}
+                  disabled={updateSubscriptionMutation.isPending}
+                >
+                  {updateSubscriptionMutation.isPending ? "Updating…" : "Update subscription"}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="cta-secondary"
+                onClick={() => stripePortalMutation.mutate()}
+                disabled={stripePortalMutation.isPending}
+              >
+                {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
+              </button>
+            </div>
+          ) : (
+            <div className="button-row">
+              <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
+                {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
+              </button>
+              <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending || !hasAddress}>
+                {paypalCheckoutMutation.isPending ? "Redirecting..." : "Pay with PayPal"}
+              </button>
+            </div>
+          )}
+          {updateSubscriptionMutation.isSuccess ? (
+            <p className="success-inline">
+              Subscription updated to {formatUsd(updateSubscriptionMutation.data.amountCents)}/mo.
+            </p>
+          ) : null}
+          {updateSubscriptionMutation.isError ? (
+            <p className="error">{getErrorMessage(updateSubscriptionMutation.error)}</p>
+          ) : null}
+        </article>
+
+        <article className="panel">
           <h3>Addresses &amp; coverage</h3>
           {!summary || summary.addresses.length === 0 ? (
             <p className="subtext">
@@ -537,54 +589,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             {formatUsd(PRICING.extraCanMonthlyCents)}/mo each; extra pickup days add{" "}
             {formatUsd(PRICING.extraPickupDayMonthlyCents)}/mo each.
           </p>
-        </article>
-
-        <article className="panel">
-          <h3>{summary?.active ? "Manage subscription" : "Activate subscription"}</h3>
-          <p className="subtext">
-            {!hasAddress
-              ? "Add a service address to activate."
-              : summary?.active
-                ? summary.needsUpdate
-                  ? `Your plan bills ${formatUsd(summary.billedMonthlyCents)}/mo. Update to ${formatUsd(summary.totalMonthlyCents)}/mo to match your current addresses (prorated).`
-                  : "Your plan is up to date. Manage payment details in the billing portal."
-                : `You'll be billed ${formatUsd(summary?.totalMonthlyCents ?? 0)}/month via Stripe or PayPal.`}
-          </p>
-          <div className="button-row">
-            {summary?.active ? (
-              <>
-                {summary.needsUpdate ? (
-                  <button
-                    type="button"
-                    onClick={() => updateSubscriptionMutation.mutate()}
-                    disabled={updateSubscriptionMutation.isPending}
-                  >
-                    {updateSubscriptionMutation.isPending ? "Updating…" : "Update subscription"}
-                  </button>
-                ) : null}
-                <button type="button" onClick={() => stripePortalMutation.mutate()} disabled={stripePortalMutation.isPending}>
-                  {stripePortalMutation.isPending ? "Opening..." : "Open Billing Portal"}
-                </button>
-              </>
-            ) : (
-              <>
-                <button type="button" onClick={() => stripeCheckoutMutation.mutate()} disabled={stripeCheckoutMutation.isPending || !hasAddress}>
-                  {stripeCheckoutMutation.isPending ? "Redirecting..." : "Pay with Stripe"}
-                </button>
-                <button type="button" onClick={() => paypalCheckoutMutation.mutate()} disabled={paypalCheckoutMutation.isPending || !hasAddress}>
-                  {paypalCheckoutMutation.isPending ? "Redirecting..." : "Pay with PayPal"}
-                </button>
-              </>
-            )}
-          </div>
-          {updateSubscriptionMutation.isSuccess ? (
-            <p className="success-inline">
-              Subscription updated to {formatUsd(updateSubscriptionMutation.data.amountCents)}/mo.
-            </p>
-          ) : null}
-          {updateSubscriptionMutation.isError ? (
-            <p className="error">{getErrorMessage(updateSubscriptionMutation.error)}</p>
-          ) : null}
         </article>
       </div>
     );
