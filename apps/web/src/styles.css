@@ -554,6 +554,13 @@ a {
   white-space: nowrap;
 }
 
+.detail-save-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.2rem;
+}
+
 .checkbox-field {
   display: flex;
   align-items: flex-start;

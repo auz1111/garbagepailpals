@@ -1127,8 +1127,6 @@ function LocationDetail({
   const [cans, setCans] = useState(address.canCount);
   const [days, setDays] = useState(address.pickupsPerWeek);
   const [rollIn, setRollIn] = useState(address.rollIn ?? true);
-  const configDirty =
-    cans !== address.canCount || days !== address.pickupsPerWeek || rollIn !== (address.rollIn ?? true);
   const configValid = cans >= 1 && cans <= 20 && days >= 1 && days <= 7;
   const safeCans = Math.max(1, cans || 1);
   const safeDays = Math.max(1, days || 1);
@@ -1150,6 +1148,18 @@ function LocationDetail({
   });
   const cadence = scheduleForm.watch("cadence");
 
+  const [submitted, setSubmitted] = useState(false);
+  const savingAll = savingConfig || savingSchedule;
+  const saveError = configError ?? scheduleError;
+
+  // One Save button persists everything on the page: the address config (cans,
+  // pickups, roll-in) and the pickup schedule (day, cadence).
+  const handleSaveAll = scheduleForm.handleSubmit((values) => {
+    setSubmitted(true);
+    onSaveConfig(address.id, { canCount: cans, pickupsPerWeek: days, rollIn });
+    onSaveSchedule(address.id, values);
+  });
+
   return (
     <div className="dash-page">
       <div className="dash-page-head">
@@ -1167,12 +1177,54 @@ function LocationDetail({
         </p>
       </div>
 
-      <article className="panel">
-        <h3>Pickup schedule</h3>
-        <p className="subtext">Choose the day we roll your cans to the curb and back.</p>
-        <form
-          onSubmit={scheduleForm.handleSubmit((values) => onSaveSchedule(address.id, values))}
-        >
+      <form onSubmit={handleSaveAll}>
+        <article className="panel">
+          <h3>Cans &amp; options</h3>
+          <p className="subtext">
+            Billing updates to match — {formatUsd(monthly)}/mo for this location.
+          </p>
+          <div className="field-row">
+            <label>
+              Cans
+              <input
+                type="number"
+                min={1}
+                max={20}
+                value={cans}
+                onChange={(event) => setCans(Number(event.target.value))}
+              />
+            </label>
+            <label>
+              Pickups per week
+              <input
+                type="number"
+                min={1}
+                max={7}
+                value={days}
+                onChange={(event) => setDays(Number(event.target.value))}
+              />
+            </label>
+          </div>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={rollIn}
+              onChange={(event) => setRollIn(event.target.checked)}
+            />
+            <span>
+              <strong>Bring my cans back the next day (roll-in)</strong>
+              <span className="subtext">
+                {rollIn
+                  ? `Included. Turn off to save ${formatUsd(rollInCredit)}/mo — we'll only roll cans out.`
+                  : `You save ${formatUsd(rollInCredit)}/mo — we won't bring cans back.`}
+              </span>
+            </span>
+          </label>
+        </article>
+
+        <article className="panel">
+          <h3>Pickup schedule</h3>
+          <p className="subtext">Choose the day we roll your cans to the curb.</p>
           <div className="field-row">
             <label>
               Pickup day
@@ -1195,71 +1247,21 @@ function LocationDetail({
           {cadence === "BIWEEKLY" ? (
             <label>
               First pickup date
-              <input
-                type="datetime-local"
-                {...scheduleForm.register("biweeklyAnchorDate")}
-              />
+              <input type="datetime-local" {...scheduleForm.register("biweeklyAnchorDate")} />
             </label>
           ) : null}
-          <button type="submit" disabled={savingSchedule}>
-            {savingSchedule ? "Saving…" : "Save schedule"}
-          </button>
-        </form>
-        {scheduleSaved && !savingSchedule ? (
-          <p className="success-inline">Schedule saved.</p>
-        ) : null}
-        {scheduleError ? <p className="error">{scheduleError}</p> : null}
-      </article>
+        </article>
 
-      <article className="panel">
-        <h3>Cans &amp; options</h3>
-        <p className="subtext">Billing updates to match — {formatUsd(monthly)}/mo for this location.</p>
-        <div className="field-row">
-          <label>
-            Cans
-            <input
-              type="number"
-              min={1}
-              max={20}
-              value={cans}
-              onChange={(event) => setCans(Number(event.target.value))}
-            />
-          </label>
-          <label>
-            Pickups per week
-            <input
-              type="number"
-              min={1}
-              max={7}
-              value={days}
-              onChange={(event) => setDays(Number(event.target.value))}
-            />
-          </label>
+        <div className="detail-save-row">
+          <button type="submit" className="cta-primary" disabled={!configValid || savingAll}>
+            {savingAll ? "Saving…" : "Save changes"}
+          </button>
+          {submitted && !savingAll && !saveError && scheduleSaved ? (
+            <span className="success-inline">All changes saved.</span>
+          ) : null}
         </div>
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={rollIn}
-            onChange={(event) => setRollIn(event.target.checked)}
-          />
-          <span>
-            <strong>Bring my cans back the next day (roll-in)</strong>
-            <span className="subtext">
-              {rollIn
-                ? `Included. Turn off to save ${formatUsd(rollInCredit)}/mo — we'll only roll cans out.`
-                : `You save ${formatUsd(rollInCredit)}/mo — we won't bring cans back.`}
-            </span>
-          </span>
-        </label>
-        <button
-          type="button"
-          disabled={!configDirty || !configValid || savingConfig}
-          onClick={() => onSaveConfig(address.id, { canCount: cans, pickupsPerWeek: days, rollIn })}
-        >
-          {savingConfig ? "Saving…" : "Save changes"}
-        </button>
-        {configError ? <p className="error">{configError}</p> : null}
-      </article>
+        {saveError ? <p className="error">{saveError}</p> : null}
+      </form>
 
       <article className="panel">
         <h3>Remove location</h3>
