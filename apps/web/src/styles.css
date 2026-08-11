@@ -960,10 +960,63 @@ a {
   margin-bottom: 0.5rem;
 }
 
+/* Stops on the left, route map on the right (stacks on narrow screens). */
+.operator-route-body {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.operator-route .button-row {
+  margin-top: 0.25rem;
+}
+
+.operator-route-body .route-stop-list {
+  flex: 1 1 300px;
+  margin: 0;
+  min-width: 0;
+}
+
+.route-mini-map {
+  flex: 1 1 260px;
+  min-height: 240px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  z-index: 0;
+}
+
 .operator-route-lock {
   font-weight: 700;
   color: var(--gold);
   align-self: center;
+}
+
+/* Make the primary Accept action stand out — the generic `.button-row button`
+   rule would otherwise flatten it into a plain white pill. */
+.button-row .accept-route-btn {
+  flex: 1 1 auto;
+  min-width: 12rem;
+  color: var(--teal-deep);
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  border: 1px solid transparent;
+  box-shadow: var(--shadow-gold);
+  padding: 0.9rem 1.6rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.button-row .accept-route-btn:hover {
+  border-color: transparent;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(247, 168, 27, 0.5);
+}
+
+.button-row .accept-route-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 
 .admin-loc-hood {

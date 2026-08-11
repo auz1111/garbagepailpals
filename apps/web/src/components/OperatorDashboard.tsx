@@ -1,15 +1,107 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CurrentUser, DailyRoute, OperatorQueueJob } from "@gpp/shared";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import type { CurrentUser, DailyRoute } from "@gpp/shared";
 import {
   acceptOperatorRoute,
-  claimOperatorJob,
   getOperatorAvailability,
-  getOperatorQueue,
   getOperatorRoutes,
-  setOperatorAvailability,
-  updateOperatorJobStatus
+  setOperatorAvailability
 } from "../lib/api";
+
+// Decode an ORS/Google encoded polyline (precision 5) to [lat, lng] pairs.
+function decodePolyline(encoded: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let byte: number;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+  return points;
+}
+
+// A small read-only map of one route: numbered stops, optional start/end pins,
+// and the driving polyline.
+function RouteMiniMap({ route }: { route: DailyRoute }): JSX.Element {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: false,
+      zoomControl: false,
+      attributionControl: false
+    });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+
+    const pin = (label: string, color: string) =>
+      L.divIcon({
+        className: "route-pin-wrap",
+        html: `<span class="route-pin" style="background:${color}">${label}</span>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+    const bounds: Array<[number, number]> = [];
+    const color = "#055a5f";
+
+    if (route.geometry) {
+      L.polyline(decodePolyline(route.geometry), { color, weight: 4 }).addTo(layer);
+    }
+    if (route.start) {
+      L.marker([route.start.lat, route.start.lng], { icon: pin("A", "#043e42") }).addTo(layer);
+      bounds.push([route.start.lat, route.start.lng]);
+    }
+    if (route.end) {
+      L.marker([route.end.lat, route.end.lng], { icon: pin("B", "#b5750a") }).addTo(layer);
+      bounds.push([route.end.lat, route.end.lng]);
+    }
+    route.stops.forEach((s) => {
+      L.marker([s.lat, s.lng], { icon: pin(String(s.order + 1), color) }).addTo(layer);
+      bounds.push([s.lat, s.lng]);
+    });
+
+    if (bounds.length > 0) {
+      // Zoom in as tightly as possible while still showing the whole route.
+      // A small padding keeps pins off the very edge; maxZoom guards the
+      // degenerate single-point case from zooming to the tile limit.
+      map.fitBounds(L.latLngBounds(bounds), { padding: [12, 12], maxZoom: 18 });
+    }
+    setTimeout(() => map.invalidateSize(), 0);
+  }, [route]);
+
+  return <div className="route-mini-map" ref={containerRef} />;
+}
 
 function routeMapsUrl(route: DailyRoute): string {
   const points = [
@@ -52,11 +144,6 @@ const NEXT_30_DAYS: Date[] = Array.from({ length: 30 }, (_, i) => {
 export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps): JSX.Element {
   const queryClient = useQueryClient();
 
-  const queueQuery = useQuery({
-    queryKey: ["operator-queue"],
-    queryFn: async () => getOperatorQueue(accessToken)
-  });
-
   const routesQuery = useQuery({
     queryKey: ["operator-routes"],
     queryFn: async () => getOperatorRoutes(accessToken)
@@ -89,18 +176,6 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     }
   });
 
-  const invalidateQueue = () => queryClient.invalidateQueries({ queryKey: ["operator-queue"] });
-  const completeMutation = useMutation({
-    mutationFn: (jobId: string) => updateOperatorJobStatus(jobId, { status: "COMPLETED" }, accessToken),
-    onSuccess: invalidateQueue
-  });
-  const claimMutation = useMutation({
-    mutationFn: (jobId: string) => claimOperatorJob(jobId, accessToken),
-    onSuccess: invalidateQueue
-  });
-
-  const jobs = queueQuery.data?.jobs ?? [];
-
   const availabilityDirty = useMemo(() => {
     const saved = new Set(availabilityQuery.data?.dates ?? []);
     if (saved.size !== selectedDays.size) return true;
@@ -115,28 +190,6 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
       else next.add(key);
       return next;
     });
-  }
-
-  function jobActions(job: OperatorQueueJob): JSX.Element {
-    if (job.status !== "SCHEDULED") {
-      return (
-        <span className={`coverage-badge ${job.status === "COMPLETED" ? "covered" : "uncovered"}`}>
-          {job.status}
-        </span>
-      );
-    }
-    return (
-      <div className="button-row">
-        {!job.assignedOperatorId ? (
-          <button type="button" onClick={() => claimMutation.mutate(job.id)} disabled={claimMutation.isPending}>
-            Claim
-          </button>
-        ) : null}
-        <button type="button" onClick={() => completeMutation.mutate(job.id)} disabled={completeMutation.isPending}>
-          Complete
-        </button>
-      </div>
-    );
   }
 
   return (
@@ -217,27 +270,30 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                       </span>
                     </div>
                     <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
-                      {accepted ? "✓ Accepted" : "Assigned"}
+                      {accepted ? "Assigned to You" : "Assigned to You — Awaiting Acceptance"}
                     </span>
                   </div>
-                  <ol className="route-stop-list">
-                    {route.stops.map((stop) => (
-                      <li className="route-stop" key={stop.addressId}>
-                        <span className="route-stop-num">{stop.order + 1}</span>
-                        <div>
-                          <strong>{stop.line1}</strong>
-                          <span className="admin-table-sub">
-                            {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
-                          </span>
-                          <span className="admin-table-sub">
-                            {stop.jobTypes
-                              .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                              .join(" + ")}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
+                  <div className="operator-route-body">
+                    <ol className="route-stop-list">
+                      {route.stops.map((stop) => (
+                        <li className="route-stop" key={stop.addressId}>
+                          <span className="route-stop-num">{stop.order + 1}</span>
+                          <div>
+                            <strong>{stop.line1}</strong>
+                            <span className="admin-table-sub">
+                              {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                            </span>
+                            <span className="admin-table-sub">
+                              {stop.jobTypes
+                                .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                                .join(" + ")}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                    <RouteMiniMap route={route} />
+                  </div>
                   <div className="button-row">
                     <a
                       className="cta-secondary"
@@ -252,11 +308,11 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                     ) : (
                       <button
                         type="button"
-                        className="cta-primary"
+                        className="cta-primary accept-route-btn"
                         onClick={() => acceptMutation.mutate(route.id)}
                         disabled={acceptMutation.isPending}
                       >
-                        {acceptMutation.isPending ? "Accepting…" : "Accept route"}
+                        {acceptMutation.isPending ? "Accepting…" : "✓ Accept route"}
                       </button>
                     )}
                   </div>
@@ -267,35 +323,6 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         )}
         {routesQuery.isError ? <p className="error">{getErrorMessage(routesQuery.error)}</p> : null}
         {acceptMutation.isError ? <p className="error">{getErrorMessage(acceptMutation.error)}</p> : null}
-      </article>
-
-      <article className="panel">
-        <h3>All upcoming jobs (7 days)</h3>
-        {queueQuery.isLoading ? (
-          <p className="subtext">Loading…</p>
-        ) : jobs.length === 0 ? (
-          <p className="subtext">No jobs scheduled in the next 7 days.</p>
-        ) : (
-          <ul className="op-job-list">
-            {jobs.map((job) => (
-              <li className="op-job" key={job.id}>
-                <div className="op-job-main">
-                  <strong>{job.addressLine1}</strong>
-                  <span className="admin-table-sub">
-                    {job.city}, {job.state} · {new Date(job.scheduledDate).toLocaleString()} ·{" "}
-                    {job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"}
-                  </span>
-                </div>
-                {jobActions(job)}
-              </li>
-            ))}
-          </ul>
-        )}
-        {(queueQuery.error || claimMutation.error || completeMutation.error) ? (
-          <p className="error">
-            {getErrorMessage(queueQuery.error ?? claimMutation.error ?? completeMutation.error)}
-          </p>
-        ) : null}
       </article>
     </div>
   );
