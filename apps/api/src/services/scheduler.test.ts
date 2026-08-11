@@ -9,7 +9,7 @@ describe("calculateJobsForAddress", () => {
       "addr_1",
       "America/Los_Angeles",
       {
-        pickupDayOfWeek: 2,
+        pickupDaysOfWeek: [2],
         cadence: "WEEKLY",
         biweeklyAnchorDate: null,
         curbOutOffsetHours: -12,
@@ -32,7 +32,7 @@ describe("calculateJobsForAddress", () => {
       "addr_1",
       "America/Los_Angeles",
       {
-        pickupDayOfWeek: 2,
+        pickupDaysOfWeek: [2],
         cadence: "WEEKLY",
         biweeklyAnchorDate: null,
         curbOutOffsetHours: -12,
@@ -59,7 +59,7 @@ describe("calculateJobsForAddress", () => {
       "addr_1",
       "America/Los_Angeles",
       {
-        pickupDayOfWeek: 1,
+        pickupDaysOfWeek: [1],
         cadence: "WEEKLY",
         biweeklyAnchorDate: null,
         curbOutOffsetHours: -12,
@@ -86,7 +86,7 @@ describe("calculateJobsForAddress", () => {
       "addr_1",
       "America/Los_Angeles",
       {
-        pickupDayOfWeek: 4,
+        pickupDaysOfWeek: [4],
         cadence: "BIWEEKLY",
         biweeklyAnchorDate: new Date("2026-08-06T00:00:00.000Z"),
         curbOutOffsetHours: -12,

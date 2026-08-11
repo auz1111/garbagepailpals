@@ -34,6 +34,7 @@ function toAddressResponse(address: {
     id: string;
     serviceAddressId: string;
     pickupDayOfWeek: number;
+    pickupDaysOfWeek: number[];
     cadence: string;
     biweeklyAnchorDate: Date | null;
     curbOutOffsetHours: number;
@@ -55,6 +56,7 @@ function toAddressResponse(address: {
           id: address.schedule.id,
           serviceAddressId: address.schedule.serviceAddressId,
           pickupDayOfWeek: address.schedule.pickupDayOfWeek,
+          pickupDaysOfWeek: address.schedule.pickupDaysOfWeek,
           cadence: address.schedule.cadence,
           biweeklyAnchorDate: address.schedule.biweeklyAnchorDate?.toISOString(),
           curbOutOffsetHours: address.schedule.curbOutOffsetHours,
@@ -277,29 +279,37 @@ export async function upsertScheduleHandler(
           return jsonResponse(400, { message: "biweeklyAnchorDate is required for BIWEEKLY cadence" });
         }
 
-        const upserted = await prisma.serviceSchedule.upsert({
-          where: { serviceAddressId: addressId },
-          create: {
-            serviceAddressId: addressId,
-            pickupDayOfWeek: input.pickupDayOfWeek,
-            cadence: input.cadence,
-            biweeklyAnchorDate: input.biweeklyAnchorDate ? new Date(input.biweeklyAnchorDate) : null,
-            curbOutOffsetHours: input.curbOutOffsetHours,
-            curbInOffsetHours: input.curbInOffsetHours
-          },
-          update: {
-            pickupDayOfWeek: input.pickupDayOfWeek,
-            cadence: input.cadence,
-            biweeklyAnchorDate: input.biweeklyAnchorDate ? new Date(input.biweeklyAnchorDate) : null,
-            curbOutOffsetHours: input.curbOutOffsetHours,
-            curbInOffsetHours: input.curbInOffsetHours
-          }
-        });
+        // The schema sorts + dedupes the days; the first is the primary day and
+        // the count is the pickups-per-week that drives pricing.
+        const days = input.pickupDaysOfWeek;
+        const primaryDay = days[0]!;
+        const scheduleData = {
+          pickupDayOfWeek: primaryDay,
+          pickupDaysOfWeek: days,
+          cadence: input.cadence,
+          biweeklyAnchorDate: input.biweeklyAnchorDate ? new Date(input.biweeklyAnchorDate) : null,
+          curbOutOffsetHours: input.curbOutOffsetHours,
+          curbInOffsetHours: input.curbInOffsetHours
+        };
+
+        const [upserted] = await prisma.$transaction([
+          prisma.serviceSchedule.upsert({
+            where: { serviceAddressId: addressId },
+            create: { serviceAddressId: addressId, ...scheduleData },
+            update: scheduleData
+          }),
+          // Keep pickups-per-week (pricing input) in sync with the chosen days.
+          prisma.serviceAddress.update({
+            where: { id: addressId },
+            data: { pickupsPerWeek: days.length }
+          })
+        ]);
 
         const response = serviceScheduleSchema.parse({
           id: upserted.id,
           serviceAddressId: upserted.serviceAddressId,
           pickupDayOfWeek: upserted.pickupDayOfWeek,
+          pickupDaysOfWeek: upserted.pickupDaysOfWeek,
           cadence: upserted.cadence,
           biweeklyAnchorDate: upserted.biweeklyAnchorDate?.toISOString(),
           curbOutOffsetHours: upserted.curbOutOffsetHours,

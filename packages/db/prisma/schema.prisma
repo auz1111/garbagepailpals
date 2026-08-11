@@ -113,6 +113,7 @@ model ServiceSchedule {
   id                  String         @id @default(cuid())
   serviceAddressId    String         @unique
   pickupDayOfWeek     Int
+  pickupDaysOfWeek    Int[]          @default([])
   cadence             Cadence
   biweeklyAnchorDate  DateTime?
   curbOutOffsetHours  Int            @default(-12)

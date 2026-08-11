@@ -12,7 +12,7 @@ type SchedulerAddress = {
   pickupsPerWeek: number;
   rollIn: boolean;
   schedule: {
-    pickupDayOfWeek: number;
+    pickupDaysOfWeek: number[];
     cadence: Cadence;
     biweeklyAnchorDate: Date | null;
     curbOutOffsetHours: number;
@@ -53,18 +53,6 @@ function weekdayIndexFromLuxon(dt: DateTime): number {
   return dt.weekday % 7;
 }
 
-// Spread N pickups evenly across the week, anchored at the primary pickup day.
-// e.g. Tue + 2/week -> [Tue, Fri]; Tue + 3/week -> [Tue, Thu, Sat].
-export function computePickupWeekdays(primaryDay: number, pickupsPerWeek: number): number[] {
-  const count = Math.min(7, Math.max(1, Math.floor(pickupsPerWeek || 1)));
-  const days = new Set<number>();
-  for (let i = 0; i < count; i += 1) {
-    const offset = Math.floor((i * 7) / count);
-    days.add((primaryDay + offset) % 7);
-  }
-  return [...days].sort((a, b) => a - b);
-}
-
 function isHoldCovered(date: DateTime, holds: SchedulerAddress["holds"]): boolean {
   return holds.some((hold) => {
     const start = DateTime.fromJSDate(hold.startDate).startOf("day");
@@ -101,12 +89,11 @@ export function calculateJobsForAddress(
   holidays: HolidayRule[],
   lookaheadDays: number,
   referenceDate = new Date(),
-  pickupsPerWeek = 1,
   rollIn = true
 ): PendingJob[] {
   const start = DateTime.fromJSDate(referenceDate, { zone: timezone }).startOf("day");
   const jobs: PendingJob[] = [];
-  const pickupWeekdays = computePickupWeekdays(schedule.pickupDayOfWeek, pickupsPerWeek);
+  const pickupWeekdays = [...new Set(schedule.pickupDaysOfWeek)];
 
   for (let i = 0; i < lookaheadDays; i += 1) {
     const day = start.plus({ days: i });
@@ -208,7 +195,6 @@ export async function runNightlyJobGeneration(
       applicableHolidays,
       lookahead,
       now,
-      subscription.serviceAddress.pickupsPerWeek ?? 1,
       subscription.serviceAddress.rollIn ?? true
     );
 

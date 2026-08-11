@@ -68,7 +68,13 @@ export const serviceAddressInputSchema = z.object({
 });
 
 export const serviceScheduleInputSchema = z.object({
-  pickupDayOfWeek: z.number().int().min(0).max(6),
+  // One or more weekdays (0 = Sunday … 6 = Saturday) the customer wants pickup.
+  // The number of days drives pickups-per-week (and pricing).
+  pickupDaysOfWeek: z
+    .array(z.number().int().min(0).max(6))
+    .min(1)
+    .max(7)
+    .transform((days) => [...new Set(days)].sort((a, b) => a - b)),
   cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
   biweeklyAnchorDate: z.string().datetime().optional(),
   curbOutOffsetHours: z.number().int().min(-48).max(48).default(-12),
@@ -78,6 +84,8 @@ export const serviceScheduleInputSchema = z.object({
 export const serviceScheduleSchema = serviceScheduleInputSchema.extend({
   id: z.string(),
   serviceAddressId: z.string(),
+  // Primary day (first of pickupDaysOfWeek), kept for convenience.
+  pickupDayOfWeek: z.number().int().min(0).max(6),
   createdAt: z.string(),
   updatedAt: z.string()
 });

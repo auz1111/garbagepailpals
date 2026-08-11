@@ -164,6 +164,7 @@ async function seed() {
       data: {
         serviceAddressId: address1.id,
         pickupDayOfWeek: 2,
+        pickupDaysOfWeek: [2],
         cadence: "WEEKLY",
         curbOutOffsetHours: -12,
         curbInOffsetHours: 8
@@ -173,6 +174,7 @@ async function seed() {
       data: {
         serviceAddressId: address2.id,
         pickupDayOfWeek: 4,
+        pickupDaysOfWeek: [4],
         cadence: "BIWEEKLY",
         biweeklyAnchorDate: new Date("2026-08-06T00:00:00.000Z"),
         curbOutOffsetHours: -14,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -49,12 +49,7 @@ const defaultAddressValues: ServiceAddressInput = {
   isActive: true
 };
 
-const defaultScheduleValues: ServiceScheduleInput = {
-  pickupDayOfWeek: 2,
-  cadence: "WEEKLY",
-  curbOutOffsetHours: -12,
-  curbInOffsetHours: 8
-};
+const DEFAULT_PICKUP_DAYS = [2];
 
 const WEEKDAYS = [
   "Sunday",
@@ -70,7 +65,6 @@ export const CUSTOMER_NAV = [
   { to: "/customer", label: "Dashboard", icon: "🧭", end: true },
   { to: "/customer/billing", label: "Billing", icon: "💳" },
   { to: "/customer/addresses", label: "Locations", icon: "🏠" },
-  { to: "/customer/schedule", label: "Schedule", icon: "🗓️" },
   { to: "/customer/jobs", label: "Upcoming Jobs", icon: "🚚" },
   { to: "/customer/history", label: "History", icon: "🕓" }
 ] as const;
@@ -80,7 +74,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   const location = useLocation();
   const navigate = useNavigate();
   const [finalizingCheckout, setFinalizingCheckout] = useState(false);
-  const [selectedAddressId, setSelectedAddressId] = useState<string>("");
   // Inline service-area check for the Add Address form.
   const [areaCheck, setAreaCheck] = useState<{ postalCode: string; eligible: boolean } | null>(null);
   const [areaChecking, setAreaChecking] = useState(false);
@@ -114,10 +107,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       setAreaChecking(false);
     }
   }
-
-  const scheduleForm = useForm<ServiceScheduleInput>({
-    defaultValues: defaultScheduleValues
-  });
 
   const addressesQuery = useQuery({
     queryKey: ["customer-addresses"],
@@ -880,68 +869,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     );
   }
 
-  function renderSchedule(): JSX.Element {
-    return (
-      <div className="dash-page">
-        <div className="dash-page-head">
-          <h2>Schedule</h2>
-          <p className="subtext">Set the pickup day and cadence for an address.</p>
-        </div>
-        <article className="panel">
-          <label>
-            Address
-            <select
-              value={selectedAddressId}
-              onChange={(event) => setSelectedAddressId(event.target.value)}
-              disabled={!addressesQuery.data?.addresses.length}
-            >
-              <option value="">Select an address</option>
-              {addressesQuery.data?.addresses.map((address) => (
-                <option key={address.id} value={address.id}>
-                  {address.line1}, {address.city}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <form
-            onSubmit={scheduleForm.handleSubmit((values) => {
-              if (!selectedAddressId) {
-                return;
-              }
-              scheduleMutation.mutate({ addressId: selectedAddressId, input: values });
-            })}
-          >
-            <label>
-              Pickup day (0-6)
-              <input
-                type="number"
-                min={0}
-                max={6}
-                {...scheduleForm.register("pickupDayOfWeek", { valueAsNumber: true })}
-              />
-            </label>
-            <label>
-              Cadence
-              <select {...scheduleForm.register("cadence")}>
-                <option value="WEEKLY">Weekly</option>
-                <option value="BIWEEKLY">Biweekly</option>
-              </select>
-            </label>
-            <label>
-              Biweekly anchor date (ISO)
-              <input {...scheduleForm.register("biweeklyAnchorDate")} placeholder="2026-08-01T00:00:00.000Z" />
-            </label>
-            <button type="submit" disabled={scheduleMutation.isPending || !selectedAddressId}>
-              {scheduleMutation.isPending ? "Saving..." : "Save Schedule"}
-            </button>
-          </form>
-          {scheduleMutation.isError ? <p className="error">{getErrorMessage(scheduleMutation.error)}</p> : null}
-        </article>
-      </div>
-    );
-  }
-
   function renderJobs(): JSX.Element {
     return (
       <div className="dash-page">
@@ -1016,7 +943,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         <Route path="billing" element={renderBilling()} />
         <Route path="addresses" element={renderAddresses()} />
         <Route path="addresses/:addressId" element={renderLocationDetail()} />
-        <Route path="schedule" element={renderSchedule()} />
         <Route path="jobs" element={renderJobs()} />
         <Route path="history" element={renderHistory()} />
         <Route path="*" element={<Navigate to="/customer" replace />} />
@@ -1026,12 +952,16 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
 }
 
 function scheduleSummary(address: ServiceAddress): string {
-  if (!address.schedule) {
+  const days = address.schedule?.pickupDaysOfWeek ?? [];
+  if (!address.schedule || days.length === 0) {
     return "No pickup schedule set";
   }
-  const day = WEEKDAYS[address.schedule.pickupDayOfWeek] ?? "—";
+  const labels = [...days]
+    .sort((a, b) => a - b)
+    .map((d) => (WEEKDAYS[d] ?? "—").slice(0, 3))
+    .join(", ");
   const cadence = address.schedule.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly";
-  return `Pickup ${day} · ${cadence}`;
+  return `Pickup ${labels} · ${cadence}`;
 }
 
 function AddressRow({
@@ -1111,10 +1041,7 @@ function LocationDetail({
 }: {
   address: ServiceAddress;
   covered: boolean | undefined;
-  onSaveConfig: (
-    id: string,
-    patch: { canCount: number; pickupsPerWeek: number; rollIn: boolean }
-  ) => void;
+  onSaveConfig: (id: string, patch: { canCount: number; rollIn: boolean }) => void;
   savingConfig: boolean;
   configError: string | null;
   onRemove: (id: string) => void;
@@ -1125,40 +1052,65 @@ function LocationDetail({
   scheduleSaved: boolean;
 }): JSX.Element {
   const [cans, setCans] = useState(address.canCount);
-  const [days, setDays] = useState(address.pickupsPerWeek);
   const [rollIn, setRollIn] = useState(address.rollIn ?? true);
-  const configValid = cans >= 1 && cans <= 20 && days >= 1 && days <= 7;
-  const safeCans = Math.max(1, cans || 1);
-  const safeDays = Math.max(1, days || 1);
-  const monthly = addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: safeDays, rollIn });
-  const rollInCredit =
-    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: safeDays, rollIn: true }) -
-    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: safeDays, rollIn: false });
-
-  const scheduleForm = useForm<ServiceScheduleInput>({
-    defaultValues: address.schedule
-      ? {
-          pickupDayOfWeek: address.schedule.pickupDayOfWeek,
-          cadence: address.schedule.cadence,
-          biweeklyAnchorDate: address.schedule.biweeklyAnchorDate?.slice(0, 16),
-          curbOutOffsetHours: address.schedule.curbOutOffsetHours,
-          curbInOffsetHours: address.schedule.curbInOffsetHours
-        }
-      : defaultScheduleValues
-  });
-  const cadence = scheduleForm.watch("cadence");
-
+  const initialDays =
+    address.schedule && address.schedule.pickupDaysOfWeek.length > 0
+      ? [...new Set(address.schedule.pickupDaysOfWeek)].sort((a, b) => a - b)
+      : DEFAULT_PICKUP_DAYS;
+  const [pickupDays, setPickupDays] = useState<number[]>(initialDays);
+  const [cadence, setCadence] = useState<"WEEKLY" | "BIWEEKLY">(
+    address.schedule?.cadence ?? "WEEKLY"
+  );
+  const [anchorDate, setAnchorDate] = useState<string>(
+    address.schedule?.biweeklyAnchorDate?.slice(0, 16) ?? ""
+  );
   const [submitted, setSubmitted] = useState(false);
+
+  const pickups = pickupDays.length;
+  const configValid = cans >= 1 && cans <= 20 && pickups >= 1;
+  const safeCans = Math.max(1, cans || 1);
+  const monthly = addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: pickups, rollIn });
+  const rollInCredit =
+    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: pickups, rollIn: true }) -
+    addressMonthlyCents({ canCount: safeCans, pickupsPerWeek: pickups, rollIn: false });
+
   const savingAll = savingConfig || savingSchedule;
   const saveError = configError ?? scheduleError;
 
+  const usedDays = new Set(pickupDays);
+  const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
+
+  function updateDay(idx: number, value: number): void {
+    setPickupDays((prev) => prev.map((d, i) => (i === idx ? value : d)).sort((a, b) => a - b));
+  }
+  function removeDay(idx: number): void {
+    setPickupDays((prev) => prev.filter((_, i) => i !== idx));
+  }
+  function addDay(): void {
+    if (firstAvailableDay === undefined) {
+      return;
+    }
+    setPickupDays((prev) => [...prev, firstAvailableDay].sort((a, b) => a - b));
+  }
+
   // One Save button persists everything on the page: the address config (cans,
-  // pickups, roll-in) and the pickup schedule (day, cadence).
-  const handleSaveAll = scheduleForm.handleSubmit((values) => {
+  // roll-in) and the pickup schedule (days + cadence). Pickups-per-week — and
+  // therefore price — is derived server-side from the chosen days.
+  function handleSaveAll(event: FormEvent): void {
+    event.preventDefault();
+    if (!configValid) {
+      return;
+    }
     setSubmitted(true);
-    onSaveConfig(address.id, { canCount: cans, pickupsPerWeek: days, rollIn });
-    onSaveSchedule(address.id, values);
-  });
+    onSaveConfig(address.id, { canCount: cans, rollIn });
+    onSaveSchedule(address.id, {
+      pickupDaysOfWeek: [...new Set(pickupDays)].sort((a, b) => a - b),
+      cadence,
+      biweeklyAnchorDate: anchorDate || undefined,
+      curbOutOffsetHours: address.schedule?.curbOutOffsetHours ?? -12,
+      curbInOffsetHours: address.schedule?.curbInOffsetHours ?? 8
+    });
+  }
 
   return (
     <div className="dash-page">
@@ -1183,28 +1135,16 @@ function LocationDetail({
           <p className="subtext">
             Billing updates to match — {formatUsd(monthly)}/mo for this location.
           </p>
-          <div className="field-row">
-            <label>
-              Cans
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={cans}
-                onChange={(event) => setCans(Number(event.target.value))}
-              />
-            </label>
-            <label>
-              Pickups per week
-              <input
-                type="number"
-                min={1}
-                max={7}
-                value={days}
-                onChange={(event) => setDays(Number(event.target.value))}
-              />
-            </label>
-          </div>
+          <label className="field-single">
+            Cans
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={cans}
+              onChange={(event) => setCans(Number(event.target.value))}
+            />
+          </label>
           <label className="checkbox-field">
             <input
               type="checkbox"
@@ -1224,30 +1164,58 @@ function LocationDetail({
 
         <article className="panel">
           <h3>Pickup schedule</h3>
-          <p className="subtext">Choose the day we roll your cans to the curb.</p>
-          <div className="field-row">
-            <label>
-              Pickup day
-              <select {...scheduleForm.register("pickupDayOfWeek", { valueAsNumber: true })}>
-                {WEEKDAYS.map((label, value) => (
-                  <option key={label} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Cadence
-              <select {...scheduleForm.register("cadence")}>
-                <option value="WEEKLY">Every week</option>
-                <option value="BIWEEKLY">Every 2 weeks</option>
-              </select>
-            </label>
-          </div>
+          <p className="subtext">
+            Add the weekdays you want pickup — {pickups} pickup{pickups === 1 ? "" : "s"}/week.
+          </p>
+          <ul className="pickup-day-list">
+            {pickupDays.map((day, idx) => (
+              <li className="pickup-day-row" key={`${day}-${idx}`}>
+                <select value={day} onChange={(event) => updateDay(idx, Number(event.target.value))}>
+                  {WEEKDAYS.map((label, value) => (
+                    <option key={label} value={value} disabled={value !== day && usedDays.has(value)}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  className="pickup-day-remove"
+                  onClick={() => removeDay(idx)}
+                  disabled={pickupDays.length <= 1}
+                  aria-label={`Remove ${WEEKDAYS[day]}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            className="add-day-btn"
+            onClick={addDay}
+            disabled={firstAvailableDay === undefined}
+          >
+            + Add day
+          </button>
+
+          <label className="field-single">
+            Cadence
+            <select
+              value={cadence}
+              onChange={(event) => setCadence(event.target.value as "WEEKLY" | "BIWEEKLY")}
+            >
+              <option value="WEEKLY">Every week</option>
+              <option value="BIWEEKLY">Every 2 weeks</option>
+            </select>
+          </label>
           {cadence === "BIWEEKLY" ? (
-            <label>
+            <label className="field-single">
               First pickup date
-              <input type="datetime-local" {...scheduleForm.register("biweeklyAnchorDate")} />
+              <input
+                type="datetime-local"
+                value={anchorDate}
+                onChange={(event) => setAnchorDate(event.target.value)}
+              />
             </label>
           ) : null}
         </article>
