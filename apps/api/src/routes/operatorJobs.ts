@@ -56,6 +56,7 @@ export async function operatorQueueHandler(
             type: job.type,
             status: job.status,
             assignedOperatorId: job.assignedOperatorId ?? null,
+            routeSequence: job.routeSequence ?? null,
             customerName: job.serviceAddress.user.name,
             addressLine1: job.serviceAddress.line1,
             city: job.serviceAddress.city,

@@ -275,6 +275,7 @@ export const operatorQueueJobSchema = z.object({
   type: z.enum(["CURB_OUT", "CURB_IN"]),
   status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"]),
   assignedOperatorId: z.string().nullable(),
+  routeSequence: z.number().int().nullable(),
   customerName: z.string(),
   addressLine1: z.string(),
   city: z.string(),
@@ -392,11 +393,35 @@ export const adminUserUpdateSchema = z.object({
   operatorAccess: z.boolean().optional()
 });
 
+// --- Operator availability ------------------------------------------------
+export const operatorAvailabilityResponseSchema = z.object({
+  // ISO YYYY-MM-DD dates the operator has marked available.
+  dates: z.array(z.string())
+});
+
+export const operatorAvailabilityUpdateSchema = z.object({
+  dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).max(60)
+});
+
+export const availableOperatorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string()
+});
+
+export const availableOperatorsResponseSchema = z.object({
+  date: z.string(),
+  operators: z.array(availableOperatorSchema)
+});
+
 // --- Today's route (admin) ------------------------------------------------
 export const adminRouteRequestSchema = z.object({
   start: z.string().min(1).max(200),
   // Optional — when blank the route returns to the start (round trip).
-  end: z.string().max(200).optional()
+  end: z.string().max(200).optional(),
+  // When present, today's jobs are split into an optimized route per operator
+  // and assigned to them. When empty, a single unassigned preview route.
+  operatorIds: z.array(z.string()).max(20).optional()
 });
 
 export const adminRoutePointSchema = z.object({
@@ -415,20 +440,26 @@ export const adminRouteStopSchema = z.object({
   postalCode: z.string(),
   lat: z.number(),
   lng: z.number(),
-  cans: z.number().int().nonnegative(),
-  rollIn: z.boolean(),
-  cadence: z.enum(["WEEKLY", "BIWEEKLY"])
+  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"]))
+});
+
+export const adminRouteLegSchema = z.object({
+  operatorId: z.string().nullable(),
+  operatorName: z.string().nullable(),
+  stops: z.array(adminRouteStopSchema),
+  totalDistanceMeters: z.number().nonnegative(),
+  totalDurationSeconds: z.number().nonnegative(),
+  // Encoded polyline (precision 5) for drawing this leg; null if unavailable.
+  geometry: z.string().nullable()
 });
 
 export const adminRouteResponseSchema = z.object({
   date: z.string(),
   start: adminRoutePointSchema,
   end: adminRoutePointSchema,
-  stops: z.array(adminRouteStopSchema),
-  totalDistanceMeters: z.number().nonnegative(),
-  totalDurationSeconds: z.number().nonnegative(),
-  // Encoded polyline (precision 5) for drawing the route; null if unavailable.
-  geometry: z.string().nullable()
+  routes: z.array(adminRouteLegSchema),
+  // true when the jobs were assigned to operators (vs a preview).
+  assigned: z.boolean()
 });
 
 export const adminRuntimeMetricsSchema = z.object({
@@ -567,7 +598,12 @@ export type AdminUserWithLocations = z.infer<typeof adminUserDetailSchema>;
 export type AdminRouteRequest = z.infer<typeof adminRouteRequestSchema>;
 export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
 export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
+export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;
 export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
+export type OperatorAvailabilityResponse = z.infer<typeof operatorAvailabilityResponseSchema>;
+export type OperatorAvailabilityUpdate = z.infer<typeof operatorAvailabilityUpdateSchema>;
+export type AvailableOperator = z.infer<typeof availableOperatorSchema>;
+export type AvailableOperatorsResponse = z.infer<typeof availableOperatorsResponseSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
 export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;

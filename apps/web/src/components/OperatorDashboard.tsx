@@ -1,7 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CurrentUser, OperatorQueueJob } from "@gpp/shared";
-import { claimOperatorJob, getOperatorQueue, updateOperatorJobStatus } from "../lib/api";
+import {
+  claimOperatorJob,
+  getOperatorAvailability,
+  getOperatorQueue,
+  setOperatorAvailability,
+  updateOperatorJobStatus
+} from "../lib/api";
 
 type OperatorDashboardProps = {
   user: CurrentUser;
@@ -10,6 +16,10 @@ type OperatorDashboardProps = {
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
+}
+
+function dayKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 function isToday(iso: string): boolean {
@@ -22,6 +32,13 @@ function isToday(iso: string): boolean {
   );
 }
 
+const NEXT_30_DAYS: Date[] = Array.from({ length: 30 }, (_, i) => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + i);
+  return d;
+});
+
 export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps): JSX.Element {
   const queryClient = useQueryClient();
 
@@ -30,49 +47,67 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     queryFn: async () => getOperatorQueue(accessToken)
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["operator-queue"] });
-
-  const claimMutation = useMutation({
-    mutationFn: (jobId: string) => claimOperatorJob(jobId, accessToken),
-    onSuccess: invalidate
+  const availabilityQuery = useQuery({
+    queryKey: ["operator-availability"],
+    queryFn: async () => getOperatorAvailability(accessToken)
   });
+
+  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (availabilityQuery.data) {
+      setSelectedDays(new Set(availabilityQuery.data.dates));
+    }
+  }, [availabilityQuery.data]);
+
+  const saveAvailability = useMutation({
+    mutationFn: () => setOperatorAvailability([...selectedDays], accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["operator-availability"], data);
+    }
+  });
+
+  const invalidateQueue = () => queryClient.invalidateQueries({ queryKey: ["operator-queue"] });
   const completeMutation = useMutation({
     mutationFn: (jobId: string) => updateOperatorJobStatus(jobId, { status: "COMPLETED" }, accessToken),
-    onSuccess: invalidate
+    onSuccess: invalidateQueue
   });
-  const failMutation = useMutation({
-    mutationFn: (jobId: string) =>
-      updateOperatorJobStatus(
-        jobId,
-        { status: "FAILED", failureReason: "Marked failed from dashboard" },
-        accessToken
-      ),
-    onSuccess: invalidate
+  const claimMutation = useMutation({
+    mutationFn: (jobId: string) => claimOperatorJob(jobId, accessToken),
+    onSuccess: invalidateQueue
   });
 
-  const jobs = useMemo(
-    () =>
-      [...(queueQuery.data?.jobs ?? [])].sort(
-        (a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime()
-      ),
-    [queueQuery.data]
-  );
+  const jobs = queueQuery.data?.jobs ?? [];
 
-  const stats = useMemo(() => {
-    const todays = jobs.filter((j) => isToday(j.scheduledDate));
-    return {
-      today: todays.length,
-      rollOut: todays.filter((j) => j.type === "CURB_OUT").length,
-      rollIn: todays.filter((j) => j.type === "CURB_IN").length,
-      remaining: jobs.filter((j) => j.status === "SCHEDULED").length
-    };
-  }, [jobs]);
+  // Jobs assigned to me for today, in route order.
+  const myRoute = useMemo(() => {
+    return jobs
+      .filter((j) => j.assignedOperatorId === user.id && isToday(j.scheduledDate))
+      .sort((a, b) => (a.routeSequence ?? 999) - (b.routeSequence ?? 999));
+  }, [jobs, user.id]);
 
-  const anyError = claimMutation.error ?? completeMutation.error ?? failMutation.error;
+  const availabilityDirty = useMemo(() => {
+    const saved = new Set(availabilityQuery.data?.dates ?? []);
+    if (saved.size !== selectedDays.size) return true;
+    for (const d of selectedDays) if (!saved.has(d)) return true;
+    return false;
+  }, [availabilityQuery.data, selectedDays]);
 
-  function actionsFor(job: OperatorQueueJob): JSX.Element {
+  function toggleDay(key: string): void {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function jobActions(job: OperatorQueueJob): JSX.Element {
     if (job.status !== "SCHEDULED") {
-      return <span className={`coverage-badge ${job.status === "COMPLETED" ? "covered" : "uncovered"}`}>{job.status}</span>;
+      return (
+        <span className={`coverage-badge ${job.status === "COMPLETED" ? "covered" : "uncovered"}`}>
+          {job.status}
+        </span>
+      );
     }
     return (
       <div className="button-row">
@@ -84,9 +119,6 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         <button type="button" onClick={() => completeMutation.mutate(job.id)} disabled={completeMutation.isPending}>
           Complete
         </button>
-        <button type="button" className="address-row-remove" onClick={() => failMutation.mutate(job.id)} disabled={failMutation.isPending}>
-          Fail
-        </button>
       </div>
     );
   }
@@ -95,36 +127,85 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     <div className="dash-page">
       <div className="dash-page-head">
         <h2>Operator Dashboard</h2>
-        <p className="subtext">Signed in as {user.name}. Your upcoming pickups (next 7 days).</p>
+        <p className="subtext">Signed in as {user.name}. Manage your availability and today's route.</p>
       </div>
 
       <article className="panel">
-        <div className="route-summary">
-          <div className="admin-stat">
-            <span className="admin-stat-label">Today</span>
-            <strong>{stats.today}</strong>
-          </div>
-          <div className="admin-stat">
-            <span className="admin-stat-label">Roll-outs today</span>
-            <strong>{stats.rollOut}</strong>
-          </div>
-          <div className="admin-stat">
-            <span className="admin-stat-label">Roll-ins today</span>
-            <strong>{stats.rollIn}</strong>
-          </div>
-          <div className="admin-stat">
-            <span className="admin-stat-label">Scheduled (7 days)</span>
-            <strong>{stats.remaining}</strong>
-          </div>
+        <div className="panel-head-row">
+          <h3>My availability</h3>
+          {availabilityDirty ? (
+            <button
+              type="button"
+              className="add-day-btn"
+              onClick={() => saveAvailability.mutate()}
+              disabled={saveAvailability.isPending}
+            >
+              {saveAvailability.isPending ? "Saving…" : "Save availability"}
+            </button>
+          ) : null}
         </div>
+        <p className="subtext">Tap the days over the next 30 you're available to run routes.</p>
+        {availabilityQuery.isLoading ? (
+          <p className="subtext">Loading…</p>
+        ) : (
+          <div className="availability-grid">
+            {NEXT_30_DAYS.map((d) => {
+              const key = dayKey(d);
+              const on = selectedDays.has(key);
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  className={`availability-day${on ? " is-on" : ""}`}
+                  onClick={() => toggleDay(key)}
+                >
+                  <span className="availability-dow">
+                    {d.toLocaleDateString(undefined, { weekday: "short" })}
+                  </span>
+                  <span className="availability-num">{d.getDate()}</span>
+                  <span className="availability-mon">
+                    {d.toLocaleDateString(undefined, { month: "short" })}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {saveAvailability.isSuccess && !availabilityDirty ? (
+          <p className="success-inline">Availability saved.</p>
+        ) : null}
+        {saveAvailability.isError ? <p className="error">{getErrorMessage(saveAvailability.error)}</p> : null}
       </article>
 
       <article className="panel">
-        <h3>Job queue</h3>
+        <h3>My route today</h3>
+        {myRoute.length === 0 ? (
+          <p className="subtext">No route assigned to you today yet. An admin assigns routes each day.</p>
+        ) : (
+          <ol className="route-stop-list">
+            {myRoute.map((job, i) => (
+              <li className="route-stop" key={job.id}>
+                <span className="route-stop-num">{(job.routeSequence ?? i) + 1}</span>
+                <div>
+                  <strong>{job.addressLine1}</strong>
+                  <span className="admin-table-sub">
+                    {job.city}, {job.state} {job.postalCode} · {job.customerName}
+                  </span>
+                  <span className="admin-table-sub">
+                    {job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"} · {job.status}
+                  </span>
+                </div>
+                {jobActions(job)}
+              </li>
+            ))}
+          </ol>
+        )}
+      </article>
+
+      <article className="panel">
+        <h3>All upcoming jobs (7 days)</h3>
         {queueQuery.isLoading ? (
-          <p className="subtext">Loading jobs…</p>
-        ) : queueQuery.isError ? (
-          <p className="error">{getErrorMessage(queueQuery.error)}</p>
+          <p className="subtext">Loading…</p>
         ) : jobs.length === 0 ? (
           <p className="subtext">No jobs scheduled in the next 7 days.</p>
         ) : (
@@ -134,19 +215,20 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                 <div className="op-job-main">
                   <strong>{job.addressLine1}</strong>
                   <span className="admin-table-sub">
-                    {job.city}, {job.state} {job.postalCode} · {job.customerName}
-                  </span>
-                  <span className="admin-table-sub">
-                    {new Date(job.scheduledDate).toLocaleString()} ·{" "}
+                    {job.city}, {job.state} · {new Date(job.scheduledDate).toLocaleString()} ·{" "}
                     {job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"}
                   </span>
                 </div>
-                {actionsFor(job)}
+                {jobActions(job)}
               </li>
             ))}
           </ul>
         )}
-        {anyError ? <p className="error">{getErrorMessage(anyError)}</p> : null}
+        {(queueQuery.error || claimMutation.error || completeMutation.error) ? (
+          <p className="error">
+            {getErrorMessage(queueQuery.error ?? claimMutation.error ?? completeMutation.error)}
+          </p>
+        ) : null}
       </article>
     </div>
   );

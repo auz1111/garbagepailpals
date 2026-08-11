@@ -15,6 +15,9 @@ import type {
   AdminUserUpdate,
   AdminRouteRequest,
   AdminRouteResponse,
+  AvailableOperatorsResponse,
+  OperatorAvailabilityResponse,
+  OperatorAvailabilityUpdate,
   AuthResponse,
   LoginInput,
   OperatorJobClaimResponse,
@@ -166,6 +169,39 @@ export function getTodaysRoute(
     "/ops-admin/routes/today",
     "POST",
     body,
+    accessToken
+  );
+}
+
+export function getAvailableOperators(
+  date: string,
+  accessToken: string
+): Promise<AvailableOperatorsResponse> {
+  return request<undefined, AvailableOperatorsResponse>(
+    `/ops-admin/routes/operators?date=${encodeURIComponent(date)}`,
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function getOperatorAvailability(accessToken: string): Promise<OperatorAvailabilityResponse> {
+  return request<undefined, OperatorAvailabilityResponse>(
+    "/operator/availability",
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function setOperatorAvailability(
+  dates: string[],
+  accessToken: string
+): Promise<OperatorAvailabilityResponse> {
+  return request<OperatorAvailabilityUpdate, OperatorAvailabilityResponse>(
+    "/operator/availability",
+    "PUT",
+    { dates },
     accessToken
   );
 }

@@ -1,19 +1,54 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { AdminRouteResponse } from "@gpp/shared";
-import { getTodaysRoute } from "../lib/api";
+import type { AdminRouteResponse, AdminRouteLeg } from "@gpp/shared";
+import { getAvailableOperators, getTodaysRoute } from "../lib/api";
 
 type TodaysRouteProps = {
   accessToken: string;
 };
 
+const LEG_COLORS = ["#055a5f", "#f7a81b", "#7b2ff7", "#e5484d", "#2b8a3e", "#1071e5", "#d6336c", "#f76707"];
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-// Decode an OpenRouteService / Google encoded polyline (precision 5) to [lat,lng] pairs.
+function localDateKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Cache the last plan in localStorage keyed by today's date so it survives
+// refreshes and navigation; discarded when the day rolls over.
+const ROUTE_CACHE_KEY = "gpp.todaysRoute";
+type CachedPlan = { date: string; start: string; end: string; response: AdminRouteResponse };
+
+function loadCachedPlan(): CachedPlan | null {
+  try {
+    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedPlan;
+    return parsed.date === localDateKey() ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedPlan(plan: Omit<CachedPlan, "date">): void {
+  try {
+    localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify({ date: localDateKey(), ...plan }));
+  } catch {
+    /* best-effort */
+  }
+}
+
 function decodePolyline(encoded: string): Array<[number, number]> {
   const points: Array<[number, number]> = [];
   let index = 0;
@@ -29,7 +64,6 @@ function decodePolyline(encoded: string): Array<[number, number]> {
       shift += 5;
     } while (byte >= 0x20);
     lat += result & 1 ? ~(result >> 1) : result >> 1;
-
     result = 0;
     shift = 0;
     do {
@@ -38,7 +72,6 @@ function decodePolyline(encoded: string): Array<[number, number]> {
       shift += 5;
     } while (byte >= 0x20);
     lng += result & 1 ? ~(result >> 1) : result >> 1;
-
     points.push([lat / 1e5, lng / 1e5]);
   }
   return points;
@@ -46,21 +79,17 @@ function decodePolyline(encoded: string): Array<[number, number]> {
 
 function formatDuration(seconds: number): string {
   const mins = Math.round(seconds / 60);
-  if (mins < 60) {
-    return `${mins} min`;
-  }
-  return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
 function formatMiles(meters: number): string {
   return `${(meters / 1609.34).toFixed(1)} mi`;
 }
 
-// Build a Google Maps directions deep link with the optimized stops in order.
-function googleMapsUrl(route: AdminRouteResponse): string {
+function legGoogleMapsUrl(route: AdminRouteResponse, leg: AdminRouteLeg): string {
   const points = [
     `${route.start.lat},${route.start.lng}`,
-    ...route.stops.map((stop) => `${stop.lat},${stop.lng}`),
+    ...leg.stops.map((s) => `${s.lat},${s.lng}`),
     `${route.end.lat},${route.end.lng}`
   ];
   return `https://www.google.com/maps/dir/${points.map(encodeURIComponent).join("/")}`;
@@ -72,9 +101,7 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
   const layerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) {
-      return;
-    }
+    if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, { scrollWheelZoom: false });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors",
@@ -87,9 +114,7 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
   useEffect(() => {
     const map = mapRef.current;
     const layer = layerRef.current;
-    if (!map || !layer) {
-      return;
-    }
+    if (!map || !layer) return;
     layer.clearLayers();
 
     const pin = (label: string, color: string) =>
@@ -105,68 +130,33 @@ function RouteMap({ route }: { route: AdminRouteResponse }): JSX.Element {
     L.marker([route.start.lat, route.start.lng], { icon: pin("A", "#043e42") })
       .bindPopup(`<strong>Start</strong><br>${route.start.label}`)
       .addTo(layer);
-    bounds.push([route.start.lat, route.start.lng]);
-
-    route.stops.forEach((stop) => {
-      L.marker([stop.lat, stop.lng], { icon: pin(String(stop.order + 1), "#055a5f") })
-        .bindPopup(`<strong>${stop.order + 1}. ${stop.line1}</strong><br>${stop.city}, ${stop.state}`)
-        .addTo(layer);
-      bounds.push([stop.lat, stop.lng]);
-    });
-
-    L.marker([route.end.lat, route.end.lng], { icon: pin("B", "#f7a81b") })
+    L.marker([route.end.lat, route.end.lng], { icon: pin("B", "#b5750a") })
       .bindPopup(`<strong>End</strong><br>${route.end.label}`)
       .addTo(layer);
-    bounds.push([route.end.lat, route.end.lng]);
+    bounds.push([route.start.lat, route.start.lng], [route.end.lat, route.end.lng]);
 
-    if (route.geometry) {
-      L.polyline(decodePolyline(route.geometry), { color: "#34a6ab", weight: 4 }).addTo(layer);
-    } else if (bounds.length > 1) {
-      L.polyline(bounds, { color: "#34a6ab", weight: 3, dashArray: "6 6" }).addTo(layer);
-    }
+    route.routes.forEach((leg, legIndex) => {
+      const color = LEG_COLORS[legIndex % LEG_COLORS.length] ?? "#055a5f";
+      leg.stops.forEach((stop) => {
+        L.marker([stop.lat, stop.lng], { icon: pin(String(stop.order + 1), color) })
+          .bindPopup(
+            `<strong>${leg.operatorName ?? "Route"} · ${stop.order + 1}</strong><br>${stop.line1}, ${stop.city}`
+          )
+          .addTo(layer);
+        bounds.push([stop.lat, stop.lng]);
+      });
+      if (leg.geometry) {
+        L.polyline(decodePolyline(leg.geometry), { color, weight: 4 }).addTo(layer);
+      }
+    });
 
     if (bounds.length > 0) {
-      // Fit to the tightest zoom that still shows the whole route.
       map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24] });
     }
-    // Recompute size in case the container just became visible.
     setTimeout(() => map.invalidateSize(), 0);
   }, [route]);
 
   return <div className="route-map" ref={containerRef} />;
-}
-
-// The planned route is cached in localStorage keyed by today's date, so it
-// survives page refreshes and navigation. It's only discarded when the day
-// rolls over (a new day's route must be created fresh).
-const ROUTE_CACHE_KEY = "gpp.todaysRoute";
-type CachedPlan = { date: string; start: string; end: string; response: AdminRouteResponse };
-
-function localDateKey(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-function loadCachedPlan(): CachedPlan | null {
-  try {
-    const raw = localStorage.getItem(ROUTE_CACHE_KEY);
-    if (!raw) {
-      return null;
-    }
-    const parsed = JSON.parse(raw) as CachedPlan;
-    // Only reuse a plan that was created today.
-    return parsed.date === localDateKey() ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveCachedPlan(plan: Omit<CachedPlan, "date">): void {
-  try {
-    localStorage.setItem(ROUTE_CACHE_KEY, JSON.stringify({ date: localDateKey(), ...plan }));
-  } catch {
-    // Ignore storage failures (private mode, quota) — cache is best-effort.
-  }
 }
 
 export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
@@ -174,30 +164,61 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const [start, setStart] = useState(cached?.start ?? "");
   const [end, setEnd] = useState(cached?.end ?? "");
   const [route, setRoute] = useState<AdminRouteResponse | null>(cached?.response ?? null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const operatorsQuery = useQuery({
+    queryKey: ["available-operators", todayIso()],
+    queryFn: async () => getAvailableOperators(todayIso(), accessToken)
+  });
+  const operators = operatorsQuery.data?.operators ?? [];
 
   const routeMutation = useMutation({
     mutationFn: () =>
-      getTodaysRoute({ start: start.trim(), end: end.trim() ? end.trim() : undefined }, accessToken),
+      getTodaysRoute(
+        {
+          start: start.trim(),
+          end: end.trim() ? end.trim() : undefined,
+          operatorIds: [...selected]
+        },
+        accessToken
+      ),
     onSuccess: (data) => {
       setRoute(data);
       saveCachedPlan({ start: start.trim(), end: end.trim(), response: data });
     }
   });
 
+  function toggleOperator(id: string): void {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function handleSubmit(event: FormEvent): void {
     event.preventDefault();
-    if (!start.trim()) {
-      return;
-    }
+    if (!start.trim()) return;
     routeMutation.mutate();
   }
+
+  const assigning = selected.size > 0;
+  const totals = useMemo(() => {
+    const r = route?.routes ?? [];
+    return {
+      stops: r.reduce((n, leg) => n + leg.stops.length, 0),
+      distance: r.reduce((m, leg) => m + leg.totalDistanceMeters, 0),
+      duration: r.reduce((s, leg) => s + leg.totalDurationSeconds, 0)
+    };
+  }, [route]);
 
   return (
     <div className="dash-page">
       <div className="dash-page-head">
         <h2>Today's Routes</h2>
         <p className="subtext">
-          The best order to service every location scheduled for pickup today.
+          Pick the operators working today, then assign each an optimized route of today's pickups.
         </p>
       </div>
 
@@ -205,7 +226,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         <form onSubmit={handleSubmit}>
           <div className="admin-filters">
             <label className="admin-filter-search">
-              Start location
+              Start location (depot)
               <input
                 value={start}
                 onChange={(event) => setStart(event.target.value)}
@@ -221,23 +242,50 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               />
             </label>
           </div>
+
+          <h4 className="form-section-title">Operators available today</h4>
+          {operatorsQuery.isLoading ? (
+            <p className="subtext">Loading operators…</p>
+          ) : operators.length === 0 ? (
+            <p className="subtext">
+              No operators have marked themselves available today. You can still preview an
+              unassigned route.
+            </p>
+          ) : (
+            <div className="operator-picker">
+              {operators.map((op) => (
+                <label key={op.id} className="operator-choice">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(op.id)}
+                    onChange={() => toggleOperator(op.id)}
+                  />
+                  <span>
+                    <strong>{op.name}</strong>
+                    <span className="admin-table-sub">{op.email}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+
           <div className="detail-save-row">
-            <button
-              type="submit"
-              className="cta-primary"
-              disabled={!start.trim() || routeMutation.isPending}
-            >
-              {routeMutation.isPending ? "Planning…" : "Plan route"}
+            <button type="submit" className="cta-primary" disabled={!start.trim() || routeMutation.isPending}>
+              {routeMutation.isPending
+                ? assigning
+                  ? "Assigning…"
+                  : "Planning…"
+                : assigning
+                  ? `Assign routes to ${selected.size} operator${selected.size === 1 ? "" : "s"}`
+                  : "Preview route (no assignment)"}
             </button>
           </div>
-          {routeMutation.isError ? (
-            <p className="error">{getErrorMessage(routeMutation.error)}</p>
-          ) : null}
+          {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}
         </form>
       </article>
 
       {route ? (
-        route.stops.length === 0 ? (
+        totals.stops === 0 ? (
           <article className="panel">
             <p className="subtext">No locations are scheduled for pickup today.</p>
           </article>
@@ -246,25 +294,24 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
             <article className="panel">
               <div className="route-summary">
                 <div className="admin-stat">
+                  <span className="admin-stat-label">{route.assigned ? "Operators" : "Route"}</span>
+                  <strong>{route.routes.length}</strong>
+                </div>
+                <div className="admin-stat">
                   <span className="admin-stat-label">Stops</span>
-                  <strong>{route.stops.length}</strong>
+                  <strong>{totals.stops}</strong>
                 </div>
                 <div className="admin-stat">
-                  <span className="admin-stat-label">Drive time</span>
-                  <strong>{formatDuration(route.totalDurationSeconds)}</strong>
+                  <span className="admin-stat-label">Total drive time</span>
+                  <strong>{formatDuration(totals.duration)}</strong>
                 </div>
                 <div className="admin-stat">
-                  <span className="admin-stat-label">Distance</span>
-                  <strong>{formatMiles(route.totalDistanceMeters)}</strong>
+                  <span className="admin-stat-label">Total distance</span>
+                  <strong>{formatMiles(totals.distance)}</strong>
                 </div>
-                <a
-                  className="cta-primary route-maps-link"
-                  href={googleMapsUrl(route)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Open in Google Maps
-                </a>
+                {route.assigned ? (
+                  <span className="coverage-badge covered">Assigned to operators</span>
+                ) : null}
               </div>
             </article>
 
@@ -272,41 +319,49 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               <RouteMap route={route} />
             </article>
 
-            <article className="panel">
-              <h3>Stops in order</h3>
-              <ol className="route-stop-list">
-                <li className="route-stop is-endpoint">
-                  <span className="route-stop-num route-stop-start">A</span>
-                  <div>
-                    <strong>Start</strong>
-                    <span className="admin-table-sub">{route.start.label}</span>
-                  </div>
-                </li>
-                {route.stops.map((stop) => (
-                  <li className="route-stop" key={stop.addressId}>
-                    <span className="route-stop-num">{stop.order + 1}</span>
-                    <div>
-                      <strong>{stop.line1}</strong>
-                      <span className="admin-table-sub">
-                        {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
-                      </span>
-                      <span className="admin-table-sub">
-                        {stop.cans} can{stop.cans === 1 ? "" : "s"} ·{" "}
-                        {stop.rollIn ? "roll-in" : "roll-out only"}
-                        {stop.cadence === "BIWEEKLY" ? " · biweekly" : ""}
-                      </span>
-                    </div>
-                  </li>
-                ))}
-                <li className="route-stop is-endpoint">
-                  <span className="route-stop-num route-stop-end">B</span>
-                  <div>
-                    <strong>End</strong>
-                    <span className="admin-table-sub">{route.end.label}</span>
-                  </div>
-                </li>
-              </ol>
-            </article>
+            {route.routes.map((leg, legIndex) => (
+              <article className="panel" key={leg.operatorId ?? `preview-${legIndex}`}>
+                <div className="panel-head-row">
+                  <h3>
+                    <span
+                      className="route-leg-dot"
+                      style={{ background: LEG_COLORS[legIndex % LEG_COLORS.length] }}
+                    />
+                    {leg.operatorName ?? "Unassigned preview"}
+                  </h3>
+                  <a
+                    className="cta-secondary"
+                    href={legGoogleMapsUrl(route, leg)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open in Maps
+                  </a>
+                </div>
+                <p className="subtext">
+                  {leg.stops.length} stop{leg.stops.length === 1 ? "" : "s"} ·{" "}
+                  {formatMiles(leg.totalDistanceMeters)} · {formatDuration(leg.totalDurationSeconds)}
+                </p>
+                <ol className="route-stop-list">
+                  {leg.stops.map((stop) => (
+                    <li className="route-stop" key={stop.addressId}>
+                      <span className="route-stop-num">{stop.order + 1}</span>
+                      <div>
+                        <strong>{stop.line1}</strong>
+                        <span className="admin-table-sub">
+                          {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                        </span>
+                        <span className="admin-table-sub">
+                          {stop.jobTypes
+                            .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                            .join(" + ")}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </article>
+            ))}
           </>
         )
       ) : null}

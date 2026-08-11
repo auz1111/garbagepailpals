@@ -79,6 +79,18 @@ model User {
   assignedJobs         ServiceJob[]   @relation("AssignedOperatorJobs")
   refreshTokens        RefreshToken[]
   auditLogs            AuditLog[]     @relation("AuditActorLogs")
+  availability         OperatorAvailability[]
+}
+
+model OperatorAvailability {
+  id         String   @id @default(cuid())
+  operatorId String
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now())
+  operator   User     @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@unique([operatorId, date])
+  @@index([date])
 }
 
 model ServiceAddress {
@@ -193,6 +205,7 @@ model ServiceJob {
   type                ServiceJobType
   status              ServiceJobStatus
   assignedOperatorId  String?
+  routeSequence       Int?
   completedAt         DateTime?
   photoBlobPath       String?
   failureReason       String?
