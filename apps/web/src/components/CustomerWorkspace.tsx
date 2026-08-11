@@ -336,88 +336,75 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  function renderAccountStatus(): JSX.Element {
-    if (addressesQuery.isLoading || upcomingJobsQuery.isLoading) {
-      return (
-        <div className="account-status is-info">
-          <span className="account-status-icon" aria-hidden="true">
-            ⏳
-          </span>
-          <div className="account-status-body">
-            <strong>Checking your account status…</strong>
-          </div>
-        </div>
-      );
+  // A single account-status notification, shown at the top of every customer
+  // page so the message is identical everywhere. Returns null while loading.
+  function renderAccountBanner(): JSX.Element | null {
+    if (addressesQuery.isLoading || upcomingJobsQuery.isLoading || billingSummaryQuery.isLoading) {
+      return null;
     }
 
-    // A non-entitlement error means we couldn't read the account at all.
-    if (addressesQuery.isError && !entitlementBlocked) {
-      return (
-        <div className="account-status is-warn">
-          <span className="account-status-icon" aria-hidden="true">
-            ⚠️
-          </span>
-          <div className="account-status-body">
-            <strong>We couldn't load your account status.</strong>
-            <p className="subtext">{getErrorMessage(addressesQuery.error)}</p>
-          </div>
+    const banner = (
+      tone: "ok" | "warn",
+      icon: string,
+      title: string,
+      sub: string,
+      cta: { to: string; label: string } | null
+    ): JSX.Element => (
+      <div className={`update-banner is-${tone}`} role="status">
+        <span className="update-banner-icon" aria-hidden="true">
+          {icon}
+        </span>
+        <div className="update-banner-text">
+          <strong>{title}</strong>
+          <span>{sub}</span>
         </div>
-      );
+        {cta ? (
+          <Link to={cta.to} className="update-banner-cta">
+            {cta.label}
+          </Link>
+        ) : null}
+      </div>
+    );
+
+    if (addressesQuery.isError && !entitlementBlocked) {
+      return banner("warn", "⚠️", "We couldn't load your account status.", getErrorMessage(addressesQuery.error), null);
     }
 
     const summary = billingSummaryQuery.data;
-    const uncoveredCount = summary?.uncoveredCount ?? 0;
-    const hasUncovered = Boolean(summary?.active) && uncoveredCount > 0;
-    const allOk = subscriptionActive && hasAddress && !hasUncovered;
 
-    return (
-      <div className={`account-status ${allOk ? "is-ok" : "is-warn"}`}>
-        <span className="account-status-icon" aria-hidden="true">
-          {allOk ? "✅" : "⚠️"}
-        </span>
-        <div className="account-status-body">
-          <strong>
-            {allOk
-              ? "You're all set — your account is active and ready for service."
-              : "Action needed before we can service your cans."}
-          </strong>
-          <ul className="account-status-list">
-            <li className={subscriptionActive ? "ok" : "bad"}>
-              {subscriptionActive ? (
-                "Subscription active"
-              ) : (
-                <>
-                  No active subscription — <Link to="/customer/billing">set up billing</Link> to
-                  activate your plan (an unpaid or expired plan pauses service).
-                </>
-              )}
-            </li>
-            <li
-              className={
-                !subscriptionActive ? "pending" : hasAddress ? "ok" : "bad"
-              }
-            >
-              {!subscriptionActive ? (
-                "Locations — activate your subscription first"
-              ) : hasAddress ? (
-                `${addresses.length} location${addresses.length === 1 ? "" : "s"} added`
-              ) : (
-                <>
-                  No location yet — <Link to="/customer/addresses">add one</Link> so we can schedule
-                  pickups.
-                </>
-              )}
-            </li>
-            {hasUncovered ? (
-              <li className="bad">
-                {uncoveredCount === 1 ? "1 location isn't" : `${uncoveredCount} locations aren't`} on
-                your plan — <Link to="/customer/billing">update your subscription</Link> to service{" "}
-                {uncoveredCount === 1 ? "it" : "them"}.
-              </li>
-            ) : null}
-          </ul>
-        </div>
-      </div>
+    if (!hasAddress) {
+      return banner(
+        "warn",
+        "📍",
+        "Add a service location to get started.",
+        "We can't schedule pickups until you add one.",
+        { to: "/customer/addresses", label: "Add location" }
+      );
+    }
+    if (!subscriptionActive) {
+      return banner(
+        "warn",
+        "💳",
+        "Set up billing to activate your plan.",
+        "An unpaid or expired plan pauses service.",
+        { to: "/customer/billing", label: "Set up billing" }
+      );
+    }
+    if (summary?.needsUpdate) {
+      return banner(
+        "warn",
+        "⚠️",
+        "Your subscription needs updating.",
+        `Update to ${formatUsd(summary.totalMonthlyCents)}/mo to service all your locations.`,
+        { to: "/customer/billing", label: "Review billing" }
+      );
+    }
+    return banner(
+      "ok",
+      "✅",
+      "You're all set — your account is active and ready for service.",
+      `${addresses.length} location${addresses.length === 1 ? "" : "s"} on an active plan.`,
+      null
     );
   }
 
@@ -430,7 +417,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             Signed in as {user.name} ({user.email})
           </p>
         </div>
-        {renderAccountStatus()}
         <div className="dash-nav-grid">
           {CUSTOMER_NAV.filter((item) => item.to !== "/customer").map((item) => (
             <Link key={item.to} to={item.to} className="dash-nav-card">
@@ -913,6 +899,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
 
   return (
     <section className="card role-shell customer-workspace">
+      {renderAccountBanner()}
       <Routes>
         <Route index element={renderOverview()} />
         <Route path="billing" element={renderBilling()} />
