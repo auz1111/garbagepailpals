@@ -56,6 +56,7 @@ function toAddressResponse(address: {
   canCount: number;
   pickupsPerWeek: number;
   rollIn: boolean;
+  glassRecycling: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -142,6 +143,7 @@ export async function createAddressHandler(
             canCount: input.canCount,
             pickupsPerWeek: 1,
             rollIn: input.rollIn ?? true,
+            glassRecycling: input.glassRecycling ?? false,
             isActive: input.isActive ?? true,
             schedules: {
               create: {

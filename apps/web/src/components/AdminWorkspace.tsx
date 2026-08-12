@@ -1281,7 +1281,8 @@ function AdminScheduleEditorForm({
         (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
     );
   const monthly = addressMonthlyCents(
-    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn }))
+    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn })),
+    { glassRecycling: loc.glassRecycling }
   );
 
   function updateDay(idx: number, patch: Partial<EditDay>): void {

@@ -42,6 +42,7 @@ type AddressRow = {
   state: string;
   postalCode: string;
   neighborhoodId: string | null;
+  glassRecycling: boolean;
   schedules: ScheduleRow[];
 };
 
@@ -71,7 +72,11 @@ function pricingDays(schedules: ScheduleRow[]) {
 
 function toAdminUser(row: UserAggregateRow) {
   const monthlyCents = row.serviceAddresses.reduce(
-    (sum, address) => sum + addressMonthlyCents(pricingDays(address.schedules)),
+    (sum, address) =>
+      sum +
+      addressMonthlyCents(pricingDays(address.schedules), {
+        glassRecycling: address.glassRecycling
+      }),
     0
   );
   return {
@@ -104,7 +109,10 @@ function toAdminUserDetail(row: UserAggregateRow) {
       state: address.state,
       postalCode: address.postalCode,
       neighborhoodId: address.neighborhoodId,
-      monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
+      glassRecycling: address.glassRecycling,
+      monthlyCents: addressMonthlyCents(pricingDays(address.schedules), {
+        glassRecycling: address.glassRecycling
+      }),
       pickups: [...address.schedules]
         .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
         .map((s) => ({

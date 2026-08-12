@@ -88,6 +88,8 @@ export const serviceAddressInputSchema = z.object({
   // When true (default) we bring the cans back in the day after pickup. Turning
   // it off drops that trip and earns a per-can credit on the monthly price.
   rollIn: z.boolean().default(true),
+  // The location has a glass recycling container we also roll out (+monthly fee).
+  glassRecycling: z.boolean().default(false),
   isActive: z.boolean().optional()
 });
 
@@ -146,7 +148,10 @@ export const PRICING = {
   baseMonthlyCentsPerAddress: 4500,
   extraCanMonthlyCents: 400,
   // Credit per can when the customer opts out of roll-in on a day.
-  rollInCreditMonthlyCentsPerCan: 300
+  rollInCreditMonthlyCentsPerCan: 300,
+  // Flat monthly add-on when the location has a glass recycling container we
+  // also take out.
+  glassRecyclingMonthlyCents: 500
 } as const;
 
 // Each additional pickup day (beyond the first) costs half the base price.
@@ -174,9 +179,13 @@ export function pickupDayMonthlyCents(day: PricingDay, isPrimary: boolean): numb
   return Math.max(0, cents);
 }
 
-export function addressMonthlyCents(days: PricingDay[]): number {
+export function addressMonthlyCents(
+  days: PricingDay[],
+  opts: { glassRecycling?: boolean } = {}
+): number {
   const sorted = [...days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-  return sorted.reduce((sum, day, index) => sum + pickupDayMonthlyCents(day, index === 0), 0);
+  const base = sorted.reduce((sum, day, index) => sum + pickupDayMonthlyCents(day, index === 0), 0);
+  return base + (opts.glassRecycling ? PRICING.glassRecyclingMonthlyCents : 0);
 }
 
 export function monthlyTotalCents(addresses: PricingDay[][]): number {
@@ -413,6 +422,7 @@ export const adminUserLocationSchema = z.object({
   state: z.string(),
   postalCode: z.string(),
   neighborhoodId: z.string().nullable(),
+  glassRecycling: z.boolean(),
   monthlyCents: z.number().int().nonnegative(),
   pickups: z.array(
     z.object({

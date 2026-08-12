@@ -38,7 +38,9 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
       city: address.city,
       canCount: address.canCount,
       pickupsPerWeek: address.schedules.length,
-      monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay)),
+      monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay), {
+        glassRecycling: address.glassRecycling
+      }),
       covered,
       status: sub?.status ?? null
     };
@@ -82,7 +84,11 @@ export async function computeUserMonthlyCents(userId: string): Promise<number> {
   });
 
   return addresses.reduce(
-    (sum, address) => sum + addressMonthlyCents(address.schedules.map(toPricingDay)),
+    (sum, address) =>
+      sum +
+      addressMonthlyCents(address.schedules.map(toPricingDay), {
+        glassRecycling: address.glassRecycling
+      }),
     0
   );
 }
@@ -111,7 +117,9 @@ export async function activateSubscriptionsForUser(
   const status = opts.status ?? "ACTIVE";
 
   for (const address of addresses) {
-    const amountCents = addressMonthlyCents(address.schedules.map(toPricingDay));
+    const amountCents = addressMonthlyCents(address.schedules.map(toPricingDay), {
+      glassRecycling: address.glassRecycling
+    });
     await prisma.subscription.upsert({
       where: { userId_serviceAddressId: { userId, serviceAddressId: address.id } },
       create: {

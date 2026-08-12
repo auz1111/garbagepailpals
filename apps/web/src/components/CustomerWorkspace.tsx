@@ -62,6 +62,7 @@ const defaultAddressValues: CreateAddressRequest = {
   canCount: 2,
   pickupsPerWeek: 1,
   rollIn: true,
+  glassRecycling: false,
   isActive: true,
   pickupDayOfWeek: 2,
   cadence: "WEEKLY"
@@ -102,6 +103,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     defaultValues: defaultAddressValues
   });
   const addressCadence = addressForm.watch("cadence");
+  const addressGlass = addressForm.watch("glassRecycling");
 
   function closeAddressForm(): void {
     setShowAddressForm(false);
@@ -785,10 +787,26 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                   </span>
                 </span>
               </label>
+              <label className="checkbox-field">
+                <input type="checkbox" {...addressForm.register("glassRecycling")} />
+                <span>
+                  <strong>
+                    Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
+                  </strong>
+                  <span className="subtext">
+                    We also roll your glass recycling container out and back.
+                  </span>
+                </span>
+              </label>
               <p className="subtext">
                 This sets up your first pickup ({PRICING.includedCansPerPickup} cans included ={" "}
-                {formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo). Add more pickup days on the next
-                screen.
+                {formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo
+                {addressGlass
+                  ? ` + ${formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo glass = ${formatUsd(
+                      PRICING.baseMonthlyCentsPerAddress + PRICING.glassRecyclingMonthlyCents
+                    )}/mo`
+                  : ""}
+                ). Add more pickup days on the next screen.
               </p>
               <button type="submit" disabled={createAddressMutation.isPending}>
                 {createAddressMutation.isPending ? "Saving..." : "Save Location"}
@@ -1045,7 +1063,9 @@ function AddressRow({
   covered: boolean | undefined;
   onOpen: (id: string) => void;
 }): JSX.Element {
-  const monthly = addressMonthlyCents((address.schedules ?? []).map(toPricingDay));
+  const monthly = addressMonthlyCents((address.schedules ?? []).map(toPricingDay), {
+    glassRecycling: address.glassRecycling
+  });
   const coverageClass = covered === undefined ? "" : covered ? " is-covered" : " is-uncovered";
 
   return (
@@ -1158,7 +1178,8 @@ function LocationDetail({
         (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
     );
   const monthly = addressMonthlyCents(
-    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn }))
+    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn })),
+    { glassRecycling: address.glassRecycling }
   );
 
   // Enable Save only when the current config differs from what's saved.
