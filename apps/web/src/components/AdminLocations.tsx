@@ -140,6 +140,7 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                     {l.canCount} can{l.canCount === 1 ? "" : "s"}
                   </span>
                   {l.glassRecycling ? <span className="loc-chip is-glass">Glass ♻️</span> : null}
+                  {l.petWaste ? <span className="loc-chip is-petwaste">Pet waste 🐕</span> : null}
                 </div>
                 <div className="loc-row-price">{formatUsd(l.monthlyCents)}/mo</div>
               </li>

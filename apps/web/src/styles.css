@@ -4916,3 +4916,7 @@ button[type="submit"]:disabled {
   background: #dcfce7;
   color: #166534;
 }
+.loc-chip.is-petwaste {
+  background: #fef3c7;
+  color: #92400e;
+}

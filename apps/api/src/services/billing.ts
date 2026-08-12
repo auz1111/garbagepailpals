@@ -3,14 +3,23 @@ import { addressMonthlyCents, type BillingSummary, type PricingDay } from "@gpp/
 
 const ACTIVE_STATUSES = ["ACTIVE", "TRIALING"] as const;
 
-type ScheduleRow = { pickupDayOfWeek: number; canCount: number; cadence: string; rollIn: boolean };
+type ScheduleRow = {
+  pickupDayOfWeek: number;
+  canCount: number;
+  cadence: string;
+  rollIn: boolean;
+  glassRecycling: boolean;
+  petWasteDogs: number;
+};
 
 function toPricingDay(row: ScheduleRow): PricingDay {
   return {
     dayOfWeek: row.pickupDayOfWeek,
     canCount: row.canCount,
     cadence: row.cadence as "WEEKLY" | "BIWEEKLY",
-    rollIn: row.rollIn
+    rollIn: row.rollIn,
+    glassRecycling: row.glassRecycling,
+    petWasteDogs: row.petWasteDogs
   };
 }
 
@@ -38,9 +47,7 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
       city: address.city,
       canCount: address.canCount,
       pickupsPerWeek: address.schedules.length,
-      monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay), {
-        glassRecycling: address.glassRecycling
-      }),
+      monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay)),
       covered,
       status: sub?.status ?? null
     };
@@ -84,11 +91,7 @@ export async function computeUserMonthlyCents(userId: string): Promise<number> {
   });
 
   return addresses.reduce(
-    (sum, address) =>
-      sum +
-      addressMonthlyCents(address.schedules.map(toPricingDay), {
-        glassRecycling: address.glassRecycling
-      }),
+    (sum, address) => sum + addressMonthlyCents(address.schedules.map(toPricingDay)),
     0
   );
 }
@@ -117,9 +120,7 @@ export async function activateSubscriptionsForUser(
   const status = opts.status ?? "ACTIVE";
 
   for (const address of addresses) {
-    const amountCents = addressMonthlyCents(address.schedules.map(toPricingDay), {
-      glassRecycling: address.glassRecycling
-    });
+    const amountCents = addressMonthlyCents(address.schedules.map(toPricingDay));
     await prisma.subscription.upsert({
       where: { userId_serviceAddressId: { userId, serviceAddressId: address.id } },
       create: {

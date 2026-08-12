@@ -14,6 +14,7 @@ import {
   additionalPickupDayMonthlyCents,
   addressMonthlyCents,
   formatUsd,
+  petWasteMonthlyCents,
   pickupDayMonthlyCents,
   PRICING
 } from "@gpp/shared";
@@ -31,13 +32,19 @@ import {
   listHistoryJobs,
   listUpcomingJobs,
   deleteAddress,
-  updateAddress,
   updateAddressSchedule
 } from "../lib/api";
 
 // A schedule row from the API mapped to the shared pricing input.
 function toPricingDay(day: PickupDay): PricingDay {
-  return { dayOfWeek: day.dayOfWeek, canCount: day.canCount, cadence: day.cadence, rollIn: day.rollIn };
+  return {
+    dayOfWeek: day.dayOfWeek,
+    canCount: day.canCount,
+    cadence: day.cadence,
+    rollIn: day.rollIn,
+    glassRecycling: day.glassRecycling,
+    petWasteDogs: day.petWasteDogs
+  };
 }
 
 type CustomerWorkspaceProps = {
@@ -64,6 +71,7 @@ const defaultAddressValues: CreateAddressRequest = {
   pickupsPerWeek: 1,
   rollIn: true,
   glassRecycling: false,
+  petWasteDogs: 0,
   isActive: true,
   pickupDayOfWeek: 2,
   cadence: "WEEKLY"
@@ -105,6 +113,18 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   });
   const addressCadence = addressForm.watch("cadence");
   const addressGlass = addressForm.watch("glassRecycling");
+  const addressDogs = addressForm.watch("petWasteDogs") ?? 0;
+  // Live monthly for the first pickup day, including any add-ons.
+  const firstDayMonthly = addressMonthlyCents([
+    {
+      dayOfWeek: addressForm.watch("pickupDayOfWeek") ?? 2,
+      canCount: addressForm.watch("canCount") ?? 2,
+      cadence: addressCadence ?? "WEEKLY",
+      rollIn: addressForm.watch("rollIn") ?? true,
+      glassRecycling: addressGlass ?? false,
+      petWasteDogs: addressDogs
+    }
+  ]);
 
   function closeAddressForm(): void {
     setShowAddressForm(false);
@@ -222,15 +242,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
-    }
-  });
-
-  const glassMutation = useMutation({
-    mutationFn: ({ id, glass }: { id: string; glass: boolean }) =>
-      updateAddress(id, { glassRecycling: glass }, accessToken),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
     }
   });
 
@@ -804,19 +815,42 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                     Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
                   </strong>
                   <span className="subtext">
-                    We also roll your glass recycling container out and back.
+                    We will also take out the glass recycling container.
                   </span>
                 </span>
               </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={addressDogs > 0}
+                  onChange={(event) =>
+                    addressForm.setValue("petWasteDogs", event.target.checked ? 1 : 0)
+                  }
+                />
+                <span>
+                  <strong>
+                    Pet waste removal (from {formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo)
+                  </strong>
+                  <span className="subtext">
+                    We'll clean your dog's waste from the yard and bin it before rolling out. +
+                    {formatUsd(PRICING.petWasteExtraDogMonthlyCents)}/mo per extra dog.
+                  </span>
+                </span>
+              </label>
+              {addressDogs > 0 ? (
+                <label className="field-single">
+                  Dogs
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    {...addressForm.register("petWasteDogs", { valueAsNumber: true })}
+                  />
+                </label>
+              ) : null}
               <p className="subtext">
-                This sets up your first pickup ({PRICING.includedCansPerPickup} cans included ={" "}
-                {formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo
-                {addressGlass
-                  ? ` + ${formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo glass = ${formatUsd(
-                      PRICING.baseMonthlyCentsPerAddress + PRICING.glassRecyclingMonthlyCents
-                    )}/mo`
-                  : ""}
-                ). Add more pickup days on the next screen.
+                This sets up your first pickup — {formatUsd(firstDayMonthly)}/mo. Add more pickup days
+                on the next screen.
               </p>
               <button type="submit" disabled={createAddressMutation.isPending}>
                 {createAddressMutation.isPending ? "Saving..." : "Save Location"}
@@ -913,8 +947,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         savingSchedule={scheduleMutation.isPending}
         scheduleError={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
         scheduleSaved={scheduleMutation.isSuccess}
-        onToggleGlass={(id, glass) => glassMutation.mutate({ id, glass })}
-        togglingGlass={glassMutation.isPending}
       />
     );
   }
@@ -1075,9 +1107,7 @@ function AddressRow({
   covered: boolean | undefined;
   onOpen: (id: string) => void;
 }): JSX.Element {
-  const monthly = addressMonthlyCents((address.schedules ?? []).map(toPricingDay), {
-    glassRecycling: address.glassRecycling
-  });
+  const monthly = addressMonthlyCents((address.schedules ?? []).map(toPricingDay));
   const coverageClass = covered === undefined ? "" : covered ? " is-covered" : " is-uncovered";
 
   return (
@@ -1132,6 +1162,8 @@ type EditDay = {
   cadence: "WEEKLY" | "BIWEEKLY";
   canCount: number;
   rollIn: boolean;
+  glassRecycling: boolean;
+  petWasteDogs: number;
   biweeklyAnchorDate: string;
 };
 
@@ -1143,9 +1175,7 @@ function LocationDetail({
   onSaveSchedule,
   savingSchedule,
   scheduleError,
-  scheduleSaved,
-  onToggleGlass,
-  togglingGlass
+  scheduleSaved
 }: {
   address: ServiceAddress;
   covered: boolean | undefined;
@@ -1155,8 +1185,6 @@ function LocationDetail({
   savingSchedule: boolean;
   scheduleError: string | null;
   scheduleSaved: boolean;
-  onToggleGlass: (id: string, glass: boolean) => void;
-  togglingGlass: boolean;
 }): JSX.Element {
   const initialDays: EditDay[] =
     address.schedules.length > 0
@@ -1167,6 +1195,8 @@ function LocationDetail({
             cadence: s.cadence,
             canCount: s.canCount,
             rollIn: s.rollIn,
+            glassRecycling: s.glassRecycling,
+            petWasteDogs: s.petWasteDogs,
             biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
           }))
       : [
@@ -1175,6 +1205,8 @@ function LocationDetail({
             cadence: "WEEKLY",
             canCount: 2,
             rollIn: true,
+            glassRecycling: false,
+            petWasteDogs: 0,
             biweeklyAnchorDate: ""
           }
         ];
@@ -1194,8 +1226,14 @@ function LocationDetail({
         (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
     );
   const monthly = addressMonthlyCents(
-    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn })),
-    { glassRecycling: address.glassRecycling }
+    days.map((d) => ({
+      dayOfWeek: d.dayOfWeek,
+      canCount: d.canCount,
+      cadence: d.cadence,
+      rollIn: d.rollIn,
+      glassRecycling: d.glassRecycling,
+      petWasteDogs: d.petWasteDogs
+    }))
   );
 
   // Enable Save only when the current config differs from what's saved.
@@ -1204,7 +1242,7 @@ function LocationDetail({
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
       .map(
         (d) =>
-          `${d.dayOfWeek}|${d.cadence}|${d.canCount}|${d.rollIn}|${
+          `${d.dayOfWeek}|${d.cadence}|${d.canCount}|${d.rollIn}|${d.glassRecycling}|${d.petWasteDogs}|${
             d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate : ""
           }`
       )
@@ -1223,7 +1261,15 @@ function LocationDetail({
     }
     setDays((prev) => [
       ...prev,
-      { dayOfWeek: firstAvailableDay, cadence: "WEEKLY", canCount: 2, rollIn: true, biweeklyAnchorDate: "" }
+      {
+        dayOfWeek: firstAvailableDay,
+        cadence: "WEEKLY",
+        canCount: 2,
+        rollIn: true,
+        glassRecycling: false,
+        petWasteDogs: 0,
+        biweeklyAnchorDate: ""
+      }
     ]);
   }
 
@@ -1240,7 +1286,9 @@ function LocationDetail({
         cadence: d.cadence,
         biweeklyAnchorDate: d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate || undefined : undefined,
         canCount: d.canCount,
-        rollIn: d.rollIn
+        rollIn: d.rollIn,
+        glassRecycling: d.glassRecycling,
+        petWasteDogs: d.petWasteDogs
       }))
     );
   }
@@ -1379,6 +1427,67 @@ function LocationDetail({
                         </span>
                       </span>
                     </label>
+
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={day.glassRecycling}
+                        onChange={(event) => updateDay(idx, { glassRecycling: event.target.checked })}
+                      />
+                      <span>
+                        <strong>
+                          Glass recycling container (+
+                          {formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
+                        </strong>
+                        <span className="subtext">
+                          We will also take out the glass recycling container.
+                        </span>
+                      </span>
+                    </label>
+
+                    <label className="checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={day.petWasteDogs > 0}
+                        onChange={(event) =>
+                          updateDay(idx, { petWasteDogs: event.target.checked ? 1 : 0 })
+                        }
+                      />
+                      <span>
+                        <strong>
+                          Pet waste removal (+{formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo)
+                        </strong>
+                        <span className="subtext">
+                          We&apos;ll clean up your dog&apos;s waste from the yard and put it in the
+                          trash bin before rolling out.
+                        </span>
+                      </span>
+                    </label>
+
+                    {day.petWasteDogs > 0 ? (
+                      <label className="field-inline">
+                        <span>Number of dogs</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={20}
+                          value={day.petWasteDogs}
+                          onChange={(event) =>
+                            updateDay(idx, {
+                              petWasteDogs: Math.max(1, Math.min(20, Number(event.target.value) || 1))
+                            })
+                          }
+                        />
+                        <span className="subtext">
+                          {formatUsd(petWasteMonthlyCents(day.petWasteDogs))}/mo
+                          {day.petWasteDogs > 1
+                            ? ` — ${formatUsd(PRICING.petWasteBaseMonthlyCents)} for the first dog + ${formatUsd(
+                                PRICING.petWasteExtraDogMonthlyCents
+                              )}/mo each additional`
+                            : ""}
+                        </span>
+                      </label>
+                    ) : null}
                   </div>
                 </li>
               );
@@ -1398,27 +1507,6 @@ function LocationDetail({
         </div>
         {scheduleError ? <p className="error">{scheduleError}</p> : null}
       </form>
-
-      <article className="panel">
-        <h3>Add-ons</h3>
-        <label className="checkbox-field">
-          <input
-            type="checkbox"
-            checked={address.glassRecycling}
-            disabled={togglingGlass}
-            onChange={(event) => onToggleGlass(address.id, event.target.checked)}
-          />
-          <span>
-            <strong>
-              Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
-            </strong>
-            <span className="subtext">
-              We also roll your glass recycling container out and back
-              {togglingGlass ? " · saving…" : ""}.
-            </span>
-          </span>
-        </label>
-      </article>
 
       <article className="panel">
         <h3>Remove location</h3>

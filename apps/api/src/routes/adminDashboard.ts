@@ -32,6 +32,8 @@ type ScheduleRow = {
   canCount: number;
   cadence: string;
   rollIn: boolean;
+  glassRecycling: boolean;
+  petWasteDogs: number;
   biweeklyAnchorDate: Date | null;
 };
 
@@ -42,7 +44,6 @@ type AddressRow = {
   state: string;
   postalCode: string;
   neighborhoodId: string | null;
-  glassRecycling: boolean;
   schedules: ScheduleRow[];
 };
 
@@ -66,17 +67,15 @@ function pricingDays(schedules: ScheduleRow[]) {
     dayOfWeek: s.pickupDayOfWeek,
     canCount: s.canCount,
     cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
-    rollIn: s.rollIn
+    rollIn: s.rollIn,
+    glassRecycling: s.glassRecycling,
+    petWasteDogs: s.petWasteDogs
   }));
 }
 
 function toAdminUser(row: UserAggregateRow) {
   const monthlyCents = row.serviceAddresses.reduce(
-    (sum, address) =>
-      sum +
-      addressMonthlyCents(pricingDays(address.schedules), {
-        glassRecycling: address.glassRecycling
-      }),
+    (sum, address) => sum + addressMonthlyCents(pricingDays(address.schedules)),
     0
   );
   return {
@@ -109,10 +108,8 @@ function toAdminUserDetail(row: UserAggregateRow) {
       state: address.state,
       postalCode: address.postalCode,
       neighborhoodId: address.neighborhoodId,
-      glassRecycling: address.glassRecycling,
-      monthlyCents: addressMonthlyCents(pricingDays(address.schedules), {
-        glassRecycling: address.glassRecycling
-      }),
+      glassRecycling: address.schedules.some((s) => s.glassRecycling),
+      monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
       pickups: [...address.schedules]
         .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
         .map((s) => ({
@@ -120,6 +117,8 @@ function toAdminUserDetail(row: UserAggregateRow) {
           cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
           canCount: s.canCount,
           rollIn: s.rollIn,
+          glassRecycling: s.glassRecycling,
+          petWasteDogs: s.petWasteDogs,
           biweeklyAnchorDate: s.biweeklyAnchorDate?.toISOString()
         }))
     }))

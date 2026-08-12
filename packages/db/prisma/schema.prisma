@@ -144,7 +144,6 @@ model ServiceAddress {
   canCount         Int               @default(2)
   pickupsPerWeek   Int               @default(1)
   rollIn           Boolean           @default(true)
-  glassRecycling   Boolean           @default(false)
   isActive         Boolean           @default(true)
   neighborhoodId   String?
   createdAt        DateTime          @default(now())
@@ -233,6 +232,8 @@ model ServiceSchedule {
   biweeklyAnchorDate  DateTime?
   canCount            Int            @default(2)
   rollIn              Boolean        @default(true)
+  glassRecycling      Boolean        @default(false)
+  petWasteDogs        Int            @default(0)
   curbOutOffsetHours  Int            @default(-12)
   curbInOffsetHours   Int            @default(8)
   createdAt           DateTime       @default(now())

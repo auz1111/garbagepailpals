@@ -13,6 +13,7 @@ import {
   addressMonthlyCents,
   formatUsd,
   isSuperAdminRole,
+  petWasteMonthlyCents,
   pickupDayMonthlyCents,
   PRICING
 } from "@gpp/shared";
@@ -79,6 +80,8 @@ type EditDay = {
   cadence: "WEEKLY" | "BIWEEKLY";
   canCount: number;
   rollIn: boolean;
+  glassRecycling: boolean;
+  petWasteDogs: number;
   biweeklyAnchorDate: string;
 };
 
@@ -1266,9 +1269,21 @@ function AdminScheduleEditorForm({
             cadence: s.cadence,
             canCount: s.canCount,
             rollIn: s.rollIn,
+            glassRecycling: s.glassRecycling,
+            petWasteDogs: s.petWasteDogs,
             biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
           }))
-      : [{ dayOfWeek: 2, cadence: "WEEKLY", canCount: 2, rollIn: true, biweeklyAnchorDate: "" }];
+      : [
+          {
+            dayOfWeek: 2,
+            cadence: "WEEKLY",
+            canCount: 2,
+            rollIn: true,
+            glassRecycling: false,
+            petWasteDogs: 0,
+            biweeklyAnchorDate: ""
+          }
+        ];
   const [days, setDays] = useState<EditDay[]>(initialDays);
 
   const usedDays = new Set(days.map((d) => d.dayOfWeek));
@@ -1284,8 +1299,14 @@ function AdminScheduleEditorForm({
         (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
     );
   const monthly = addressMonthlyCents(
-    days.map((d) => ({ dayOfWeek: d.dayOfWeek, canCount: d.canCount, cadence: d.cadence, rollIn: d.rollIn })),
-    { glassRecycling: loc.glassRecycling }
+    days.map((d) => ({
+      dayOfWeek: d.dayOfWeek,
+      canCount: d.canCount,
+      cadence: d.cadence,
+      rollIn: d.rollIn,
+      glassRecycling: d.glassRecycling,
+      petWasteDogs: d.petWasteDogs
+    }))
   );
 
   function updateDay(idx: number, patch: Partial<EditDay>): void {
@@ -1298,7 +1319,15 @@ function AdminScheduleEditorForm({
     if (firstAvailableDay === undefined) return;
     setDays((prev) => [
       ...prev,
-      { dayOfWeek: firstAvailableDay, cadence: "WEEKLY", canCount: 2, rollIn: true, biweeklyAnchorDate: "" }
+      {
+        dayOfWeek: firstAvailableDay,
+        cadence: "WEEKLY",
+        canCount: 2,
+        rollIn: true,
+        glassRecycling: false,
+        petWasteDogs: 0,
+        biweeklyAnchorDate: ""
+      }
     ]);
   }
 
@@ -1316,7 +1345,9 @@ function AdminScheduleEditorForm({
             ? new Date(d.biweeklyAnchorDate).toISOString()
             : undefined,
         canCount: d.canCount,
-        rollIn: d.rollIn
+        rollIn: d.rollIn,
+        glassRecycling: d.glassRecycling,
+        petWasteDogs: d.petWasteDogs
       }))
     );
   }
@@ -1431,6 +1462,58 @@ function AdminScheduleEditorForm({
                     </span>
                   </span>
                 </label>
+
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={day.glassRecycling}
+                    onChange={(event) => updateDay(idx, { glassRecycling: event.target.checked })}
+                  />
+                  <span>
+                    <strong>
+                      Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
+                    </strong>
+                    <span className="subtext">
+                      We will also take out the glass recycling container.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="checkbox-field">
+                  <input
+                    type="checkbox"
+                    checked={day.petWasteDogs > 0}
+                    onChange={(event) =>
+                      updateDay(idx, { petWasteDogs: event.target.checked ? 1 : 0 })
+                    }
+                  />
+                  <span>
+                    <strong>
+                      Pet waste removal (+{formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo)
+                    </strong>
+                    <span className="subtext">
+                      Clean up the dog&apos;s waste from the yard into the trash bin before roll-out.
+                    </span>
+                  </span>
+                </label>
+
+                {day.petWasteDogs > 0 ? (
+                  <label className="field-inline">
+                    <span>Number of dogs</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={day.petWasteDogs}
+                      onChange={(event) =>
+                        updateDay(idx, {
+                          petWasteDogs: Math.max(1, Math.min(20, Number(event.target.value) || 1))
+                        })
+                      }
+                    />
+                    <span className="subtext">{formatUsd(petWasteMonthlyCents(day.petWasteDogs))}/mo</span>
+                  </label>
+                ) : null}
               </div>
             </li>
           );

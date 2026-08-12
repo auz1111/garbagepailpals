@@ -88,8 +88,6 @@ export const serviceAddressInputSchema = z.object({
   // When true (default) we bring the cans back in the day after pickup. Turning
   // it off drops that trip and earns a per-can credit on the monthly price.
   rollIn: z.boolean().default(true),
-  // The location has a glass recycling container we also roll out (+monthly fee).
-  glassRecycling: z.boolean().default(false),
   isActive: z.boolean().optional()
 });
 
@@ -100,7 +98,11 @@ export const pickupDayInputSchema = z.object({
   cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
   biweeklyAnchorDate: z.string().datetime().optional(),
   canCount: z.number().int().min(1).max(20),
-  rollIn: z.boolean().default(true)
+  rollIn: z.boolean().default(true),
+  // We also roll out this day's glass recycling container (+monthly fee).
+  glassRecycling: z.boolean().default(false),
+  // Pet waste removal for this day: number of dogs (0 = no service).
+  petWasteDogs: z.number().int().min(0).max(20).default(0)
 });
 
 export const pickupDaySchema = pickupDayInputSchema.extend({
@@ -126,7 +128,11 @@ export const scheduleUpdateSchema = z.object({
 export const createAddressRequestSchema = serviceAddressInputSchema.extend({
   pickupDayOfWeek: z.number().int().min(0).max(6).default(2),
   cadence: z.enum(["WEEKLY", "BIWEEKLY"]).default("WEEKLY"),
-  biweeklyAnchorDate: z.string().datetime().optional()
+  biweeklyAnchorDate: z.string().datetime().optional(),
+  // Glass recycling for the first pickup day.
+  glassRecycling: z.boolean().default(false),
+  // Pet waste removal (dogs) for the first pickup day.
+  petWasteDogs: z.number().int().min(0).max(20).default(0)
 });
 
 export const serviceAddressSchema = serviceAddressInputSchema.extend({
@@ -151,8 +157,18 @@ export const PRICING = {
   rollInCreditMonthlyCentsPerCan: 300,
   // Flat monthly add-on when the location has a glass recycling container we
   // also take out.
-  glassRecyclingMonthlyCents: 500
+  glassRecyclingMonthlyCents: 500,
+  // Pet waste removal: base for the first dog, plus a per-extra-dog surcharge.
+  petWasteBaseMonthlyCents: 6000,
+  petWasteExtraDogMonthlyCents: 1500
 } as const;
+
+// Monthly pet-waste fee for `dogs` dogs (0 dogs = no service).
+export function petWasteMonthlyCents(dogs: number): number {
+  return dogs > 0
+    ? PRICING.petWasteBaseMonthlyCents + (dogs - 1) * PRICING.petWasteExtraDogMonthlyCents
+    : 0;
+}
 
 // Each additional pickup day (beyond the first) costs half the base price.
 export const additionalPickupDayMonthlyCents = (): number =>
@@ -163,6 +179,8 @@ export type PricingDay = {
   canCount: number;
   cadence: "WEEKLY" | "BIWEEKLY";
   rollIn?: boolean;
+  glassRecycling?: boolean;
+  petWasteDogs?: number;
 };
 
 export function pickupDayMonthlyCents(day: PricingDay, isPrimary: boolean): number {
@@ -176,16 +194,18 @@ export function pickupDayMonthlyCents(day: PricingDay, isPrimary: boolean): numb
   if (day.cadence === "BIWEEKLY") {
     cents = Math.round(cents / 2);
   }
+  // The glass recycling add-on is a flat per-day fee (not halved for biweekly).
+  if (day.glassRecycling) {
+    cents += PRICING.glassRecyclingMonthlyCents;
+  }
+  // Pet waste removal is likewise a flat per-day add-on.
+  cents += petWasteMonthlyCents(day.petWasteDogs ?? 0);
   return Math.max(0, cents);
 }
 
-export function addressMonthlyCents(
-  days: PricingDay[],
-  opts: { glassRecycling?: boolean } = {}
-): number {
+export function addressMonthlyCents(days: PricingDay[]): number {
   const sorted = [...days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-  const base = sorted.reduce((sum, day, index) => sum + pickupDayMonthlyCents(day, index === 0), 0);
-  return base + (opts.glassRecycling ? PRICING.glassRecyclingMonthlyCents : 0);
+  return sorted.reduce((sum, day, index) => sum + pickupDayMonthlyCents(day, index === 0), 0);
 }
 
 export function monthlyTotalCents(addresses: PricingDay[][]): number {
@@ -430,6 +450,8 @@ export const adminUserLocationSchema = z.object({
       cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
       canCount: z.number().int().nonnegative(),
       rollIn: z.boolean(),
+      glassRecycling: z.boolean(),
+      petWasteDogs: z.number().int().nonnegative(),
       biweeklyAnchorDate: z.string().optional()
     })
   )
@@ -624,6 +646,7 @@ export const adminLocationSchema = z.object({
   zoneName: z.string().nullable(),
   canCount: z.number().int().nonnegative(),
   glassRecycling: z.boolean(),
+  petWaste: z.boolean(),
   monthlyCents: z.number().int().nonnegative()
 });
 

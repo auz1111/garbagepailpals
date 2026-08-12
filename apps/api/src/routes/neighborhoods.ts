@@ -265,15 +265,17 @@ export async function adminLocationsHandler(
               zoneId: a.neighborhood?.zoneId ?? null,
               zoneName: a.neighborhood?.zone?.name ?? null,
               canCount: a.canCount,
-              glassRecycling: a.glassRecycling,
+              glassRecycling: a.schedules.some((s) => s.glassRecycling),
+              petWaste: a.schedules.some((s) => s.petWasteDogs > 0),
               monthlyCents: addressMonthlyCents(
                 a.schedules.map((s) => ({
                   dayOfWeek: s.pickupDayOfWeek,
                   canCount: s.canCount,
                   cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
-                  rollIn: s.rollIn
-                })),
-                { glassRecycling: a.glassRecycling }
+                  rollIn: s.rollIn,
+                  glassRecycling: s.glassRecycling,
+                  petWasteDogs: s.petWasteDogs
+                }))
               )
             }))
           })

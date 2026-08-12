@@ -22,6 +22,8 @@ type ScheduleRow = {
   biweeklyAnchorDate: Date | null;
   canCount: number;
   rollIn: boolean;
+  glassRecycling: boolean;
+  petWasteDogs: number;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -35,6 +37,8 @@ function toScheduleResponse(row: ScheduleRow) {
     biweeklyAnchorDate: row.biweeklyAnchorDate?.toISOString(),
     canCount: row.canCount,
     rollIn: row.rollIn,
+    glassRecycling: row.glassRecycling,
+    petWasteDogs: row.petWasteDogs,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
@@ -56,7 +60,6 @@ function toAddressResponse(address: {
   canCount: number;
   pickupsPerWeek: number;
   rollIn: boolean;
-  glassRecycling: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -143,7 +146,6 @@ export async function createAddressHandler(
             canCount: input.canCount,
             pickupsPerWeek: 1,
             rollIn: input.rollIn ?? true,
-            glassRecycling: input.glassRecycling ?? false,
             isActive: input.isActive ?? true,
             schedules: {
               create: {
@@ -153,7 +155,9 @@ export async function createAddressHandler(
                   ? new Date(input.biweeklyAnchorDate)
                   : null,
                 canCount: input.canCount,
-                rollIn: input.rollIn ?? true
+                rollIn: input.rollIn ?? true,
+                glassRecycling: input.glassRecycling ?? false,
+                petWasteDogs: input.petWasteDogs ?? 0
               }
             }
           },
@@ -361,7 +365,9 @@ export async function upsertScheduleHandler(
               cadence: day.cadence,
               biweeklyAnchorDate: day.biweeklyAnchorDate ? new Date(day.biweeklyAnchorDate) : null,
               canCount: day.canCount,
-              rollIn: day.rollIn
+              rollIn: day.rollIn,
+              glassRecycling: day.glassRecycling ?? false,
+              petWasteDogs: day.petWasteDogs ?? 0
             }))
           }),
           prisma.serviceSchedule.findMany({ where: { serviceAddressId: addressId } })
