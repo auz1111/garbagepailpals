@@ -95,7 +95,7 @@ export async function createAddressHandler(
           });
         }
 
-        if (!(await isPostalServiceable(input.postalCode))) {
+        if (!(await isPostalServiceable(input.postalCode, { includeTest: true }))) {
           return jsonResponse(400, { message: "Address is outside the service area" });
         }
 
@@ -220,7 +220,7 @@ export async function updateAddressHandler(
           return jsonResponse(403, { message: "Forbidden" });
         }
 
-        if (input.postalCode && !(await isPostalServiceable(input.postalCode))) {
+        if (input.postalCode && !(await isPostalServiceable(input.postalCode, { includeTest: true }))) {
           return jsonResponse(400, { message: "Address is outside the service area" });
         }
 
