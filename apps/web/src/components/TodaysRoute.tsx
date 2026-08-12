@@ -505,7 +505,10 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               className={`zone-tab${z.id === zoneId ? " is-active" : ""}`}
               onClick={() => setZoneId(z.id)}
             >
-              <span className="zone-tab-name">{z.name}</span>
+              <span className="zone-tab-name">
+                {z.name}
+                {z.isTest ? <span className="zone-tab-test">Test</span> : null}
+              </span>
               <span className="zone-tab-count">
                 {z.neighborhoodCount} neighborhood{z.neighborhoodCount === 1 ? "" : "s"}
               </span>

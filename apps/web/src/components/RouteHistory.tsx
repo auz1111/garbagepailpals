@@ -202,6 +202,7 @@ export function RouteHistory({ accessToken }: RouteHistoryProps): JSX.Element {
               onClick={() => setZoneId(z.id)}
             >
               {z.name}
+              {z.isTest ? <span className="zone-tab-test">Test</span> : null}
             </button>
           ))}
         </div>
