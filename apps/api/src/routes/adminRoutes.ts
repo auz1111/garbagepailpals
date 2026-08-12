@@ -7,7 +7,8 @@ import {
   adminTodaysLocationsResponseSchema,
   assignedRoutesResponseSchema,
   availableOperatorsResponseSchema,
-  routeCancelSchema
+  routeCancelSchema,
+  routeHistoryResponseSchema
 } from "@gpp/shared";
 import { env } from "../lib/env";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
@@ -135,6 +136,7 @@ export type DailyRouteRow = {
   id: string;
   operatorId: string;
   operator: { name: string };
+  serviceDate: Date;
   status: "ASSIGNED" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
   label: string | null;
   startLabel: string | null;
@@ -172,6 +174,7 @@ export function serializeDailyRoute(route: DailyRouteRow) {
     id: route.id,
     operatorId: route.operatorId,
     operatorName: route.operator.name,
+    serviceDate: route.serviceDate.toISOString(),
     status: route.status,
     label: route.label,
     start:
@@ -375,6 +378,119 @@ export async function adminCancelRouteHandler(
           assignedRoutesResponseSchema.parse({
             date: now.toISOString(),
             routes: routes.map((r) => serializeDailyRoute(r as unknown as DailyRouteRow))
+          })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Historical routes across a rolling window (default 30 days), with aggregate
+// summary stats for the admin route-history dashboard. Includes every status so
+// admins can review completed, cancelled, and in-flight routes.
+export async function adminRouteHistoryHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const daysParam = Number(new URL(req.url).searchParams.get("days"));
+        const rangeDays = Number.isFinite(daysParam)
+          ? Math.min(Math.max(Math.trunc(daysParam), 1), 365)
+          : 30;
+
+        const now = new Date();
+        const from = new Date(todayServiceDate(now));
+        from.setUTCDate(from.getUTCDate() - (rangeDays - 1));
+
+        const rows = await prisma.dailyRoute.findMany({
+          where: { serviceDate: { gte: from } },
+          include: DAILY_ROUTE_INCLUDE,
+          orderBy: [{ serviceDate: "desc" }, { operator: { name: "asc" } }, { createdAt: "asc" }]
+        });
+        const routes = rows.map((r) => serializeDailyRoute(r as unknown as DailyRouteRow));
+
+        let completed = 0;
+        let cancelled = 0;
+        let inProgress = 0;
+        let awaiting = 0;
+        let stopsServiced = 0;
+        let stopsTotal = 0;
+        const dayMap = new Map<
+          string,
+          { routes: number; stopsServiced: number; stopsTotal: number }
+        >();
+        const opMap = new Map<
+          string,
+          {
+            operatorId: string;
+            operatorName: string;
+            routes: number;
+            stopsServiced: number;
+            stopsTotal: number;
+          }
+        >();
+
+        for (const r of routes) {
+          if (r.status === "COMPLETED") completed += 1;
+          else if (r.status === "CANCELLED") cancelled += 1;
+          else if (r.status === "ACCEPTED") inProgress += 1;
+          else awaiting += 1;
+
+          const svc = r.stops.filter((s) => s.servicedAt).length;
+          const tot = r.stops.length;
+          stopsServiced += svc;
+          stopsTotal += tot;
+
+          const dayKey = r.serviceDate.slice(0, 10);
+          const day = dayMap.get(dayKey) ?? { routes: 0, stopsServiced: 0, stopsTotal: 0 };
+          day.routes += 1;
+          day.stopsServiced += svc;
+          day.stopsTotal += tot;
+          dayMap.set(dayKey, day);
+
+          const op = opMap.get(r.operatorId) ?? {
+            operatorId: r.operatorId,
+            operatorName: r.operatorName,
+            routes: 0,
+            stopsServiced: 0,
+            stopsTotal: 0
+          };
+          op.routes += 1;
+          op.stopsServiced += svc;
+          op.stopsTotal += tot;
+          opMap.set(r.operatorId, op);
+        }
+
+        const byDay = [...dayMap.entries()]
+          .map(([date, v]) => ({ date, ...v }))
+          .sort((a, b) => (a.date < b.date ? -1 : 1));
+        const byOperator = [...opMap.values()].sort((a, b) => b.stopsServiced - a.stopsServiced);
+
+        return jsonResponse(
+          200,
+          routeHistoryResponseSchema.parse({
+            generatedAt: now.toISOString(),
+            rangeDays,
+            summary: {
+              totalRoutes: routes.length,
+              completed,
+              cancelled,
+              inProgress,
+              awaiting,
+              stopsServiced,
+              stopsTotal,
+              byDay,
+              byOperator
+            },
+            routes
           })
         );
       },

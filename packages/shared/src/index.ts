@@ -621,6 +621,8 @@ export const dailyRouteSchema = z.object({
   id: z.string(),
   operatorId: z.string(),
   operatorName: z.string(),
+  // The service day this route belongs to (UTC-midnight ISO), for history.
+  serviceDate: z.string(),
   status: routeStatusSchema,
   label: z.string().nullable(),
   start: adminRoutePointSchema.nullable(),
@@ -638,6 +640,41 @@ export const dailyRouteSchema = z.object({
 // Admin cancel request — an optional free-text reason kept for the record.
 export const routeCancelSchema = z.object({
   reason: z.string().trim().max(500).optional()
+});
+
+// ---- Route history (admin) ----
+export const routeHistoryDaySchema = z.object({
+  date: z.string(), // YYYY-MM-DD (service day)
+  routes: z.number().int().nonnegative(),
+  stopsServiced: z.number().int().nonnegative(),
+  stopsTotal: z.number().int().nonnegative()
+});
+
+export const routeHistoryOperatorSchema = z.object({
+  operatorId: z.string(),
+  operatorName: z.string(),
+  routes: z.number().int().nonnegative(),
+  stopsServiced: z.number().int().nonnegative(),
+  stopsTotal: z.number().int().nonnegative()
+});
+
+export const routeHistorySummarySchema = z.object({
+  totalRoutes: z.number().int().nonnegative(),
+  completed: z.number().int().nonnegative(),
+  cancelled: z.number().int().nonnegative(),
+  inProgress: z.number().int().nonnegative(),
+  awaiting: z.number().int().nonnegative(),
+  stopsServiced: z.number().int().nonnegative(),
+  stopsTotal: z.number().int().nonnegative(),
+  byDay: z.array(routeHistoryDaySchema),
+  byOperator: z.array(routeHistoryOperatorSchema)
+});
+
+export const routeHistoryResponseSchema = z.object({
+  generatedAt: z.string(),
+  rangeDays: z.number().int().positive(),
+  summary: routeHistorySummarySchema,
+  routes: z.array(dailyRouteSchema)
 });
 
 // Lightweight counts (no routing/optimization) so the admin UI can tell, on
@@ -839,6 +876,8 @@ export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
 export type RouteStatus = z.infer<typeof routeStatusSchema>;
 export type DailyRoute = z.infer<typeof dailyRouteSchema>;
 export type RouteCancel = z.infer<typeof routeCancelSchema>;
+export type RouteHistoryResponse = z.infer<typeof routeHistoryResponseSchema>;
+export type RouteHistorySummary = z.infer<typeof routeHistorySummarySchema>;
 export type DailyRouteStop = z.infer<typeof dailyRouteStopSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
 export type AdminRouteSummary = z.infer<typeof adminRouteSummarySchema>;

@@ -19,6 +19,7 @@ import type {
   AdminRouteSummary,
   AdminTodaysLocationsResponse,
   AssignedRoutesResponse,
+  RouteHistoryResponse,
   NeighborhoodsResponse,
   NeighborhoodCreate,
   NeighborhoodUpdate,
@@ -253,6 +254,15 @@ export function setLocationNeighborhood(
 export function getAssignedRoutes(accessToken: string): Promise<AssignedRoutesResponse> {
   return request<undefined, AssignedRoutesResponse>(
     "/ops-admin/routes/assigned",
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function getRouteHistory(days: number, accessToken: string): Promise<RouteHistoryResponse> {
+  return request<undefined, RouteHistoryResponse>(
+    `/ops-admin/routes/history?days=${days}`,
     "GET",
     undefined,
     accessToken

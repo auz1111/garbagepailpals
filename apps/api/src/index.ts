@@ -34,6 +34,7 @@ import {
 } from "./routes/adminDashboard";
 import {
   adminAssignedRoutesHandler,
+  adminRouteHistoryHandler,
   adminAvailableOperatorsHandler,
   adminCancelRouteHandler,
   adminDeleteRouteHandler,
@@ -181,6 +182,13 @@ app.http("admin-assigned-routes", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminAssignedRoutesHandler
+});
+
+app.http("admin-route-history", {
+  route: "ops-admin/routes/history",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminRouteHistoryHandler
 });
 
 app.http("admin-delete-route", {
