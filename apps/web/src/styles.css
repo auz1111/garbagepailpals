@@ -1160,12 +1160,14 @@ a {
   padding: 0.7rem 1.2rem;
   border-radius: var(--pill);
   text-decoration: none;
-  box-shadow: var(--shadow-gold);
+  box-shadow: none;
   white-space: nowrap;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .routes-hero-cta:hover {
   transform: translateY(-1px);
+  box-shadow: var(--shadow-gold);
 }
 
 .routes-hero-stats {
@@ -1198,6 +1200,24 @@ a {
 }
 
 .rh-stat.is-done strong {
+  color: #34d399;
+}
+/* These spans live inside .rh-stat, so the label rule (.rh-stat span) would
+   shrink them — restore the big number sizing from .rh-stat strong. */
+.rh-stat .rh-frac-done,
+.rh-stat .rh-frac-total {
+  font-size: inherit;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #ffffff;
+}
+/* Numerator turns serviced-green as soon as anything is serviced; the total
+   joins it only once every stop is done. */
+.rh-frac.has-done .rh-frac-done {
+  color: #34d399;
+}
+.rh-frac.all-done .rh-frac-total {
   color: #34d399;
 }
 .rh-stat.is-accepted strong {
@@ -1250,21 +1270,33 @@ a {
 
 .rh-route-top {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 0.5rem;
   flex-wrap: wrap;
   margin-bottom: 0.45rem;
+}
+
+/* Neighborhood is the headline; operator name sits beneath it. */
+.rh-route-ident {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 .rh-route-top strong {
   font-size: 0.95rem;
 }
 
+.rh-route-operator {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .rh-route-meta {
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.8);
-  flex: 1;
-  min-width: 0;
+  white-space: nowrap;
 }
 
 .rh-route-pill {
@@ -1296,6 +1328,15 @@ a {
   border-radius: var(--pill);
   background: rgba(255, 255, 255, 0.22);
   overflow: hidden;
+}
+
+.rh-route-serviced {
+  display: block;
+  margin-top: 0.3rem;
+  text-align: right;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .rh-route-fill {
@@ -2039,6 +2080,23 @@ a {
   border-radius: var(--r-sm);
   background: var(--surface);
   padding: 0.8rem 0.95rem;
+  scroll-margin-top: 5rem;
+  transition: box-shadow 0.4s ease, border-color 0.4s ease;
+}
+
+/* Highlight the card a map-popup link jumped to. */
+.admin-loc-card:target {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px var(--gold);
+}
+
+/* Clickable address title inside a Leaflet map popup. */
+.map-popup-link {
+  color: var(--teal-deep);
+  text-decoration: underline;
+}
+.map-popup-link:hover {
+  color: var(--teal-bright);
 }
 
 .admin-loc-head {

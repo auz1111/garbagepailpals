@@ -35,7 +35,7 @@ type ServiceWork = {
     postalCode: string;
     neighborhoodId: string | null;
     neighborhood: { name: string } | null;
-    user: { name: string };
+    user: { id: string; name: string };
     lat: { toNumber: () => number };
     lng: { toNumber: () => number };
   };
@@ -46,7 +46,7 @@ type ServiceWork = {
 
 const SERVICE_ADDRESS_INCLUDE = {
   schedules: true,
-  user: { select: { name: true } },
+  user: { select: { id: true, name: true } },
   neighborhood: { select: { name: true } },
   subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
 } as const;
@@ -441,6 +441,7 @@ export async function adminTodaysLocationsHandler(
           state: w.address.state,
           postalCode: w.address.postalCode,
           customerName: w.address.user.name,
+          userId: w.address.user.id,
           lat: w.address.lat.toNumber(),
           lng: w.address.lng.toNumber(),
           assigned: statusByAddress.has(w.address.id),

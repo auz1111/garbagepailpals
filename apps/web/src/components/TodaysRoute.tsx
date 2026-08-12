@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -106,6 +107,7 @@ function LocationsMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -116,7 +118,22 @@ function LocationsMap({
     }).addTo(map);
     layerRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
-  }, []);
+
+    // Popups render as raw HTML outside React Router, so a plain <a> would do a
+    // full page reload. Intercept clicks on our popup links and route them
+    // through the SPA router instead.
+    map.on("popupopen", (e) => {
+      const link = (e.popup.getElement() as HTMLElement | undefined)?.querySelector<HTMLAnchorElement>(
+        "a.map-popup-link"
+      );
+      if (!link) return;
+      link.onclick = (ev) => {
+        ev.preventDefault();
+        const to = link.getAttribute("data-to");
+        if (to) navigate(to);
+      };
+    });
+  }, [navigate]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -145,9 +162,10 @@ function LocationsMap({
     });
 
     locations.forEach((loc) => {
+      const href = `/admin/users/${loc.userId}#address-${loc.addressId}`;
       L.marker([loc.lat, loc.lng], { icon: pin(locationColor(loc)) })
         .bindPopup(
-          `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br><b>${locationActionLabel(
+          `<a class="map-popup-link" href="${href}" data-to="${href}"><strong>${loc.line1}</strong></a><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br><b>${locationActionLabel(
             loc
           )}</b> · ${loc.canCount} can${loc.canCount === 1 ? "" : "s"} · ${locationStatusLabel(loc)}`
         )

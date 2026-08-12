@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type {
@@ -908,6 +908,15 @@ function AdminLocationCard({
   const [editing, setEditing] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
 
+  // When arrived at via a map-popup link (…#address-<id>), scroll this card into
+  // view and briefly highlight it.
+  useEffect(() => {
+    if (window.location.hash === `#address-${loc.id}`) {
+      const el = document.getElementById(`address-${loc.id}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [loc.id]);
+
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
     queryFn: async () => getNeighborhoods(accessToken)
@@ -966,7 +975,7 @@ function AdminLocationCard({
   });
 
   return (
-    <li className="admin-loc-card">
+    <li className="admin-loc-card" id={`address-${loc.id}`}>
       <div className="admin-loc-head">
         <div>
           <div className="admin-loc-title">

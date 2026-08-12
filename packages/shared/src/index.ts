@@ -650,6 +650,9 @@ export const adminTodaysLocationSchema = z.object({
   state: z.string(),
   postalCode: z.string(),
   customerName: z.string(),
+  // Owning customer — used to link the map popup to the admin user-detail page
+  // where this location is managed.
+  userId: z.string(),
   lat: z.number(),
   lng: z.number(),
   // Whether this location is on a route today (assigned OR accepted).

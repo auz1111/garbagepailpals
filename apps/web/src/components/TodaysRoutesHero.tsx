@@ -82,11 +82,15 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
   const locations = locationsQuery.data?.locations ?? [];
 
   const total = locations.length;
+  // A location counts as serviced once its own stop is marked done — independent
+  // of whether the rest of its route has finished.
   const done = locations.filter(
-    (l) => l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
+    (l) => l.servicedAt || l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
   ).length;
-  const accepted = locations.filter((l) => l.routeStatus === "ACCEPTED").length;
-  const awaiting = locations.filter((l) => l.routeStatus === "ASSIGNED").length;
+  // Serviced (above) is mutually exclusive with these, so a serviced stop on an
+  // accepted route counts once — as serviced, not "in progress".
+  const accepted = locations.filter((l) => !l.servicedAt && l.routeStatus === "ACCEPTED").length;
+  const awaiting = locations.filter((l) => !l.servicedAt && l.routeStatus === "ASSIGNED").length;
   const unassigned = locations.filter((l) => !l.assigned).length;
 
   const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
@@ -127,12 +131,15 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
         </div>
 
         <div className="routes-hero-stats">
-          <div className="rh-stat">
-            <strong>{total}</strong>
-            <span>Locations</span>
-          </div>
           <div className="rh-stat is-done">
-            <strong>{done}</strong>
+            <strong
+              className={`rh-frac${done > 0 ? " has-done" : ""}${
+                total > 0 && done === total ? " all-done" : ""
+              }`}
+            >
+              <span className="rh-frac-done">{done}</span>
+              <span className="rh-frac-total">/{total}</span>
+            </strong>
             <span>Serviced</span>
           </div>
           <div className="rh-stat is-accepted">
@@ -191,12 +198,11 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
               return (
                 <div className="rh-route" key={r.id}>
                   <div className="rh-route-top">
-                    <strong>{r.operatorName}</strong>
-                    <span className="rh-route-meta">
-                      {r.label ? `${r.label} · ` : ""}
-                      {servicedCount}/{totalStops} serviced · ~
-                      {formatMinutes(estimatedRouteMinutes(r))}
-                    </span>
+                    <div className="rh-route-ident">
+                      <strong>{r.label ?? "Route"}</strong>
+                      <span className="rh-route-operator">{r.operatorName}</span>
+                    </div>
+                    <span className="rh-route-meta">~{formatMinutes(estimatedRouteMinutes(r))}</span>
                     <span className={`rh-route-pill ${statusClass}`}>{statusLabel}</span>
                   </div>
                   <div className="rh-route-bar">
@@ -205,6 +211,9 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
                       style={{ width: `${fillPct}%` }}
                     />
                   </div>
+                  <span className="rh-route-serviced">
+                    {servicedCount}/{totalStops} serviced
+                  </span>
                 </div>
               );
             })
