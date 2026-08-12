@@ -1744,6 +1744,10 @@ a {
   border-left-color: var(--gold);
 }
 
+.operator-route.is-complete {
+  border-left-color: #16a34a;
+}
+
 .operator-route-head {
   display: flex;
   align-items: center;
@@ -1784,6 +1788,10 @@ a {
   font-weight: 700;
   color: var(--gold);
   align-self: center;
+}
+
+.operator-route-lock.is-complete {
+  color: #16a34a;
 }
 
 /* A route dispatch pulled after acceptance — de-emphasised, red accent. */

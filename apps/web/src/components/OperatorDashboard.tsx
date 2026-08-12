@@ -278,7 +278,9 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                     : { cls: "uncovered", text: "Assigned to You — Awaiting Acceptance" };
               return (
                 <li
-                  className={`operator-route${canService ? " is-accepted" : ""}${isCancelled ? " is-cancelled" : ""}`}
+                  className={`operator-route${
+                    isCompleted ? " is-complete" : isAccepted ? " is-accepted" : ""
+                  }${isCancelled ? " is-cancelled" : ""}`}
                   key={route.id}
                 >
                   <div className="operator-route-head">
@@ -369,7 +371,7 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                         {acceptMutation.isPending ? "Accepting…" : "✓ Accept route"}
                       </button>
                     ) : isCompleted ? (
-                      <span className="operator-route-lock">✓ Route complete</span>
+                      <span className="operator-route-lock is-complete">✓ Route complete</span>
                     ) : isCancelled ? (
                       <span className="operator-route-lock">Dispatch pulled this route</span>
                     ) : (
