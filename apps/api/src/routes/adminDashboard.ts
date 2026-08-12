@@ -289,93 +289,64 @@ export async function adminDashboardMetricsHandler(
         const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
         const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-        const [
-          totalUsers,
-          customers,
-          operators,
-          admins,
-          addresses,
-          activeSubscriptions,
-          activeEntitlements,
-          scheduledNext7Days,
-          completedLast7Days,
-          failedLast7Days,
-          stripeLast24h,
-          paypalLast24h,
-          remindersSentLast24h,
-          remindersFailedLast24h,
-          overdueSentLast24h,
-          overdueFailedLast24h
-        ] = await Promise.all([
-          prisma.user.count(),
-          prisma.user.count({ where: { role: "CUSTOMER" } }),
-          prisma.user.count({ where: { role: "OPERATOR" } }),
-          prisma.user.count({ where: { role: "ADMIN" } }),
-          prisma.serviceAddress.count({ where: { isActive: true } }),
-          prisma.subscription.count({ where: { status: "ACTIVE" } }),
-          prisma.entitlement.count({ where: { status: "ACTIVE" } }),
-          prisma.serviceJob.count({
-            where: {
-              scheduledDate: { gte: now, lte: in7Days },
-              status: "SCHEDULED"
-            }
-          }),
-          prisma.serviceJob.count({
-            where: {
-              completedAt: { gte: weekAgo },
-              status: "COMPLETED"
-            }
-          }),
-          prisma.serviceJob.count({
-            where: {
-              updatedAt: { gte: weekAgo },
-              status: "FAILED"
-            }
-          }),
-          prisma.webhookEvent.count({
-            where: {
-              provider: "stripe",
-              createdAt: { gte: dayAgo }
-            }
-          }),
-          prisma.webhookEvent.count({
-            where: {
-              provider: "paypal",
-              createdAt: { gte: dayAgo }
-            }
-          }),
-          prisma.auditLog.count({
-            where: {
-              action: "notification.reminder.sent",
-              createdAt: { gte: dayAgo }
-            }
-          }),
-          prisma.auditLog.count({
-            where: {
-              action: "notification.reminder.failed",
-              createdAt: { gte: dayAgo }
-            }
-          }),
-          prisma.auditLog.count({
-            where: {
-              action: "notification.overdue.sent",
-              createdAt: { gte: dayAgo }
-            }
-          }),
-          prisma.auditLog.count({
-            where: {
-              action: "notification.overdue.failed",
-              createdAt: { gte: dayAgo }
-            }
-          })
-        ]);
+        // Run sequentially and collapse related counts into single grouped
+        // queries. This keeps the whole dashboard load to one DB connection at a
+        // time (instead of firing ~16 counts in parallel and exhausting the
+        // Postgres connection slots — see P2037).
+        const NOTIFICATION_ACTIONS = [
+          "notification.reminder.sent",
+          "notification.reminder.failed",
+          "notification.overdue.sent",
+          "notification.overdue.failed"
+        ];
+
+        // Users by role in one query (total = sum of the buckets).
+        const userGroups = await prisma.user.groupBy({
+          by: ["role"],
+          _count: { _all: true }
+        });
+        const roleCount = (role: string) =>
+          userGroups.find((g) => g.role === role)?._count._all ?? 0;
+        const totalUsers = userGroups.reduce((sum, g) => sum + g._count._all, 0);
+
+        const addresses = await prisma.serviceAddress.count({ where: { isActive: true } });
+        const activeSubscriptions = await prisma.subscription.count({ where: { status: "ACTIVE" } });
+        const activeEntitlements = await prisma.entitlement.count({ where: { status: "ACTIVE" } });
+
+        const scheduledNext7Days = await prisma.serviceJob.count({
+          where: { scheduledDate: { gte: now, lte: in7Days }, status: "SCHEDULED" }
+        });
+        const completedLast7Days = await prisma.serviceJob.count({
+          where: { completedAt: { gte: weekAgo }, status: "COMPLETED" }
+        });
+        const failedLast7Days = await prisma.serviceJob.count({
+          where: { updatedAt: { gte: weekAgo }, status: "FAILED" }
+        });
+
+        // Webhook events (last 24h) by provider in one query.
+        const webhookGroups = await prisma.webhookEvent.groupBy({
+          by: ["provider"],
+          where: { createdAt: { gte: dayAgo } },
+          _count: { _all: true }
+        });
+        const providerCount = (provider: string) =>
+          webhookGroups.find((g) => g.provider === provider)?._count._all ?? 0;
+
+        // Notification audit log (last 24h) for all four actions in one query.
+        const auditGroups = await prisma.auditLog.groupBy({
+          by: ["action"],
+          where: { action: { in: NOTIFICATION_ACTIONS }, createdAt: { gte: dayAgo } },
+          _count: { _all: true }
+        });
+        const actionCount = (action: string) =>
+          auditGroups.find((g) => g.action === action)?._count._all ?? 0;
 
         const response = adminDashboardMetricsSchema.parse({
           users: {
             total: totalUsers,
-            customers,
-            operators,
-            admins
+            customers: roleCount("CUSTOMER"),
+            operators: roleCount("OPERATOR"),
+            admins: roleCount("ADMIN")
           },
           service: {
             addresses,
@@ -388,14 +359,14 @@ export async function adminDashboardMetricsHandler(
             failedLast7Days
           },
           webhooks: {
-            stripeLast24h,
-            paypalLast24h
+            stripeLast24h: providerCount("stripe"),
+            paypalLast24h: providerCount("paypal")
           },
           notifications: {
-            remindersSentLast24h,
-            remindersFailedLast24h,
-            overdueSentLast24h,
-            overdueFailedLast24h
+            remindersSentLast24h: actionCount("notification.reminder.sent"),
+            remindersFailedLast24h: actionCount("notification.reminder.failed"),
+            overdueSentLast24h: actionCount("notification.overdue.sent"),
+            overdueFailedLast24h: actionCount("notification.overdue.failed")
           }
         });
 
