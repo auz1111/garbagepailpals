@@ -22,6 +22,7 @@ async function neighborhoodList() {
       city: n.city,
       state: n.state,
       zipCodes: n.zipCodes,
+      isTest: n.isTest,
       locationCount: n._count.addresses
     }))
   });
@@ -51,7 +52,8 @@ export async function adminNeighborhoodsHandler(
               name: input.name,
               city: input.city ?? null,
               state: input.state ?? null,
-              zipCodes: input.zipCodes ?? []
+              zipCodes: input.zipCodes ?? [],
+              isTest: input.isTest ?? false
             }
           });
           return jsonResponse(201, await neighborhoodList());
@@ -97,7 +99,8 @@ export async function adminNeighborhoodByIdHandler(
             ...(input.name !== undefined ? { name: input.name } : {}),
             ...(input.city !== undefined ? { city: input.city } : {}),
             ...(input.state !== undefined ? { state: input.state } : {}),
-            ...(input.zipCodes !== undefined ? { zipCodes: input.zipCodes } : {})
+            ...(input.zipCodes !== undefined ? { zipCodes: input.zipCodes } : {}),
+            ...(input.isTest !== undefined ? { isTest: input.isTest } : {})
           }
         });
         return jsonResponse(200, await neighborhoodList());

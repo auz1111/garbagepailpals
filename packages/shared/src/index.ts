@@ -496,6 +496,9 @@ export const neighborhoodSchema = z.object({
   city: z.string().nullable(),
   state: z.string().nullable(),
   zipCodes: z.array(z.string()),
+  // Test neighborhoods are for trialing routes/flows and are excluded from the
+  // real customer service area.
+  isTest: z.boolean(),
   locationCount: z.number().int().nonnegative()
 });
 
@@ -509,7 +512,8 @@ export const neighborhoodCreateSchema = z.object({
   name: z.string().min(1).max(80),
   city: z.string().max(80).nullable().optional(),
   state: z.string().max(40).nullable().optional(),
-  zipCodes: zipCodesSchema.optional()
+  zipCodes: zipCodesSchema.optional(),
+  isTest: z.boolean().optional()
 });
 
 // Partial update — any subset of fields may be sent.
@@ -517,7 +521,8 @@ export const neighborhoodUpdateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   city: z.string().max(80).nullable().optional(),
   state: z.string().max(40).nullable().optional(),
-  zipCodes: zipCodesSchema.optional()
+  zipCodes: zipCodesSchema.optional(),
+  isTest: z.boolean().optional()
 });
 
 export const adminLocationSchema = z.object({

@@ -10,7 +10,7 @@ export async function isPostalServiceable(postalCode: string): Promise<boolean> 
     return false;
   }
   const neighborhood = await prisma.neighborhood.findFirst({
-    where: { zipCodes: { has: zip } },
+    where: { isTest: false, zipCodes: { has: zip } },
     select: { id: true }
   });
   if (neighborhood) {

@@ -40,6 +40,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
   const [editCity, setEditCity] = useState("");
   const [editState, setEditState] = useState("");
   const [editZips, setEditZips] = useState("");
+  const [editIsTest, setEditIsTest] = useState(false);
   const [locFilter, setLocFilter] = useState<"UNASSIGNED" | "ALL">("UNASSIGNED");
 
   const neighborhoodsQuery = useQuery({
@@ -95,7 +96,8 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
           name: editName.trim(),
           city: editCity.trim() || null,
           state: editState.trim() || null,
-          zipCodes: parseZips(editZips)
+          zipCodes: parseZips(editZips),
+          isTest: editIsTest
         },
         accessToken
       ),
@@ -203,6 +205,14 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                         placeholder="Zip codes (comma-separated)"
                       />
                     </div>
+                    <label className="nb-test-toggle" title="Excluded from the customer service area">
+                      <input
+                        type="checkbox"
+                        checked={editIsTest}
+                        onChange={(event) => setEditIsTest(event.target.checked)}
+                      />
+                      Test
+                    </label>
                     <div className="neighborhood-row-actions">
                       <button
                         type="submit"
@@ -224,6 +234,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                   <>
                     <div>
                       <strong>{n.name}</strong>
+                      {n.isTest ? <span className="nb-test-chip">Test</span> : null}
                       <span className="admin-table-sub">
                         {[n.city, n.state].filter(Boolean).join(", ") || "No city/state set"}
                         {n.zipCodes.length > 0 ? ` · ${n.zipCodes.join(", ")}` : ""}
@@ -242,6 +253,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                           setEditCity(n.city ?? "");
                           setEditState(n.state ?? "");
                           setEditZips(n.zipCodes.join(", "));
+                          setEditIsTest(n.isTest);
                         }}
                       >
                         Edit

@@ -220,11 +220,8 @@ export async function updateAddressHandler(
           return jsonResponse(403, { message: "Forbidden" });
         }
 
-        if (input.postalCode) {
-          const allowedArea = await prisma.serviceArea.findUnique({ where: { postalCode: input.postalCode } });
-          if (!allowedArea?.isActive) {
-            return jsonResponse(400, { message: "Address is outside the service area" });
-          }
+        if (input.postalCode && !(await isPostalServiceable(input.postalCode))) {
+          return jsonResponse(400, { message: "Address is outside the service area" });
         }
 
         // If any part of the street address changed, re-geocode so routing keeps
