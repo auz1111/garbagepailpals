@@ -357,11 +357,15 @@ export function markStopServiced(
   );
 }
 
-export function cancelRoute(routeId: string, accessToken: string): Promise<AssignedRoutesResponse> {
-  return request<undefined, AssignedRoutesResponse>(
+export function cancelRoute(
+  routeId: string,
+  reason: string | undefined,
+  accessToken: string
+): Promise<AssignedRoutesResponse> {
+  return request<{ reason?: string }, AssignedRoutesResponse>(
     `/ops-admin/routes/${routeId}/cancel`,
     "POST",
-    undefined,
+    reason && reason.length > 0 ? { reason } : {},
     accessToken
   );
 }

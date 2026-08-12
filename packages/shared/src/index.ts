@@ -629,7 +629,15 @@ export const dailyRouteSchema = z.object({
   totalDurationSeconds: z.number().nonnegative(),
   geometry: z.string().nullable(),
   acceptedAt: z.string().nullable(),
+  // When/why an admin cancelled the route (null unless status is CANCELLED).
+  cancelledAt: z.string().nullable(),
+  cancelReason: z.string().nullable(),
   stops: z.array(dailyRouteStopSchema)
+});
+
+// Admin cancel request — an optional free-text reason kept for the record.
+export const routeCancelSchema = z.object({
+  reason: z.string().trim().max(500).optional()
 });
 
 // Lightweight counts (no routing/optimization) so the admin UI can tell, on
@@ -830,6 +838,7 @@ export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;
 export type AdminRouteResponse = z.infer<typeof adminRouteResponseSchema>;
 export type RouteStatus = z.infer<typeof routeStatusSchema>;
 export type DailyRoute = z.infer<typeof dailyRouteSchema>;
+export type RouteCancel = z.infer<typeof routeCancelSchema>;
 export type DailyRouteStop = z.infer<typeof dailyRouteStopSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
 export type AdminRouteSummary = z.infer<typeof adminRouteSummarySchema>;

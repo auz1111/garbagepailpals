@@ -6,7 +6,8 @@ import {
   adminRouteSummarySchema,
   adminTodaysLocationsResponseSchema,
   assignedRoutesResponseSchema,
-  availableOperatorsResponseSchema
+  availableOperatorsResponseSchema,
+  routeCancelSchema
 } from "@gpp/shared";
 import { env } from "../lib/env";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
@@ -140,6 +141,8 @@ export type DailyRouteRow = {
   durationSeconds: number | null;
   geometry: string | null;
   acceptedAt: Date | null;
+  cancelledAt: Date | null;
+  cancelReason: string | null;
   stops: Array<{
     sequence: number;
     serviceAddressId: string;
@@ -177,6 +180,8 @@ export function serializeDailyRoute(route: DailyRouteRow) {
     totalDurationSeconds: route.durationSeconds ?? 0,
     geometry: route.geometry,
     acceptedAt: route.acceptedAt ? route.acceptedAt.toISOString() : null,
+    cancelledAt: route.cancelledAt ? route.cancelledAt.toISOString() : null,
+    cancelReason: route.cancelReason,
     stops: route.stops.map((s) => ({
       order: s.sequence,
       addressId: s.serviceAddressId,
@@ -309,9 +314,10 @@ export async function adminDeleteRouteHandler(
   );
 }
 
-// Admin cancels an accepted/completed route (e.g. operator can't finish). The
+// Admin cancels a route (accepted, completed, or not-yet-accepted). The
 // un-serviced stops are freed for reassignment; serviced stops stay on the
-// route as a record, and the route is marked CANCELLED.
+// route as a record, and the route is marked CANCELLED with an optional reason
+// kept for the audit trail.
 export async function adminCancelRouteHandler(
   request: HttpRequest,
   context: InvocationContext
@@ -335,9 +341,17 @@ export async function adminCancelRouteHandler(
         if (route.status === "CANCELLED") {
           throw new HttpError(409, "This route is already cancelled.");
         }
+        const { reason } = await parseJson(req, routeCancelSchema);
         // Free the stops that weren't serviced yet, then mark the route cancelled.
         await prisma.routeStop.deleteMany({ where: { routeId, servicedAt: null } });
-        await prisma.dailyRoute.update({ where: { id: routeId }, data: { status: "CANCELLED" } });
+        await prisma.dailyRoute.update({
+          where: { id: routeId },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+            cancelReason: reason && reason.length > 0 ? reason : null
+          }
+        });
 
         const now = new Date();
         const routes = await prisma.dailyRoute.findMany({

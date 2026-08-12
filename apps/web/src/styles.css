@@ -1599,6 +1599,42 @@ a {
   padding: 0 0.3rem;
 }
 
+.assigned-route-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* Cancel keeps a record (amber), distinct from the red hard-delete Remove. */
+.assigned-route-cancel {
+  border: 1px solid var(--gold);
+  border-radius: var(--pill);
+  padding: 0.5rem 0.9rem;
+  background: var(--surface);
+  color: var(--gold-ink, #8a5a00);
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.assigned-route-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.assigned-route-cancel:not(:disabled):hover {
+  background: #fff8e6;
+  border-color: var(--gold-2, var(--gold));
+}
+
+.assigned-route-cancel-note {
+  margin: 0;
+  padding: 0.4rem 0.9rem 0.7rem;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
 /* Operator dashboard: routes assigned to me */
 .operator-route-list {
   list-style: none;

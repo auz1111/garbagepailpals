@@ -287,12 +287,26 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: (routeId: string) => cancelRoute(routeId, accessToken),
+    mutationFn: ({ routeId, reason }: { routeId: string; reason?: string }) =>
+      cancelRoute(routeId, reason, accessToken),
     onSuccess: (data) => {
       queryClient.setQueryData(["assigned-routes"], data);
       invalidateRouteViews();
     }
   });
+
+  // Cancel keeps a record (route stays, marked Cancelled) with an optional
+  // typed reason. Un-serviced stops are freed to reassign. `prompt` returns null
+  // when the admin dismisses the dialog — treat that as "don't cancel".
+  const promptAndCancel = (ar: DailyRoute) => {
+    const reason = window.prompt(
+      `Cancel ${ar.operatorName}'s route${ar.label ? ` (${ar.label})` : ""}?\n\n` +
+        "Un-serviced stops are freed to reassign; any serviced stops stay recorded.\n" +
+        "Optionally type a reason for the record (leave blank to skip):"
+    );
+    if (reason === null) return;
+    cancelMutation.mutate({ routeId: ar.id, reason: reason.trim() || undefined });
+  };
 
   const routeMutation = useMutation({
     mutationFn: () =>
@@ -498,32 +512,39 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       <span className={`coverage-badge ${statusBadge.cls}`}>{statusBadge.text}</span>
                     </button>
                     {status === "ASSIGNED" ? (
-                      <button
-                        type="button"
-                        className="address-row-remove"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Remove ${ar.operatorName}'s route? Its locations become assignable again.`)) {
-                            deleteMutation.mutate(ar.id);
-                          }
-                        }}
-                      >
-                        Remove
-                      </button>
+                      <div className="assigned-route-actions">
+                        <button
+                          type="button"
+                          className="assigned-route-cancel"
+                          disabled={cancelMutation.isPending}
+                          onClick={() => promptAndCancel(ar)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="address-row-remove"
+                          disabled={deleteMutation.isPending}
+                          title="Delete without keeping a record"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                `Remove ${ar.operatorName}'s route entirely (no cancellation record)? Its locations become assignable again.`
+                              )
+                            ) {
+                              deleteMutation.mutate(ar.id);
+                            }
+                          }}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     ) : canCancel ? (
                       <button
                         type="button"
-                        className="address-row-remove"
+                        className="assigned-route-cancel"
                         disabled={cancelMutation.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              `Cancel ${ar.operatorName}'s route? Un-serviced stops will be freed to reassign to another operator; serviced stops stay recorded.`
-                            )
-                          ) {
-                            cancelMutation.mutate(ar.id);
-                          }
-                        }}
+                        onClick={() => promptAndCancel(ar)}
                       >
                         Cancel route
                       </button>
@@ -531,6 +552,11 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       <span className="assigned-route-lock">✓</span>
                     )}
                   </div>
+                  {status === "CANCELLED" && ar.cancelReason ? (
+                    <p className="assigned-route-cancel-note">
+                      <strong>Cancelled:</strong> {ar.cancelReason}
+                    </p>
+                  ) : null}
                   {open ? (
                     <ol className="route-stop-list assigned-route-detail">
                       {ar.stops.map((stop) => (
