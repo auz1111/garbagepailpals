@@ -259,6 +259,7 @@ export async function adminLocationsHandler(
               state: a.state,
               postalCode: a.postalCode,
               customerName: a.user.name,
+              userId: a.userId,
               neighborhoodId: a.neighborhoodId,
               neighborhoodName: a.neighborhood?.name ?? null,
               zoneId: a.neighborhood?.zoneId ?? null,

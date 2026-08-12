@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { formatUsd } from "@gpp/shared";
 import { getAdminLocations, getNeighborhoods, getZones } from "../lib/api";
 
@@ -119,12 +119,16 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
           <ul className="loc-list">
             {filtered.map((l) => (
               <li className="loc-row" key={l.id}>
-                <div className="loc-row-main">
+                <Link
+                  className="loc-row-main"
+                  to={`/admin/users/${l.userId}#address-${l.id}`}
+                  title={`Open ${l.customerName}'s account`}
+                >
                   <strong>{l.line1}</strong>
                   <span className="admin-table-sub">
                     {l.city}, {l.state} {l.postalCode} · {l.customerName}
                   </span>
-                </div>
+                </Link>
                 <div className="loc-row-tags">
                   {l.zoneName ? <span className="loc-chip is-zone">{l.zoneName}</span> : null}
                   {l.neighborhoodName ? (

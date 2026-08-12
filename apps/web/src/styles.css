@@ -4872,6 +4872,14 @@ button[type="submit"]:disabled {
   flex-direction: column;
   min-width: 0;
   flex: 1 1 16rem;
+  text-decoration: none;
+  color: inherit;
+}
+.loc-row-main strong {
+  color: var(--teal-deep);
+}
+.loc-row-main:hover strong {
+  text-decoration: underline;
 }
 .loc-row-tags {
   display: flex;
