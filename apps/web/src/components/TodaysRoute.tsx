@@ -182,6 +182,58 @@ function LocationsMap({
   return <div className="route-map" ref={containerRef} />;
 }
 
+// A focused map of a single assigned route — its path plus numbered stops,
+// serviced stops in green. Shown when an assigned-route card is expanded.
+function RouteDetailMap({ route, color }: { route: DailyRoute; color: string }): JSX.Element {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current, { scrollWheelZoom: false, attributionControl: false });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+
+    const pin = (label: string, fill: string) =>
+      L.divIcon({
+        className: "route-pin-wrap",
+        html: `<span class="route-pin" style="background:${fill}">${label}</span>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+      });
+
+    const path = route.geometry
+      ? decodePolyline(route.geometry)
+      : route.stops.map((s) => [s.lat, s.lng] as [number, number]);
+    if (path.length > 1) {
+      L.polyline(path, { color, weight: 4, opacity: 0.85 }).addTo(layer);
+    }
+
+    const bounds: Array<[number, number]> = [];
+    route.stops.forEach((s) => {
+      const fill = s.servicedAt ? COLOR_SERVICED : "#055a5f";
+      L.marker([s.lat, s.lng], { icon: pin(String(s.order + 1), fill) }).addTo(layer);
+      bounds.push([s.lat, s.lng]);
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [24, 24], maxZoom: 17 });
+    }
+    setTimeout(() => map.invalidateSize(), 0);
+  }, [route, color]);
+
+  return <div className="assigned-route-map" ref={containerRef} />;
+}
+
 export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [expandedOperator, setExpandedOperator] = useState<string | null>(null);
@@ -621,26 +673,34 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                     </p>
                   ) : null}
                   {open ? (
-                    <ol className="route-stop-list assigned-route-detail">
-                      {ar.stops.map((stop) => (
-                        <li className={`route-stop${stop.servicedAt ? " is-serviced" : ""}`} key={stop.addressId}>
-                          <span className="route-stop-num">{stop.order + 1}</span>
-                          <div>
-                            <strong>{stop.line1}</strong>
-                            <span className="admin-table-sub">
-                              {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
-                            </span>
-                            <span className="admin-table-sub">
-                              {stop.jobTypes
-                                .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                                .join(" + ")}{" "}
-                              · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
-                              {stop.servicedAt ? " · ✓ serviced" : ""}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
+                    <div className="assigned-route-expand">
+                      <ol className="route-stop-list assigned-route-detail">
+                        {ar.stops.map((stop) => (
+                          <li
+                            className={`route-stop${stop.servicedAt ? " is-serviced" : ""}`}
+                            key={stop.addressId}
+                          >
+                            <span className="route-stop-num">{stop.order + 1}</span>
+                            <div>
+                              <strong>{stop.line1}</strong>
+                              <span className="admin-table-sub">
+                                {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                              </span>
+                              <span className="admin-table-sub">
+                                {stop.jobTypes
+                                  .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                                  .join(" + ")}{" "}
+                                · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                                {stop.servicedAt ? " · ✓ serviced" : ""}
+                              </span>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                      {ar.stops.length > 0 ? (
+                        <RouteDetailMap route={ar} color={routeColorById.get(ar.id) ?? "#7b2ff7"} />
+                      ) : null}
+                    </div>
                   ) : null}
                   {status !== "CANCELLED" ? (
                     <div

@@ -2056,6 +2056,30 @@ a {
   padding: 0 0.9rem 0.8rem;
 }
 
+/* Expanded card: stop list on the left, single-route map on the right. */
+.assigned-route-expand {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: stretch;
+  padding: 0 0.9rem 0.8rem;
+}
+
+.assigned-route-expand .assigned-route-detail {
+  flex: 1 1 300px;
+  margin: 0;
+  padding: 0;
+}
+
+.assigned-route-map {
+  flex: 1 1 280px;
+  min-height: 240px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  z-index: 0;
+}
+
 .route-leg-dot {
   display: inline-block;
   width: 0.8rem;
