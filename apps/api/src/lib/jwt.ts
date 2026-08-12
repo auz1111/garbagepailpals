@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import type { JWTPayload } from "jose";
+import type { Role } from "@gpp/shared";
 import { env } from "./env";
 
 const accessSecret = new TextEncoder().encode(env.JWT_ACCESS_SECRET);
@@ -8,7 +9,7 @@ const refreshSecret = new TextEncoder().encode(env.JWT_REFRESH_SECRET);
 
 export type AuthTokenPayload = JWTPayload & {
   sub: string;
-  role: "CUSTOMER" | "OPERATOR" | "ADMIN";
+  role: Role;
   email: string;
   name: string;
 };

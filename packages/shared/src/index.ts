@@ -1,6 +1,28 @@
 import { z } from "zod";
 
-export const roleSchema = z.enum(["CUSTOMER", "OPERATOR", "ADMIN"]);
+// SUPER_ADMIN administers every zone. PRO_OPERATOR is a sub-admin scoped to the
+// zones granted to them — they can both assign and run routes there. ADMIN is
+// the legacy full-admin role, kept during the transition and treated as an
+// all-zone admin.
+export const roleSchema = z.enum([
+  "CUSTOMER",
+  "OPERATOR",
+  "ADMIN",
+  "PRO_OPERATOR",
+  "SUPER_ADMIN"
+]);
+
+// Roles that reach the admin surfaces (dashboard, routes, etc.).
+export const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "PRO_OPERATOR"] as const;
+// Roles that can run/operate routes (admins can operate too).
+export const STAFF_ROLES = ["OPERATOR", "ADMIN", "SUPER_ADMIN", "PRO_OPERATOR"] as const;
+
+export function isAdminRole(role: string | undefined | null): boolean {
+  return role != null && (ADMIN_ROLES as readonly string[]).includes(role);
+}
+export function isSuperAdminRole(role: string | undefined | null): boolean {
+  return role === "SUPER_ADMIN" || role === "ADMIN";
+}
 
 export const registerSchema = z.object({
   email: z.string().email(),

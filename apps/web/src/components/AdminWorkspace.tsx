@@ -53,7 +53,9 @@ export const ADMIN_NAV = [
 const ROLE_LABELS: Record<Role, string> = {
   CUSTOMER: "Customer",
   OPERATOR: "Operator",
-  ADMIN: "Admin"
+  ADMIN: "Admin",
+  PRO_OPERATOR: "Pro operator",
+  SUPER_ADMIN: "Super admin"
 };
 
 const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];

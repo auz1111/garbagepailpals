@@ -13,6 +13,8 @@ enum UserRole {
   CUSTOMER
   OPERATOR
   ADMIN
+  PRO_OPERATOR
+  SUPER_ADMIN
 }
 
 enum Cadence {
@@ -95,6 +97,7 @@ model User {
   availability         OperatorAvailability[]
   routes               DailyRoute[]   @relation("OperatorRoutes")
   timeOff              OperatorTimeOff[] @relation("OperatorTimeOff")
+  zones                UserZone[]
 }
 
 // An operator is available by default. A record here is a request to take a day
@@ -164,9 +167,42 @@ model Neighborhood {
   state     String?
   zipCodes  String[]         @default([])
   isTest    Boolean          @default(false)
+  zoneId    String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  zone      Zone?            @relation(fields: [zoneId], references: [id], onDelete: SetNull)
   addresses ServiceAddress[]
+
+  @@index([zoneId])
+}
+
+// A city / service region. The top scoping unit: admins and operators are
+// granted zones, and routes are set per zone.
+model Zone {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  city          String?
+  state         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  neighborhoods Neighborhood[]
+  userZones     UserZone[]
+}
+
+// Grants a zone to a user: a PRO_OPERATOR's admin scope and/or the zones an
+// OPERATOR serves. `serves` marks it as a serviceable area for routing.
+model UserZone {
+  id        String   @id @default(cuid())
+  userId    String
+  zoneId    String
+  serves    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  zone      Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, zoneId])
+  @@index([userId])
+  @@index([zoneId])
 }
 
 model ServiceSchedule {

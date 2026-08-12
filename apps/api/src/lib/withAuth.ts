@@ -13,6 +13,23 @@ type AuthOptions = {
   roles?: Role[];
 };
 
+// Which required roles each actual role satisfies. Higher admin tiers subsume
+// the lower ones so existing `roles: ["ADMIN"]` / `["OPERATOR", "ADMIN"]` gates
+// keep working without editing every call site. Zone-level scoping (who may act
+// in WHICH zone) is enforced inside the handlers, not here.
+const ROLE_GRANTS: Record<Role, Role[]> = {
+  SUPER_ADMIN: ["SUPER_ADMIN", "PRO_OPERATOR", "ADMIN", "OPERATOR", "CUSTOMER"],
+  PRO_OPERATOR: ["PRO_OPERATOR", "ADMIN", "OPERATOR"],
+  ADMIN: ["ADMIN", "OPERATOR"],
+  OPERATOR: ["OPERATOR"],
+  CUSTOMER: ["CUSTOMER"]
+};
+
+function roleAllowed(actual: Role, required: Role[]): boolean {
+  const grants = ROLE_GRANTS[actual] ?? [actual];
+  return required.some((r) => grants.includes(r));
+}
+
 function getBearerToken(request: HttpRequest): string | null {
   const authHeader = request.headers.get("authorization");
   if (!authHeader) {
@@ -42,7 +59,7 @@ export function withAuth(handler: AuthenticatedHandler, options: AuthOptions = {
       return jsonResponse(401, { message: "Invalid or expired token" });
     }
 
-    if (options.roles && !options.roles.includes(auth.role)) {
+    if (options.roles && !roleAllowed(auth.role, options.roles)) {
       return jsonResponse(403, { message: "Forbidden" });
     }
 

@@ -8,6 +8,9 @@ import {
   loginSchema,
   monthlyTotalCents,
   registerSchema,
+  ADMIN_ROLES,
+  STAFF_ROLES,
+  isAdminRole,
   type CurrentUser,
   type LoginInput,
   type Role,
@@ -173,7 +176,7 @@ export function App() {
   }
 
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
-  const isAdmin = user?.role === "ADMIN";
+  const isAdmin = isAdminRole(user?.role);
   const isOperator = user?.role === "OPERATOR";
 
   // Admin alert: locations with no neighborhood assigned (drives the nav badge).
@@ -664,7 +667,7 @@ export function App() {
           />
 
           <Route
-            element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["CUSTOMER", "ADMIN"]} />}
+            element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["CUSTOMER", ...ADMIN_ROLES]} />}
           >
             <Route
               path="/service-area"
@@ -693,7 +696,7 @@ export function App() {
           </Route>
 
           <Route
-            element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["OPERATOR", "ADMIN"]} />}
+            element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={[...STAFF_ROLES]} />}
           >
             <Route
               path="/operator"
@@ -707,7 +710,7 @@ export function App() {
             />
           </Route>
 
-          <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["ADMIN"]} />}>
+          <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={[...ADMIN_ROLES]} />}>
             <Route
               path="/admin/*"
               element={
@@ -803,7 +806,7 @@ function PasswordInput({
 }
 
 function defaultRouteForRole(role: Role): string {
-  if (role === "ADMIN") {
+  if (isAdminRole(role)) {
     return "/admin";
   }
 
