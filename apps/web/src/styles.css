@@ -995,6 +995,94 @@ a {
   flex-shrink: 0;
 }
 
+/* Day-progress checklist shown once everything is assigned. */
+.route-checklist-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.9rem;
+}
+
+.route-checklist-title {
+  font-weight: 800;
+  font-size: 1.02rem;
+}
+
+.route-checklist-sub {
+  color: var(--slate-2);
+  font-size: 0.9rem;
+}
+
+.route-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.route-step {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.route-step.is-done {
+  border-left-color: #16a34a;
+  background: #ecfdf5;
+}
+
+/* Numbered circle → checkmark when the step is complete. */
+.route-step-mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: var(--slate-2);
+  background: var(--line);
+  border: 2px solid transparent;
+}
+
+.route-step.is-done .route-step-mark {
+  color: #ffffff;
+  background: #16a34a;
+}
+
+.route-step-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.route-step-label {
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.route-step.is-done .route-step-label {
+  color: #05663a;
+}
+
+.route-step-detail {
+  font-size: 0.8rem;
+  color: var(--slate-2);
+}
+
+.route-checklist-foot {
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  color: var(--slate-2);
+}
+
 .map-legend {
   display: flex;
   gap: 1.25rem;
@@ -1896,6 +1984,26 @@ a {
   opacity: 0.72;
 }
 
+/* The card's bottom stroke doubles as a service-progress bar: a teal→green
+   gradient that fills as stops are serviced and goes solid serviced-green
+   once the route is complete. */
+.assigned-route-progress {
+  height: 5px;
+  width: 100%;
+  background: var(--line);
+}
+
+.assigned-route-progress-fill {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--teal-bright), #22c55e);
+  transition: width 0.35s ease, background 0.35s ease;
+}
+
+.assigned-route-progress-fill.is-complete {
+  background: #16a34a;
+}
+
 .assigned-route-head {
   display: flex;
   align-items: center;
@@ -1926,6 +2034,22 @@ a {
   font-weight: 700;
   color: var(--slate-2);
   white-space: nowrap;
+}
+
+/* Serviced ratio — mirrors the hero card: the serviced count turns green once
+   anything is done, and the total joins it green only when the route is fully
+   serviced. */
+.ar-frac-done {
+  color: inherit;
+}
+.ar-frac.has-done .ar-frac-done {
+  color: #16a34a;
+}
+.ar-frac-total {
+  color: inherit;
+}
+.ar-frac.all-done .ar-frac-total {
+  color: #16a34a;
 }
 
 .assigned-route-detail {

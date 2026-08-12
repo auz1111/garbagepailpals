@@ -342,11 +342,37 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
 
   const assigning = selected.size > 0;
   const scope = selectedHood ? ` in ${selectedHood.name}` : "";
-  const emptyMessage =
-    summaryReason === "all_assigned"
-      ? `All of today's roll-outs and roll-ins${scope} are already assigned to a route (awaiting operator acceptance or accepted). Remove a route above to free up its locations, then reassign.`
-      : `No roll-outs or roll-ins are due today${scope}.`;
-  const emptyIcon = summaryReason === "all_assigned" ? "⚠️" : "🗓️";
+  const emptyMessage = `No roll-outs or roll-ins are due today${scope}.`;
+
+  // When there's nothing left to assign, show the day's routing lifecycle as a
+  // checklist so it's clear what's done and what's still in flight.
+  const scopeTotal = scopeLocations.length;
+  const awaitingAccept = scopeLocations.filter((l) => l.routeStatus === "ASSIGNED").length;
+  const acceptedTotal = scopeLocations.filter(
+    (l) => l.assigned && l.routeStatus !== "ASSIGNED"
+  ).length;
+  const routingSteps = [
+    {
+      label: "Today's roll-outs & roll-ins scheduled",
+      detail: `${scopeTotal} location${scopeTotal === 1 ? "" : "s"}`,
+      done: scopeTotal > 0
+    },
+    {
+      label: "Every location assigned to a route",
+      detail: `${scopeTotal - scopedUnassigned}/${scopeTotal} assigned`,
+      done: scopedUnassigned === 0
+    },
+    {
+      label: "Operators accepted their routes",
+      detail: `${acceptedTotal}/${scopeTotal} accepted`,
+      done: scopeTotal > 0 && awaitingAccept === 0
+    },
+    {
+      label: "All stops serviced",
+      detail: `${servicedCount}/${scopeTotal} serviced`,
+      done: scopeTotal > 0 && servicedCount === scopeTotal
+    }
+  ];
 
   return (
     <div className="dash-page">
@@ -360,12 +386,40 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
 
       {nothingToAssign ? (
         <article className="panel">
-          <div className={`route-notice${summaryReason === "all_assigned" ? " is-warning" : ""}`}>
-            <span className="route-notice-icon" aria-hidden="true">
-              {emptyIcon}
-            </span>
-            <span>{emptyMessage}</span>
-          </div>
+          {summaryReason === "all_assigned" ? (
+            <div className="route-checklist">
+              <div className="route-checklist-head">
+                <span className="route-checklist-title">Today's routing is fully assigned{scope}</span>
+                <span className="route-checklist-sub">
+                  Every roll-out and roll-in is on a route. Here's where the day stands:
+                </span>
+              </div>
+              <ol className="route-steps">
+                {routingSteps.map((step, index) => (
+                  <li key={step.label} className={`route-step${step.done ? " is-done" : ""}`}>
+                    <span className="route-step-mark" aria-hidden="true">
+                      {step.done ? "✓" : index + 1}
+                    </span>
+                    <span className="route-step-body">
+                      <span className="route-step-label">{step.label}</span>
+                      <span className="route-step-detail">{step.detail}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              <p className="route-checklist-foot">
+                Need to change an assignment? Remove or cancel a route above to free its
+                locations, then reassign.
+              </p>
+            </div>
+          ) : (
+            <div className="route-notice">
+              <span className="route-notice-icon" aria-hidden="true">
+                🗓️
+              </span>
+              <span>{emptyMessage}</span>
+            </div>
+          )}
         </article>
       ) : null}
 
@@ -478,6 +532,9 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               const open = expandedOperator === ar.id;
               const serviced = ar.stops.filter((s) => s.servicedAt).length;
               const status = ar.status;
+              const totalStops = ar.stops.length;
+              const progressPct = totalStops > 0 ? (serviced / totalStops) * 100 : 0;
+              const isComplete = status === "COMPLETED" || (totalStops > 0 && serviced === totalStops);
               const statusBadge =
                 status === "COMPLETED"
                   ? { cls: "covered", text: "✓ Completed" }
@@ -505,9 +562,15 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       <strong>{ar.operatorName}</strong>
                       {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
                       <span className="assigned-route-count">
-                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"}
-                        {serviced > 0 ? ` · ${serviced} serviced` : ""} · ~
-                        {formatMinutes(estimatedRouteMinutes(ar))}
+                        <span
+                          className={`ar-frac${serviced > 0 ? " has-done" : ""}${
+                            isComplete ? " all-done" : ""
+                          }`}
+                        >
+                          <span className="ar-frac-done">{serviced}</span>
+                          <span className="ar-frac-total">/{totalStops}</span>
+                        </span>{" "}
+                        serviced · ~{formatMinutes(estimatedRouteMinutes(ar))}
                       </span>
                       <span className={`coverage-badge ${statusBadge.cls}`}>{statusBadge.text}</span>
                     </button>
@@ -578,6 +641,18 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                         </li>
                       ))}
                     </ol>
+                  ) : null}
+                  {status !== "CANCELLED" ? (
+                    <div
+                      className="assigned-route-progress"
+                      role="img"
+                      aria-label={`${serviced} of ${totalStops} stops serviced`}
+                    >
+                      <div
+                        className={`assigned-route-progress-fill${isComplete ? " is-complete" : ""}`}
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
                   ) : null}
                 </li>
               );
