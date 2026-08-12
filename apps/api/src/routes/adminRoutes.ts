@@ -15,14 +15,88 @@ import { withAuth } from "../lib/withAuth";
 const ORS_BASE = "https://api.openrouteservice.org";
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
 
-// A biweekly day is "on" when a whole even number of weeks has passed since its
-// first-pickup anchor.
-function biweeklyMatchesToday(anchor: Date | null, now: Date): boolean {
+// A biweekly day is "on" for a given date when a whole even number of weeks has
+// passed since its first-pickup anchor.
+function biweeklyMatches(anchor: Date | null, date: Date): boolean {
   if (!anchor) {
     return false;
   }
-  const days = Math.floor((now.getTime() - anchor.getTime()) / 86_400_000);
+  const days = Math.floor((date.getTime() - anchor.getTime()) / 86_400_000);
   return Math.floor(days / 7) % 2 === 0;
+}
+
+// The work for a single location on a given operating day.
+type ServiceWork = {
+  address: {
+    id: string;
+    line1: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    neighborhoodId: string | null;
+    neighborhood: { name: string } | null;
+    user: { name: string };
+    lat: { toNumber: () => number };
+    lng: { toNumber: () => number };
+  };
+  subscriptionId: string;
+  jobTypes: string[]; // "CURB_OUT" (roll cart out) and/or "CURB_IN" (roll cart in)
+};
+
+const SERVICE_ADDRESS_INCLUDE = {
+  schedules: true,
+  user: { select: { name: true } },
+  neighborhood: { select: { name: true } },
+  subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
+} as const;
+
+// The cart-handling work due on the operating day `now`:
+//  - Roll OUT the cart the evening before pickup  → pickups scheduled TOMORROW.
+//  - Roll IN the cart the day after pickup (opted-in) → pickups that were YESTERDAY.
+// A location can need both on the same day (e.g. two pickups a week).
+async function collectTodaysWork(now: Date, neighborhoodId?: string): Promise<ServiceWork[]> {
+  const dayMs = 86_400_000;
+  const rollOutDate = new Date(now.getTime() + dayMs);
+  const rollInDate = new Date(now.getTime() - dayMs);
+  const rollOutWeekday = rollOutDate.getDay();
+  const rollInWeekday = rollInDate.getDay();
+
+  const addresses = await prisma.serviceAddress.findMany({
+    where: {
+      isActive: true,
+      ...(neighborhoodId ? { neighborhoodId } : {}),
+      subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
+      schedules: { some: { pickupDayOfWeek: { in: [rollOutWeekday, rollInWeekday] } } }
+    },
+    include: SERVICE_ADDRESS_INCLUDE
+  });
+
+  const work: ServiceWork[] = [];
+  for (const a of addresses) {
+    const subscriptionId = a.subscriptions[0]?.id;
+    if (!subscriptionId) {
+      continue;
+    }
+    const rollOut = a.schedules.some(
+      (s) =>
+        s.pickupDayOfWeek === rollOutWeekday &&
+        (s.cadence === "WEEKLY" || biweeklyMatches(s.biweeklyAnchorDate, rollOutDate))
+    );
+    const rollIn = a.schedules.some(
+      (s) =>
+        s.pickupDayOfWeek === rollInWeekday &&
+        s.rollIn &&
+        (s.cadence === "WEEKLY" || biweeklyMatches(s.biweeklyAnchorDate, rollInDate))
+    );
+    const jobTypes: string[] = [];
+    if (rollOut) jobTypes.push("CURB_OUT");
+    if (rollIn) jobTypes.push("CURB_IN");
+    if (jobTypes.length === 0) {
+      continue;
+    }
+    work.push({ address: a as unknown as ServiceWork["address"], subscriptionId, jobTypes });
+  }
+  return work;
 }
 
 // Users who can run a route: operators, plus admins granted operator access.
@@ -244,22 +318,9 @@ export async function adminRouteSummaryHandler(
       async (req) => {
         const neighborhoodId = new URL(req.url).searchParams.get("neighborhoodId") || undefined;
         const now = new Date();
-        const weekday = now.getDay();
         const serviceDate = todayServiceDate(now);
 
-        const addresses = await prisma.serviceAddress.findMany({
-          where: {
-            isActive: true,
-            ...(neighborhoodId ? { neighborhoodId } : {}),
-            subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
-            schedules: { some: { pickupDayOfWeek: weekday } }
-          },
-          include: {
-            schedules: { where: { pickupDayOfWeek: weekday } },
-            subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
-          }
-        });
-
+        const work = await collectTodaysWork(now, neighborhoodId);
         const routedAddressIds = new Set(
           (
             await prisma.routeStop.findMany({
@@ -269,20 +330,8 @@ export async function adminRouteSummaryHandler(
           ).map((r) => r.serviceAddressId)
         );
 
-        let scheduledToday = 0;
-        let alreadyRouted = 0;
-        for (const a of addresses) {
-          const pickups = a.schedules.filter(
-            (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
-          );
-          if (pickups.length === 0 || !a.subscriptions[0]?.id) {
-            continue;
-          }
-          scheduledToday += 1;
-          if (routedAddressIds.has(a.id)) {
-            alreadyRouted += 1;
-          }
-        }
+        const scheduledToday = work.length;
+        const alreadyRouted = work.filter((w) => routedAddressIds.has(w.address.id)).length;
 
         return jsonResponse(
           200,
@@ -316,23 +365,9 @@ export async function adminTodaysLocationsHandler(
       async (req) => {
         const neighborhoodId = new URL(req.url).searchParams.get("neighborhoodId") || undefined;
         const now = new Date();
-        const weekday = now.getDay();
         const serviceDate = todayServiceDate(now);
 
-        const addresses = await prisma.serviceAddress.findMany({
-          where: {
-            isActive: true,
-            ...(neighborhoodId ? { neighborhoodId } : {}),
-            subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
-            schedules: { some: { pickupDayOfWeek: weekday } }
-          },
-          include: {
-            schedules: { where: { pickupDayOfWeek: weekday } },
-            subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 },
-            user: { select: { name: true } },
-            neighborhood: { select: { name: true } }
-          }
-        });
+        const work = await collectTodaysWork(now, neighborhoodId);
 
         const routeStopRows = await prisma.routeStop.findMany({
           where: { route: { serviceDate } },
@@ -340,27 +375,21 @@ export async function adminTodaysLocationsHandler(
         });
         const statusByAddress = new Map(routeStopRows.map((r) => [r.serviceAddressId, r.route.status]));
 
-        const locations = addresses
-          .filter((a) => {
-            const pickups = a.schedules.filter(
-              (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
-            );
-            return pickups.length > 0 && Boolean(a.subscriptions[0]?.id);
-          })
-          .map((a) => ({
-            addressId: a.id,
-            line1: a.line1,
-            city: a.city,
-            state: a.state,
-            postalCode: a.postalCode,
-            customerName: a.user.name,
-            lat: a.lat.toNumber(),
-            lng: a.lng.toNumber(),
-            assigned: statusByAddress.has(a.id),
-            routeStatus: statusByAddress.get(a.id) ?? null,
-            neighborhoodId: a.neighborhoodId,
-            neighborhoodName: a.neighborhood?.name ?? null
-          }));
+        const locations = work.map((w) => ({
+          addressId: w.address.id,
+          line1: w.address.line1,
+          city: w.address.city,
+          state: w.address.state,
+          postalCode: w.address.postalCode,
+          customerName: w.address.user.name,
+          lat: w.address.lat.toNumber(),
+          lng: w.address.lng.toNumber(),
+          assigned: statusByAddress.has(w.address.id),
+          routeStatus: statusByAddress.get(w.address.id) ?? null,
+          jobTypes: [...w.jobTypes].sort(),
+          neighborhoodId: w.address.neighborhoodId,
+          neighborhoodName: w.address.neighborhood?.name ?? null
+        }));
 
         return jsonResponse(
           200,
@@ -406,7 +435,6 @@ export async function adminTodaysRouteHandler(
         const assigning = operatorIds.length > 0;
 
         const now = new Date();
-        const weekday = now.getDay();
         const serviceDate = todayServiceDate(now);
 
         // Locations already on a route today (any operator, assigned or accepted)
@@ -420,54 +448,25 @@ export async function adminTodaysRouteHandler(
           ).map((r) => r.serviceAddressId)
         );
 
-        // Today's pickups come from schedules (pickup day == today), not from the
-        // offset curb-out/curb-in job times — so "today" means today's collections.
-        // Optionally scoped to a single neighborhood.
-        const addresses = await prisma.serviceAddress.findMany({
-          where: {
-            isActive: true,
-            ...(input.neighborhoodId ? { neighborhoodId: input.neighborhoodId } : {}),
-            subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
-            schedules: { some: { pickupDayOfWeek: weekday } }
-          },
-          include: {
-            schedules: { where: { pickupDayOfWeek: weekday } },
-            user: { select: { name: true } },
-            subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
-          }
-        });
+        // Today's work = roll-outs for tomorrow's pickups + roll-ins from
+        // yesterday's pickups, optionally scoped to a neighborhood.
+        const work = await collectTodaysWork(now, input.neighborhoodId);
+        const scheduledTodayCount = work.length;
 
-        const stops: StopBuild[] = [];
-        // Count addresses that actually have a pickup today (biweekly-aware, with
-        // an active sub) regardless of whether they're already routed, so we can
-        // distinguish "nothing scheduled" from "all already assigned".
-        let scheduledTodayCount = 0;
-        for (const a of addresses) {
-          const pickups = a.schedules.filter(
-            (sch) => sch.cadence === "WEEKLY" || biweeklyMatchesToday(sch.biweeklyAnchorDate, now)
-          );
-          const subscriptionId = a.subscriptions[0]?.id;
-          if (pickups.length === 0 || !subscriptionId) {
-            continue;
-          }
-          scheduledTodayCount += 1;
-          if (routedAddressIds.has(a.id)) {
-            continue;
-          }
-          const jobTypes = pickups.some((p) => p.rollIn) ? ["CURB_IN", "CURB_OUT"] : ["CURB_OUT"];
-          stops.push({
-            addressId: a.id,
-            customerName: a.user.name,
-            line1: a.line1,
-            city: a.city,
-            state: a.state,
-            postalCode: a.postalCode,
-            lat: a.lat.toNumber(),
-            lng: a.lng.toNumber(),
-            subscriptionId,
-            jobTypes
-          });
-        }
+        const stops: StopBuild[] = work
+          .filter((w) => !routedAddressIds.has(w.address.id))
+          .map((w) => ({
+            addressId: w.address.id,
+            customerName: w.address.user.name,
+            line1: w.address.line1,
+            city: w.address.city,
+            state: w.address.state,
+            postalCode: w.address.postalCode,
+            lat: w.address.lat.toNumber(),
+            lng: w.address.lng.toNumber(),
+            subscriptionId: w.subscriptionId,
+            jobTypes: w.jobTypes
+          }));
 
         // Resolve operator names for labelling assigned legs.
         const operatorUsers = assigning

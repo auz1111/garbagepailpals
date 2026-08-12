@@ -33,6 +33,15 @@ function locationStatusLabel(loc: AdminTodaysLocation): string {
   return "Unassigned";
 }
 
+// What's due at this location today, in plain words.
+function locationActionLabel(loc: AdminTodaysLocation): string {
+  const out = loc.jobTypes.includes("CURB_OUT");
+  const inn = loc.jobTypes.includes("CURB_IN");
+  if (out && inn) return "Roll-out + Roll-in";
+  if (inn) return "Roll-in";
+  return "Roll-out";
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
@@ -78,9 +87,9 @@ function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.
     locations.forEach((loc) => {
       L.marker([loc.lat, loc.lng], { icon: pin(locationColor(loc)) })
         .bindPopup(
-          `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br>${locationStatusLabel(
+          `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br><b>${locationActionLabel(
             loc
-          )}`
+          )}</b> · ${locationStatusLabel(loc)}`
         )
         .addTo(layer);
       bounds.push([loc.lat, loc.lng]);
@@ -211,7 +220,8 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
       <div className="dash-page-head">
         <h2>Today's Routes</h2>
         <p className="subtext">
-          Pick the operators working today, then assign each an optimized route of today's pickups.
+          Pick the operators working today, then assign each an optimized route of today's cart
+          roll-outs (for tomorrow's pickups) and roll-ins (from yesterday's).
         </p>
       </div>
 
@@ -402,10 +412,14 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
             {scopeLocations.length} location{scopeLocations.length === 1 ? "" : "s"}
           </span>
         </div>
+        <p className="subtext">
+          Today's work: roll carts <strong>out</strong> for tomorrow's pickups and roll carts{" "}
+          <strong>in</strong> from yesterday's. Tap a pin to see which applies.
+        </p>
         {locationsQuery.isLoading ? (
           <p className="subtext">Loading…</p>
         ) : scopeLocations.length === 0 ? (
-          <p className="subtext">No serviceable locations are scheduled for pickup today{scope}.</p>
+          <p className="subtext">Nothing to service today{scope} — no roll-outs or roll-ins due.</p>
         ) : (
           <>
             <LocationsMap locations={scopeLocations} />

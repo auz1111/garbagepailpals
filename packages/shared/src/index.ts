@@ -606,6 +606,9 @@ export const adminTodaysLocationSchema = z.object({
   // The status of the route it's on: awaiting operator acceptance, accepted
   // (locked), or null when not on any route yet.
   routeStatus: routeStatusSchema.nullable(),
+  // What's due here today: roll the cart out (evening before pickup) and/or
+  // roll it in (day after pickup).
+  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
   neighborhoodId: z.string().nullable(),
   neighborhoodName: z.string().nullable()
 });
