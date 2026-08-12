@@ -5,10 +5,15 @@ import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } 
 import { defaultOperatingZone, serviceDateForZone } from "../lib/timezone";
 import { withAuth } from "../lib/withAuth";
 
-// Users who can run routes: operators, plus admins granted operator access.
+// Users who can run routes: operators, pro operators, plus legacy admins
+// granted operator access.
 function operatorWhere() {
   return {
-    OR: [{ role: "OPERATOR" as const }, { role: "ADMIN" as const, operatorAccess: true }]
+    OR: [
+      { role: "OPERATOR" as const },
+      { role: "PRO_OPERATOR" as const },
+      { role: "ADMIN" as const, operatorAccess: true }
+    ]
   };
 }
 

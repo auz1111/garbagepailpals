@@ -542,6 +542,21 @@ export const zonesResponseSchema = z.object({
   zones: z.array(zoneSchema)
 });
 
+// The zones an operator can serve, each flagged with whether they currently do.
+export const operatorZoneSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  serves: z.boolean()
+});
+export const operatorZonesResponseSchema = z.object({
+  zones: z.array(operatorZoneSchema)
+});
+export const operatorZonesUpdateSchema = z.object({
+  zoneIds: z.array(z.string()).max(200)
+});
+
 const zipCodesSchema = z.array(z.string().min(2).max(12)).max(50);
 
 export const neighborhoodCreateSchema = z.object({
@@ -914,6 +929,8 @@ export type AdminUserWithLocations = z.infer<typeof adminUserDetailSchema>;
 export type AdminRouteRequest = z.infer<typeof adminRouteRequestSchema>;
 export type Zone = z.infer<typeof zoneSchema>;
 export type ZonesResponse = z.infer<typeof zonesResponseSchema>;
+export type OperatorZonesResponse = z.infer<typeof operatorZonesResponseSchema>;
+export type OperatorZonesUpdate = z.infer<typeof operatorZonesUpdateSchema>;
 export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
 export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
 export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;

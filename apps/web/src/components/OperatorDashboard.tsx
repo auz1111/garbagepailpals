@@ -8,8 +8,10 @@ import {
   acceptOperatorRoute,
   getOperatorRoutes,
   getOperatorTimeOff,
+  getOperatorZones,
   markStopServiced,
-  requestOperatorTimeOff
+  requestOperatorTimeOff,
+  setOperatorZones
 } from "../lib/api";
 
 // Decode an ORS/Google encoded polyline (precision 5) to [lat, lng] pairs.
@@ -179,6 +181,25 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     }
   });
 
+  // The zones this operator serves. Only plain operators self-manage these;
+  // pro-operators' zones are set by an admin.
+  const canManageZones = user.role === "OPERATOR";
+  const zonesQuery = useQuery({
+    queryKey: ["operator-zones"],
+    queryFn: async () => getOperatorZones(accessToken),
+    enabled: canManageZones
+  });
+  const serveZones = zonesQuery.data?.zones ?? [];
+  const zonesMutation = useMutation({
+    mutationFn: (zoneIds: string[]) => setOperatorZones(zoneIds, accessToken),
+    onSuccess: (data) => queryClient.setQueryData(["operator-zones"], data)
+  });
+  const toggleServeZone = (id: string, currentlyServes: boolean) => {
+    const current = serveZones.filter((z) => z.serves).map((z) => z.id);
+    const next = currentlyServes ? current.filter((x) => x !== id) : [...current, id];
+    zonesMutation.mutate(next);
+  };
+
   return (
     <div className="dash-page">
       <div className="dash-page-head">
@@ -249,6 +270,40 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         </div>
         {requestTimeOff.isError ? <p className="error">{getErrorMessage(requestTimeOff.error)}</p> : null}
       </article>
+
+      {canManageZones ? (
+        <article className="panel">
+          <h3>Areas I serve</h3>
+          <p className="subtext">
+            You're only offered routes in the areas you serve. Leave all unchecked to be available
+            everywhere.
+          </p>
+          {zonesQuery.isLoading ? (
+            <p className="subtext">Loading…</p>
+          ) : serveZones.length === 0 ? (
+            <p className="subtext">No service areas exist yet.</p>
+          ) : (
+            <ul className="serve-zone-list">
+              {serveZones.map((z) => (
+                <li className={`serve-zone${z.serves ? " is-on" : ""}`} key={z.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={z.serves}
+                      disabled={zonesMutation.isPending}
+                      onChange={() => toggleServeZone(z.id, z.serves)}
+                    />
+                    <span className="serve-zone-name">{z.name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {zonesMutation.isError ? (
+            <p className="error">{getErrorMessage(zonesMutation.error)}</p>
+          ) : null}
+        </article>
+      ) : null}
 
       <article className="panel">
         <h3>My routes today</h3>

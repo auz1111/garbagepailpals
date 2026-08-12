@@ -257,8 +257,8 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const zoneScope = zoneId || undefined;
 
   const operatorsQuery = useQuery({
-    queryKey: ["available-operators", todayIso()],
-    queryFn: async () => getAvailableOperators(todayIso(), accessToken)
+    queryKey: ["available-operators", todayIso(), zoneId],
+    queryFn: async () => getAvailableOperators(todayIso(), accessToken, zoneScope)
   });
   const operators = operatorsQuery.data?.operators ?? [];
 

@@ -115,10 +115,15 @@ async function collectTodaysWork(
   return work;
 }
 
-// Users who can run a route: operators, plus admins granted operator access.
+// Users who can run a route: operators, pro operators (scoped sub-admins who
+// also operate), plus legacy admins granted operator access.
 function operatorWhere() {
   return {
-    OR: [{ role: "OPERATOR" as const }, { role: "ADMIN" as const, operatorAccess: true }]
+    OR: [
+      { role: "OPERATOR" as const },
+      { role: "PRO_OPERATOR" as const },
+      { role: "ADMIN" as const, operatorAccess: true }
+    ]
   };
 }
 
@@ -228,14 +233,31 @@ export async function adminAvailableOperatorsHandler(
   return withErrorBoundary(context, async () =>
     withAuth(
       async (req) => {
-        const dateParam = new URL(req.url).searchParams.get("date");
+        const url = new URL(req.url);
+        const dateParam = url.searchParams.get("date");
+        const zoneId = url.searchParams.get("zoneId") || undefined;
         // Default "today" in the business operating zone, not UTC.
         const dateStr =
           dateParam ?? serviceDateForZone(new Date(), defaultOperatingZone()).toISOString().slice(0, 10);
         const date = new Date(`${dateStr}T00:00:00Z`);
 
+        // When a zone is chosen, only operators who serve it are available.
+        // Operators who haven't configured any zones yet are treated as
+        // available everywhere (so assignment isn't dead before they opt in).
+        const zoneFilter = zoneId
+          ? {
+              OR: [
+                { zones: { some: { zoneId, serves: true } } },
+                { zones: { none: { serves: true } } }
+              ]
+            }
+          : {};
+
         const operators = await prisma.user.findMany({
-          where: { ...operatorWhere(), timeOff: { none: { date, status: "APPROVED" } } },
+          where: {
+            AND: [{ ...operatorWhere() }, zoneFilter],
+            timeOff: { none: { date, status: "APPROVED" } }
+          },
           select: { id: true, name: true, email: true },
           orderBy: { name: "asc" }
         });

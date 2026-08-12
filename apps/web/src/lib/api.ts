@@ -21,6 +21,7 @@ import type {
   AssignedRoutesResponse,
   RouteHistoryResponse,
   ZonesResponse,
+  OperatorZonesResponse,
   NeighborhoodsResponse,
   NeighborhoodCreate,
   NeighborhoodUpdate,
@@ -398,12 +399,34 @@ export function cancelRoute(
 
 export function getAvailableOperators(
   date: string,
-  accessToken: string
+  accessToken: string,
+  zoneId?: string
 ): Promise<AvailableOperatorsResponse> {
   return request<undefined, AvailableOperatorsResponse>(
-    `/ops-admin/routes/operators?date=${encodeURIComponent(date)}`,
+    `/ops-admin/routes/operators${scopeQuery({ date, zoneId })}`,
     "GET",
     undefined,
+    accessToken
+  );
+}
+
+export function getOperatorZones(accessToken: string): Promise<OperatorZonesResponse> {
+  return request<undefined, OperatorZonesResponse>(
+    "/operator/zones",
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function setOperatorZones(
+  zoneIds: string[],
+  accessToken: string
+): Promise<OperatorZonesResponse> {
+  return request<{ zoneIds: string[] }, OperatorZonesResponse>(
+    "/operator/zones",
+    "PUT",
+    { zoneIds },
     accessToken
   );
 }
