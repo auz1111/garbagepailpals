@@ -39,6 +39,13 @@ const REFRESH_TOKEN_KEY = "gpp.refreshToken";
 // Sidebar links for an operator account.
 const OPERATOR_NAV = [{ to: "/operator", label: "Operator", icon: "🚛", end: true }] as const;
 
+// Section headers in the admin drawer, keyed by each nav item's `group`.
+const NAV_SECTION_LABELS: Record<string, string> = {
+  admin: "Administration",
+  operators: "Operators",
+  customer: "My account"
+};
+
 // Marketing plan prices are derived from the same billing engine that bills
 // customers (packages/shared PRICING), so the landing page can never drift from
 // what people are actually charged. Each tier is a representative configuration:
@@ -230,8 +237,8 @@ export function App() {
   const showDashboardMenu =
     isAuthenticated &&
     ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
-  // Admin nav: core pages, then an "Operators" section pinned at the bottom —
-  // operator management, plus the admin's own operator view when they have access.
+  // The admin drawer is split into clearly-labelled sections: administration,
+  // the operator view, and the admin's own customer account.
   const adminOperatorSection = [
     { to: "/admin/operators", label: "Operators", icon: "🧑‍🔧", group: "operators" },
     ...(user?.operatorAccess
@@ -240,7 +247,12 @@ export function App() {
   ];
   // Super-admin-only nav items (e.g. Service Areas) are hidden from pro-operators.
   const isSuper = isSuperAdminRole(user?.role);
-  const adminNav = ADMIN_NAV.filter((i) => !("superOnly" in i && i.superOnly) || isSuper);
+  const adminNav = ADMIN_NAV.filter((i) => !("superOnly" in i && i.superOnly) || isSuper).map(
+    (i) => ({ ...i, group: "admin" })
+  );
+  // Admins/super admins can also use the app as a customer — their customer nav
+  // is shown as its own section.
+  const adminCustomerSection = CUSTOMER_NAV.map((i) => ({ ...i, group: "customer" }));
   const dashboardNav: ReadonlyArray<{
     to: string;
     label: string;
@@ -249,7 +261,7 @@ export function App() {
     group?: string;
     superOnly?: boolean;
   }> = isAdmin
-    ? [...adminNav, ...adminOperatorSection]
+    ? [...adminNav, ...adminOperatorSection, ...adminCustomerSection]
     : isOperator
       ? OPERATOR_NAV
       : CUSTOMER_NAV;
@@ -348,13 +360,13 @@ export function App() {
                   // Routes awaiting acceptance and the billing prompt use the brand
                   // gold; other alerts stay red.
                   const badgeGold = (isPersonalOperatorLink && pendingRouteCount > 0) || showBillingBadge;
-                  const showOperatorsHeader =
-                    item.group === "operators" && dashboardNav[idx - 1]?.group !== "operators";
+                  const sectionLabel =
+                    item.group && item.group !== dashboardNav[idx - 1]?.group
+                      ? NAV_SECTION_LABELS[item.group] ?? null
+                      : null;
                   return (
                     <Fragment key={item.to}>
-                      {showOperatorsHeader ? (
-                        <div className="drawer-section">Operators</div>
-                      ) : null}
+                      {sectionLabel ? <div className="drawer-section">{sectionLabel}</div> : null}
                       <NavLink
                         to={item.to}
                         end={item.end}
