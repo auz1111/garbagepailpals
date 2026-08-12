@@ -527,6 +527,24 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
       )}
 
       {runtimeMetricsQuery.error ? <p className="error">{getErrorMessage(runtimeMetricsQuery.error)}</p> : null}
+
+      <article className="panel important-links" style={{ marginTop: "1rem" }}>
+        <h3>Important links</h3>
+        <div className="important-link-grid">
+          <Link to="/service-area" className="important-link">
+            <span className="important-link-icon" aria-hidden="true">
+              📍
+            </span>
+            <span className="important-link-body">
+              <strong>Service area form</strong>
+              <span className="important-link-sub">Check or request a service area</span>
+            </span>
+            <span className="important-link-arrow" aria-hidden="true">
+              →
+            </span>
+          </Link>
+        </div>
+      </article>
       </>
     );
   }

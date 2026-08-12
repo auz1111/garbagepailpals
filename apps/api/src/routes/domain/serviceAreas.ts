@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@gpp/db";
 import { serviceAreaCheckResponseSchema } from "@gpp/shared";
 import { handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
+import { isPostalServiceable } from "../../lib/serviceArea";
 import { withAuth } from "../../lib/withAuth";
 
 const serviceAreaRequestSchema = z.object({
@@ -24,13 +25,9 @@ export async function serviceAreaCheckHandler(
       return jsonResponse(400, { message: "postalCode query parameter is required" });
     }
 
-    const serviceArea = await prisma.serviceArea.findUnique({
-      where: { postalCode }
-    });
-
     const response = serviceAreaCheckResponseSchema.parse({
       postalCode,
-      eligible: Boolean(serviceArea?.isActive)
+      eligible: await isPostalServiceable(postalCode)
     });
 
     return jsonResponse(200, response);
@@ -54,10 +51,7 @@ export async function requestServiceAreaHandler(
     withAuth(async (req, _ctx, auth) => {
       const { postalCode } = await parseJson(req, serviceAreaRequestSchema);
 
-      const serviceArea = await prisma.serviceArea.findUnique({
-        where: { postalCode }
-      });
-      const eligible = Boolean(serviceArea?.isActive);
+      const eligible = await isPostalServiceable(postalCode);
 
       await prisma.user.update({
         where: { id: auth.sub },

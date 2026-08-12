@@ -12,6 +12,7 @@ import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } 
 import { withAuth } from "../../lib/withAuth";
 import { geocodeAddressParts } from "../../services/geocoding";
 import { timezoneForCoords } from "../../lib/timezone";
+import { isPostalServiceable } from "../../lib/serviceArea";
 
 type ScheduleRow = {
   id: string;
@@ -94,11 +95,7 @@ export async function createAddressHandler(
           });
         }
 
-        const allowedArea = await prisma.serviceArea.findUnique({
-          where: { postalCode: input.postalCode }
-        });
-
-        if (!allowedArea?.isActive) {
+        if (!(await isPostalServiceable(input.postalCode))) {
           return jsonResponse(400, { message: "Address is outside the service area" });
         }
 
