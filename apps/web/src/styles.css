@@ -393,6 +393,7 @@ a {
 /* Dashboard pages */
 .dash-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.1rem;
 }
 
@@ -807,8 +808,8 @@ a {
 
 .availability-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
+  gap: 0.3rem;
   margin-top: 0.5rem;
 }
 
@@ -816,8 +817,8 @@ a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.05rem;
-  padding: 0.5rem 0.25rem;
+  gap: 0;
+  padding: 0.3rem 0.1rem;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--surface);
@@ -874,21 +875,21 @@ a {
 }
 
 .availability-dow {
-  font-size: 0.68rem;
+  font-size: 0.52rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   opacity: 0.85;
 }
 
 .availability-num {
-  font-size: 1.15rem;
+  font-size: 0.95rem;
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1.05;
 }
 
 .availability-mon {
-  font-size: 0.68rem;
+  font-size: 0.52rem;
   opacity: 0.8;
 }
 
@@ -1141,15 +1142,12 @@ a {
 }
 
 .coverage-strip {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
   gap: 0.35rem;
-  overflow-x: auto;
-  padding-bottom: 0.4rem;
 }
 
 .coverage-chip {
-  flex: 0 0 auto;
-  width: 2.6rem;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1177,70 +1175,80 @@ a {
   color: var(--danger);
 }
 
-.ops-grid-scroll {
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
+@media (max-width: 640px) {
+  .coverage-threshold {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
-.ops-grid {
+/* Per-operator wrapping calendars (all days visible, no horizontal scroll). */
+.ops-operators {
   display: grid;
-  gap: 3px;
-  align-items: center;
-  min-width: max-content;
+  gap: 1.1rem;
 }
 
-.ops-grid-corner {
-  position: sticky;
-  left: 0;
+.ops-operator-name {
+  font-weight: 800;
+  font-size: 0.95rem;
+  margin-bottom: 0.4rem;
 }
 
-.ops-grid-daycol {
+.ops-cal {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr));
+  gap: 0.3rem;
+}
+
+.ops-cal-day {
   display: flex;
   flex-direction: column;
   align-items: center;
-  font-size: 0.6rem;
-  color: var(--ink-soft);
-  line-height: 1.1;
-}
-
-.ops-grid-name {
-  position: sticky;
-  left: 0;
-  background: var(--surface);
-  font-weight: 700;
-  font-size: 0.85rem;
-  padding-right: 0.5rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ops-cell {
-  width: 1.75rem;
-  height: 1.75rem;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--surface);
+  gap: 0;
+  padding: 0.3rem 0.1rem;
+  border: 1px solid #5cb576;
+  border-radius: var(--r-sm);
+  background: #bfe6cb; /* available — green */
+  color: #14532d;
   cursor: pointer;
-  padding: 0;
+  transition: filter 0.12s ease, transform 0.08s ease;
 }
 
-.ops-cell:hover {
-  border-color: var(--teal-bright);
+.ops-cal-day:hover {
+  filter: brightness(0.94);
+  transform: translateY(-1px);
 }
 
-.ops-cell.is-pending {
+.ops-cal-dow {
+  font-size: 0.52rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ops-cal-num {
+  font-size: 0.95rem;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.ops-cal-day.is-pending {
   background: var(--gold);
-  border-color: var(--gold);
+  border-color: #cf8b00;
+  color: var(--teal-deep);
 }
 
-.ops-cell.is-approved {
+.ops-cal-day.is-approved {
   background: var(--danger);
   border-color: var(--danger);
+  color: #ffffff;
 }
 
-.ops-cell.is-denied {
-  background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 4px, var(--line) 4px, var(--line) 5px);
+.ops-cal-day.is-denied {
+  background: var(--surface);
+  border-color: var(--line-2);
+  color: var(--ink-soft);
+  text-decoration: line-through;
 }
 
 /* Admin assigned-route row: expandable head + remove/lock action */
@@ -3294,6 +3302,7 @@ button[type="submit"]:disabled {
 
 .customer-workspace {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 1rem;
 }
 
@@ -3309,6 +3318,7 @@ button[type="submit"]:disabled {
   padding: 1.2rem;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
 
 .panel h3 {
@@ -3321,6 +3331,7 @@ button[type="submit"]:disabled {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .panel-head-row h3 {

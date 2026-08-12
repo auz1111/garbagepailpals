@@ -77,10 +77,10 @@ export function OperatorsAdmin({ accessToken }: OperatorsAdminProps): JSX.Elemen
     operators.filter((op) => statusFor(op.id, date) !== "APPROVED").length;
 
   function cellClass(status: TimeOffStatus | undefined): string {
-    if (status === "APPROVED") return "ops-cell is-approved";
-    if (status === "PENDING") return "ops-cell is-pending";
-    if (status === "DENIED") return "ops-cell is-denied";
-    return "ops-cell";
+    if (status === "APPROVED") return "ops-cal-day is-approved";
+    if (status === "PENDING") return "ops-cal-day is-pending";
+    if (status === "DENIED") return "ops-cal-day is-denied";
+    return "ops-cal-day is-available";
   }
 
   // Grid click toggles a direct (admin) day off: available/denied/pending -> APPROVED off; approved -> clear.
@@ -204,28 +204,16 @@ export function OperatorsAdmin({ accessToken }: OperatorsAdminProps): JSX.Elemen
         ) : operators.length === 0 ? (
           <p className="subtext">No operators yet.</p>
         ) : (
-          <div className="ops-grid-scroll">
-            <div
-              className="ops-grid"
-              style={{ gridTemplateColumns: `minmax(9rem, 12rem) repeat(${days.length}, 1.75rem)` }}
-            >
-              <div className="ops-grid-corner" />
-              {days.map((date) => {
-                const { dow, day } = labelFor(date);
-                return (
-                  <div className="ops-grid-daycol" key={date}>
-                    <span>{dow}</span>
-                    <span>{day}</span>
-                  </div>
-                );
-              })}
-              {operators.map((op) => (
-                <div className="ops-grid-row" key={op.id} style={{ display: "contents" }}>
-                  <div className="ops-grid-name" title={op.email}>
-                    {op.name}
-                  </div>
+          <div className="ops-operators">
+            {operators.map((op) => (
+              <div className="ops-operator" key={op.id}>
+                <div className="ops-operator-name" title={op.email}>
+                  {op.name}
+                </div>
+                <div className="ops-cal">
                   {days.map((date) => {
                     const status = statusFor(op.id, date);
+                    const { dow, day } = labelFor(date);
                     return (
                       <button
                         type="button"
@@ -234,14 +222,34 @@ export function OperatorsAdmin({ accessToken }: OperatorsAdminProps): JSX.Elemen
                         disabled={mutation.isPending}
                         title={`${op.name} · ${date}${status ? ` · ${status.toLowerCase()}` : " · available"}`}
                         onClick={() => onCellClick(op.id, date, status)}
-                      />
+                      >
+                        <span className="ops-cal-dow">{dow}</span>
+                        <span className="ops-cal-num">{day}</span>
+                      </button>
                     );
                   })}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         )}
+        {operators.length > 0 ? (
+          <div className="map-legend ops-legend">
+            <span>
+              <span
+                className="legend-dot"
+                style={{ background: "#d9f0df", border: "1px solid #8fce9f" }}
+              />{" "}
+              Available
+            </span>
+            <span>
+              <span className="legend-dot" style={{ background: "var(--gold)" }} /> Requested off
+            </span>
+            <span>
+              <span className="legend-dot" style={{ background: "var(--danger)" }} /> Off (approved)
+            </span>
+          </div>
+        ) : null}
         {operatorsQuery.isError ? (
           <p className="error">{getErrorMessage(operatorsQuery.error)}</p>
         ) : null}
