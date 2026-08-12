@@ -4651,3 +4651,13 @@ button[type="submit"]:disabled {
   font-weight: 700;
   font-size: 0.9rem;
 }
+
+/* Neighborhood zone select — match the adjacent inputs. */
+.nb-zone {
+  padding: 0.55rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font: inherit;
+  color: var(--ink);
+}

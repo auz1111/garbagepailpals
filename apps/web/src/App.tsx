@@ -11,6 +11,7 @@ import {
   ADMIN_ROLES,
   STAFF_ROLES,
   isAdminRole,
+  isSuperAdminRole,
   type CurrentUser,
   type LoginInput,
   type Role,
@@ -223,14 +224,18 @@ export function App() {
       ? [{ to: "/admin/operator", label: "My operator view", icon: "🚛", group: "operators" }]
       : [])
   ];
+  // Super-admin-only nav items (e.g. Service Areas) are hidden from pro-operators.
+  const isSuper = isSuperAdminRole(user?.role);
+  const adminNav = ADMIN_NAV.filter((i) => !("superOnly" in i && i.superOnly) || isSuper);
   const dashboardNav: ReadonlyArray<{
     to: string;
     label: string;
     icon: string;
     end?: boolean;
     group?: string;
+    superOnly?: boolean;
   }> = isAdmin
-    ? [...ADMIN_NAV, ...adminOperatorSection]
+    ? [...adminNav, ...adminOperatorSection]
     : isOperator
       ? OPERATOR_NAV
       : CUSTOMER_NAV;

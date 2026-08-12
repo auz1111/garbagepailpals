@@ -8,8 +8,11 @@ import {
   adminUserUpdateSchema,
   adminUsersResponseSchema,
   adminDashboardMetricsSchema,
+  isAdminRole,
+  isSuperAdminRole,
   operatorAvailabilityResponseSchema,
-  operatorAvailabilityUpdateSchema
+  operatorAvailabilityUpdateSchema,
+  operatorZonesUpdateSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
@@ -18,7 +21,8 @@ const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
 
 const USER_AGGREGATE_INCLUDE = {
   serviceAddresses: { where: { isActive: true }, include: { schedules: true } },
-  subscriptions: true
+  subscriptions: true,
+  zones: { select: { zoneId: true } }
 } as const;
 
 type ScheduleRow = {
@@ -50,6 +54,7 @@ type UserAggregateRow = {
   operatorAccess: boolean;
   serviceAddresses: AddressRow[];
   subscriptions: Array<{ status: string }>;
+  zones: Array<{ zoneId: string }>;
 };
 
 function pricingDays(schedules: ScheduleRow[]) {
@@ -87,6 +92,7 @@ function toAdminUser(row: UserAggregateRow) {
 function toAdminUserDetail(row: UserAggregateRow) {
   return {
     ...toAdminUser(row),
+    grantedZoneIds: row.zones.map((z) => z.zoneId),
     locations: row.serviceAddresses.map((address) => ({
       id: address.id,
       line1: address.line1,
@@ -119,9 +125,13 @@ export async function adminUsersHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (req) => {
+      async (req, _ctx, auth) => {
         if (req.method === "POST") {
           const input = await parseJson(req, adminCreateUserSchema);
+          // Only a super admin may create staff (admin/pro-operator) accounts.
+          if (isAdminRole(input.role) && !isSuperAdminRole(auth.role)) {
+            throw new HttpError(403, "Only a super admin can create admin or pro-operator accounts.");
+          }
           const existing = await prisma.user.findUnique({ where: { email: input.email } });
           if (existing) {
             throw new HttpError(409, "That email is already in use by another account.");
@@ -172,7 +182,7 @@ export async function adminUserByIdHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (req) => {
+      async (req, _ctx, auth) => {
         const userId = req.params.userId;
         if (!userId) {
           throw new HttpError(400, "userId is required");
@@ -180,6 +190,10 @@ export async function adminUserByIdHandler(
 
         if (req.method === "PATCH") {
           const input = await parseJson(req, adminUserUpdateSchema);
+          // Only a super admin may set/elevate a user to a staff role.
+          if (input.role !== undefined && isAdminRole(input.role) && !isSuperAdminRole(auth.role)) {
+            throw new HttpError(403, "Only a super admin can grant admin or pro-operator roles.");
+          }
 
           if (input.email) {
             const existing = await prisma.user.findUnique({ where: { email: input.email } });
@@ -371,6 +385,57 @@ export async function adminDashboardMetricsHandler(
         });
 
         return jsonResponse(200, response);
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Super admin sets the zones granted to a user (a pro-operator's admin scope,
+// which also serves as their serviceable areas). Returns the refreshed user.
+export async function adminUserZonesHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        if (!isSuperAdminRole(auth.role)) {
+          throw new HttpError(403, "Only a super admin can grant zones.");
+        }
+        const userId = req.params.userId;
+        if (!userId) {
+          throw new HttpError(400, "userId is required");
+        }
+        const { zoneIds } = await parseJson(req, operatorZonesUpdateSchema);
+        const unique = [...new Set(zoneIds)];
+        const valid = unique.length
+          ? (await prisma.zone.findMany({ where: { id: { in: unique } }, select: { id: true } })).map(
+              (z) => z.id
+            )
+          : [];
+        await prisma.$transaction([
+          prisma.userZone.deleteMany({ where: { userId } }),
+          prisma.userZone.createMany({
+            data: valid.map((zoneId) => ({ userId, zoneId, serves: true }))
+          })
+        ]);
+        const row = await prisma.user.findUnique({
+          where: { id: userId },
+          include: USER_AGGREGATE_INCLUDE
+        });
+        if (!row) {
+          throw new HttpError(404, "User not found");
+        }
+        return jsonResponse(
+          200,
+          adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
+        );
       },
       { roles: ["ADMIN"] }
     )(request, context)

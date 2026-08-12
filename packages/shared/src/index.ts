@@ -426,7 +426,10 @@ export const adminUserLocationSchema = z.object({
 });
 
 export const adminUserDetailSchema = adminUserSchema.extend({
-  locations: z.array(adminUserLocationSchema)
+  locations: z.array(adminUserLocationSchema),
+  // Zones granted to this user (pro-operator admin scope / operator serviceable
+  // areas). Only meaningful for staff roles.
+  grantedZoneIds: z.array(z.string())
 });
 
 export const adminUserResponseSchema = z.object({
@@ -557,6 +560,17 @@ export const operatorZonesUpdateSchema = z.object({
   zoneIds: z.array(z.string()).max(200)
 });
 
+export const zoneCreateSchema = z.object({
+  name: z.string().min(1).max(80),
+  city: z.string().max(80).nullable().optional(),
+  state: z.string().max(40).nullable().optional()
+});
+export const zoneUpdateSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  city: z.string().max(80).nullable().optional(),
+  state: z.string().max(40).nullable().optional()
+});
+
 const zipCodesSchema = z.array(z.string().min(2).max(12)).max(50);
 
 export const neighborhoodCreateSchema = z.object({
@@ -564,7 +578,8 @@ export const neighborhoodCreateSchema = z.object({
   city: z.string().max(80).nullable().optional(),
   state: z.string().max(40).nullable().optional(),
   zipCodes: zipCodesSchema.optional(),
-  isTest: z.boolean().optional()
+  isTest: z.boolean().optional(),
+  zoneId: z.string().nullable().optional()
 });
 
 // Partial update — any subset of fields may be sent.
@@ -573,7 +588,8 @@ export const neighborhoodUpdateSchema = z.object({
   city: z.string().max(80).nullable().optional(),
   state: z.string().max(40).nullable().optional(),
   zipCodes: zipCodesSchema.optional(),
-  isTest: z.boolean().optional()
+  isTest: z.boolean().optional(),
+  zoneId: z.string().nullable().optional()
 });
 
 export const adminLocationSchema = z.object({
@@ -931,6 +947,8 @@ export type Zone = z.infer<typeof zoneSchema>;
 export type ZonesResponse = z.infer<typeof zonesResponseSchema>;
 export type OperatorZonesResponse = z.infer<typeof operatorZonesResponseSchema>;
 export type OperatorZonesUpdate = z.infer<typeof operatorZonesUpdateSchema>;
+export type ZoneCreate = z.infer<typeof zoneCreateSchema>;
+export type ZoneUpdate = z.infer<typeof zoneUpdateSchema>;
 export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
 export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
 export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;

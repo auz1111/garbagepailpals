@@ -25,12 +25,15 @@ import {
   getAdminDashboardMetrics,
   getAdminIncidents,
   getAdminRuntimeMetrics,
+  getZones,
+  setUserZones,
   reopenAdminIncident,
   resolveAdminIncident
 } from "../lib/api";
 import { TodaysRoute } from "./TodaysRoute";
 import { TodaysRoutesHero } from "./TodaysRoutesHero";
 import { RouteHistory } from "./RouteHistory";
+import { ZonesAdmin } from "./ZonesAdmin";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
@@ -45,6 +48,7 @@ export const ADMIN_NAV = [
   { to: "/admin", label: "Dashboard", icon: "📊", end: true },
   { to: "/admin/routes", label: "Today's Routes", icon: "🗺️" },
   { to: "/admin/history", label: "Route History", icon: "🕓" },
+  { to: "/admin/zones", label: "Service Areas", icon: "🗺", superOnly: true },
   { to: "/admin/neighborhoods", label: "Neighborhoods", icon: "🏘️" },
   { to: "/admin/users", label: "Users", icon: "👥" },
   { to: "/admin/incidents", label: "Incidents", icon: "🚨" }
@@ -303,7 +307,9 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
                 <option value="ALL">All roles</option>
                 <option value="CUSTOMER">Customers</option>
                 <option value="OPERATOR">Operators</option>
+                <option value="PRO_OPERATOR">Pro operators</option>
                 <option value="ADMIN">Admins</option>
+                <option value="SUPER_ADMIN">Super admins</option>
               </select>
             </label>
           </div>
@@ -710,6 +716,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
         <Route index element={renderDashboard()} />
         <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />
         <Route path="history" element={<RouteHistory accessToken={accessToken} />} />
+        <Route path="zones" element={<ZonesAdmin accessToken={accessToken} />} />
         <Route path="neighborhoods" element={<NeighborhoodsAdmin accessToken={accessToken} />} />
         <Route path="operators" element={<OperatorsAdmin accessToken={accessToken} />} />
         <Route
@@ -753,6 +760,31 @@ function AdminUserDetail({
   const [area, setArea] = useState(user.requestedServiceArea ?? "");
   const [operatorAccess, setOperatorAccess] = useState(user.operatorAccess);
   const [submitted, setSubmitted] = useState(false);
+
+  // Super-admin grants zones to a pro-operator (their admin scope + serviceable
+  // areas). Only shown for pro-operators.
+  const showZoneGrants = user.role === "PRO_OPERATOR";
+  const detailQueryClient = useQueryClient();
+  const grantZonesQuery = useQuery({
+    queryKey: ["zones"],
+    queryFn: async () => getZones(accessToken),
+    enabled: showZoneGrants
+  });
+  const grantZones = grantZonesQuery.data?.zones ?? [];
+  const grantedSet = new Set(user.grantedZoneIds);
+  const grantMutation = useMutation({
+    mutationFn: (zoneIds: string[]) => setUserZones(user.id, zoneIds, accessToken),
+    onSuccess: () => {
+      void detailQueryClient.invalidateQueries({ queryKey: ["admin-user", user.id] });
+      void detailQueryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    }
+  });
+  const toggleGrant = (id: string) => {
+    const next = grantedSet.has(id)
+      ? user.grantedZoneIds.filter((x) => x !== id)
+      : [...user.grantedZoneIds, id];
+    grantMutation.mutate(next);
+  };
 
   const dirty =
     name !== user.name ||
@@ -840,7 +872,9 @@ function AdminUserDetail({
             <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
               <option value="CUSTOMER">Customer</option>
               <option value="OPERATOR">Operator</option>
+              <option value="PRO_OPERATOR">Pro operator</option>
               <option value="ADMIN">Admin</option>
+              <option value="SUPER_ADMIN">Super admin</option>
             </select>
           </label>
           {role === "ADMIN" ? (
@@ -914,6 +948,36 @@ function AdminUserDetail({
           </ul>
         )}
       </article>
+
+      {showZoneGrants ? (
+        <article className="panel">
+          <h3>Granted zones</h3>
+          <p className="subtext">
+            Zones this pro-operator can administer and operate in. They only see and route these
+            areas.
+          </p>
+          {grantZones.length === 0 ? (
+            <p className="subtext">No zones exist yet — create them under Service Areas.</p>
+          ) : (
+            <ul className="serve-zone-list">
+              {grantZones.map((z) => (
+                <li className={`serve-zone${grantedSet.has(z.id) ? " is-on" : ""}`} key={z.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={grantedSet.has(z.id)}
+                      disabled={grantMutation.isPending}
+                      onChange={() => toggleGrant(z.id)}
+                    />
+                    <span className="serve-zone-name">{z.name}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {grantMutation.isError ? <p className="error">{getErrorMessage(grantMutation.error)}</p> : null}
+        </article>
+      ) : null}
     </div>
   );
 }
@@ -1423,7 +1487,9 @@ function CreateUserForm({
           <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
             <option value="CUSTOMER">Customer</option>
             <option value="OPERATOR">Operator</option>
+            <option value="PRO_OPERATOR">Pro operator</option>
             <option value="ADMIN">Admin</option>
+            <option value="SUPER_ADMIN">Super admin</option>
           </select>
         </label>
         {role === "ADMIN" ? (

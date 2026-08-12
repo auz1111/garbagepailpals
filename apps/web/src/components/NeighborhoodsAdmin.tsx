@@ -5,6 +5,7 @@ import {
   deleteNeighborhood,
   getAdminLocations,
   getNeighborhoods,
+  getZones,
   setLocationNeighborhood,
   updateNeighborhood
 } from "../lib/api";
@@ -41,7 +42,13 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
   const [editState, setEditState] = useState("");
   const [editZips, setEditZips] = useState("");
   const [editIsTest, setEditIsTest] = useState(false);
+  const [newZoneId, setNewZoneId] = useState("");
+  const [editZoneId, setEditZoneId] = useState("");
   const [locFilter, setLocFilter] = useState<"UNASSIGNED" | "ALL">("UNASSIGNED");
+
+  const zonesQuery = useQuery({ queryKey: ["zones"], queryFn: async () => getZones(accessToken) });
+  const zones = zonesQuery.data?.zones ?? [];
+  const zoneName = (id: string | null) => (id ? zones.find((z) => z.id === id)?.name ?? null : null);
 
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
@@ -69,7 +76,8 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
           name: newName.trim(),
           city: newCity.trim() || null,
           state: newState.trim() || null,
-          zipCodes: parseZips(newZips)
+          zipCodes: parseZips(newZips),
+          zoneId: newZoneId || null
         },
         accessToken
       ),
@@ -79,6 +87,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
       setNewCity("");
       setNewState("");
       setNewZips("");
+      setNewZoneId("");
     }
   });
   const deleteMutation = useMutation({
@@ -97,7 +106,8 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
           city: editCity.trim() || null,
           state: editState.trim() || null,
           zipCodes: parseZips(editZips),
-          isTest: editIsTest
+          isTest: editIsTest,
+          zoneId: editZoneId || null
         },
         accessToken
       ),
@@ -154,6 +164,18 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
               onChange={(event) => setNewZips(event.target.value)}
               placeholder="Zip codes (comma-separated)"
             />
+            <select
+              className="nb-zone"
+              value={newZoneId}
+              onChange={(event) => setNewZoneId(event.target.value)}
+            >
+              <option value="">No zone</option>
+              {zones.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
           </div>
           <button type="submit" className="add-day-btn" disabled={!newName.trim() || createMutation.isPending}>
             {createMutation.isPending ? "Adding…" : "+ Add neighborhood"}
@@ -204,6 +226,18 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                         onChange={(event) => setEditZips(event.target.value)}
                         placeholder="Zip codes (comma-separated)"
                       />
+                      <select
+                        className="nb-zone"
+                        value={editZoneId}
+                        onChange={(event) => setEditZoneId(event.target.value)}
+                      >
+                        <option value="">No zone</option>
+                        {zones.map((z) => (
+                          <option key={z.id} value={z.id}>
+                            {z.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <label className="nb-test-toggle" title="Excluded from the customer service area">
                       <input
@@ -236,6 +270,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                       <strong>{n.name}</strong>
                       {n.isTest ? <span className="nb-test-chip">Test</span> : null}
                       <span className="admin-table-sub">
+                        {zoneName(n.zoneId) ? `${zoneName(n.zoneId)} · ` : "No zone · "}
                         {[n.city, n.state].filter(Boolean).join(", ") || "No city/state set"}
                         {n.zipCodes.length > 0 ? ` · ${n.zipCodes.join(", ")}` : ""}
                       </span>
@@ -254,6 +289,7 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                           setEditState(n.state ?? "");
                           setEditZips(n.zipCodes.join(", "));
                           setEditIsTest(n.isTest);
+                          setEditZoneId(n.zoneId ?? "");
                         }}
                       >
                         Edit

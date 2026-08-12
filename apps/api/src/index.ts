@@ -30,6 +30,7 @@ import {
   adminUserByIdHandler,
   adminUserAvailabilityHandler,
   adminUsersHandler,
+  adminUserZonesHandler,
   adminDashboardMetricsHandler
 } from "./routes/adminDashboard";
 import {
@@ -55,6 +56,7 @@ import {
   adminLocationsHandler,
   adminNeighborhoodByIdHandler,
   adminNeighborhoodsHandler,
+  adminZoneByIdHandler,
   adminZonesHandler
 } from "./routes/neighborhoods";
 import { operatorAvailabilityHandler } from "./routes/operatorAvailability";
@@ -149,6 +151,13 @@ app.http("admin-user-availability", {
   methods: ["GET", "PUT", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminUserAvailabilityHandler
+});
+
+app.http("admin-user-zones", {
+  route: "ops-admin/users/{userId}/zones",
+  methods: ["PUT", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminUserZonesHandler
 });
 
 app.http("admin-todays-route", {
@@ -258,9 +267,16 @@ app.http("admin-operator-timeoff", {
 
 app.http("admin-zones", {
   route: "ops-admin/zones",
-  methods: ["GET", "OPTIONS"],
+  methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminZonesHandler
+});
+
+app.http("admin-zone-by-id", {
+  route: "ops-admin/zones/{zoneId}",
+  methods: ["PATCH", "DELETE", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminZoneByIdHandler
 });
 
 app.http("admin-neighborhoods", {

@@ -3,14 +3,38 @@ import { prisma } from "@gpp/db";
 import {
   adminLocationNeighborhoodUpdateSchema,
   adminLocationsResponseSchema,
+  isSuperAdminRole,
   neighborhoodCreateSchema,
   neighborhoodUpdateSchema,
   neighborhoodsResponseSchema,
+  zoneCreateSchema,
+  zoneUpdateSchema,
   zonesResponseSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
-import { allowedZoneIds } from "../lib/zoneScope";
+
+async function zonesList(userId: string, role: string) {
+  const allowed = isSuperAdminRole(role)
+    ? "ALL"
+    : (await prisma.userZone.findMany({ where: { userId }, select: { zoneId: true } })).map(
+        (r) => r.zoneId
+      );
+  const rows = await prisma.zone.findMany({
+    where: allowed === "ALL" ? {} : { id: { in: allowed } },
+    orderBy: { name: "asc" },
+    include: { _count: { select: { neighborhoods: true } } }
+  });
+  return zonesResponseSchema.parse({
+    zones: rows.map((z) => ({
+      id: z.id,
+      name: z.name,
+      city: z.city,
+      state: z.state,
+      neighborhoodCount: z._count.neighborhoods
+    }))
+  });
+}
 
 async function neighborhoodList() {
   const rows = await prisma.neighborhood.findMany({
@@ -32,6 +56,7 @@ async function neighborhoodList() {
 }
 
 // GET zones the caller may administer (super admin: all; pro operator: granted).
+// POST creates a zone (super admin only).
 export async function adminZonesHandler(
   request: HttpRequest,
   context: InvocationContext
@@ -43,25 +68,68 @@ export async function adminZonesHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (_req, _ctx, auth) => {
-        const allowed = await allowedZoneIds(auth);
-        const rows = await prisma.zone.findMany({
-          where: allowed === "ALL" ? {} : { id: { in: allowed } },
-          orderBy: { name: "asc" },
-          include: { _count: { select: { neighborhoods: true } } }
+      async (req, _ctx, auth) => {
+        if (req.method === "POST") {
+          if (!isSuperAdminRole(auth.role)) {
+            throw new HttpError(403, "Only a super admin can manage zones.");
+          }
+          const input = await parseJson(req, zoneCreateSchema);
+          const existing = await prisma.zone.findUnique({ where: { name: input.name } });
+          if (existing) {
+            throw new HttpError(409, "A zone with that name already exists.");
+          }
+          await prisma.zone.create({
+            data: { name: input.name, city: input.city ?? null, state: input.state ?? null }
+          });
+        }
+        return jsonResponse(200, await zonesList(auth.sub, auth.role));
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// PATCH rename / DELETE a zone (super admin only).
+export async function adminZoneByIdHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        if (!isSuperAdminRole(auth.role)) {
+          throw new HttpError(403, "Only a super admin can manage zones.");
+        }
+        const id = req.params.zoneId;
+        if (!id) {
+          throw new HttpError(400, "zoneId is required");
+        }
+        if (req.method === "DELETE") {
+          // Neighborhoods keep their data; their zoneId is nulled (schema FK).
+          await prisma.zone.delete({ where: { id } });
+          return jsonResponse(200, await zonesList(auth.sub, auth.role));
+        }
+        const input = await parseJson(req, zoneUpdateSchema);
+        if (input.name) {
+          const clash = await prisma.zone.findUnique({ where: { name: input.name } });
+          if (clash && clash.id !== id) {
+            throw new HttpError(409, "A zone with that name already exists.");
+          }
+        }
+        await prisma.zone.update({
+          where: { id },
+          data: {
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.city !== undefined ? { city: input.city } : {}),
+            ...(input.state !== undefined ? { state: input.state } : {})
+          }
         });
-        return jsonResponse(
-          200,
-          zonesResponseSchema.parse({
-            zones: rows.map((z) => ({
-              id: z.id,
-              name: z.name,
-              city: z.city,
-              state: z.state,
-              neighborhoodCount: z._count.neighborhoods
-            }))
-          })
-        );
+        return jsonResponse(200, await zonesList(auth.sub, auth.role));
       },
       { roles: ["ADMIN"] }
     )(request, context)
@@ -93,7 +161,8 @@ export async function adminNeighborhoodsHandler(
               city: input.city ?? null,
               state: input.state ?? null,
               zipCodes: input.zipCodes ?? [],
-              isTest: input.isTest ?? false
+              isTest: input.isTest ?? false,
+              zoneId: input.zoneId ?? null
             }
           });
           return jsonResponse(201, await neighborhoodList());
@@ -140,7 +209,8 @@ export async function adminNeighborhoodByIdHandler(
             ...(input.city !== undefined ? { city: input.city } : {}),
             ...(input.state !== undefined ? { state: input.state } : {}),
             ...(input.zipCodes !== undefined ? { zipCodes: input.zipCodes } : {}),
-            ...(input.isTest !== undefined ? { isTest: input.isTest } : {})
+            ...(input.isTest !== undefined ? { isTest: input.isTest } : {}),
+            ...(input.zoneId !== undefined ? { zoneId: input.zoneId } : {})
           }
         });
         return jsonResponse(200, await neighborhoodList());

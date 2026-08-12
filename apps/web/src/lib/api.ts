@@ -21,6 +21,8 @@ import type {
   AssignedRoutesResponse,
   RouteHistoryResponse,
   ZonesResponse,
+  ZoneCreate,
+  ZoneUpdate,
   OperatorZonesResponse,
   NeighborhoodsResponse,
   NeighborhoodCreate,
@@ -263,6 +265,45 @@ function scopeQuery(params: Record<string, string | undefined>): string {
 
 export function getZones(accessToken: string): Promise<ZonesResponse> {
   return request<undefined, ZonesResponse>("/ops-admin/zones", "GET", undefined, accessToken);
+}
+
+export function createZone(input: ZoneCreate, accessToken: string): Promise<ZonesResponse> {
+  return request<ZoneCreate, ZonesResponse>("/ops-admin/zones", "POST", input, accessToken);
+}
+
+export function updateZone(
+  zoneId: string,
+  input: ZoneUpdate,
+  accessToken: string
+): Promise<ZonesResponse> {
+  return request<ZoneUpdate, ZonesResponse>(
+    `/ops-admin/zones/${zoneId}`,
+    "PATCH",
+    input,
+    accessToken
+  );
+}
+
+export function deleteZone(zoneId: string, accessToken: string): Promise<ZonesResponse> {
+  return request<undefined, ZonesResponse>(
+    `/ops-admin/zones/${zoneId}`,
+    "DELETE",
+    undefined,
+    accessToken
+  );
+}
+
+export function setUserZones(
+  userId: string,
+  zoneIds: string[],
+  accessToken: string
+): Promise<AdminUserResponse> {
+  return request<{ zoneIds: string[] }, AdminUserResponse>(
+    `/ops-admin/users/${userId}/zones`,
+    "PUT",
+    { zoneIds },
+    accessToken
+  );
 }
 
 export function getAssignedRoutes(
