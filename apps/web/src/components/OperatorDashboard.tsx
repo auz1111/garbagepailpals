@@ -180,7 +180,7 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
       </div>
 
       <article className="panel">
-        <h3>My time off</h3>
+        <h3>My schedule</h3>
         <p className="subtext">
           You're available by default. Tap a day to request it off — an admin approves time off. Tap a
           pending request again to cancel it.

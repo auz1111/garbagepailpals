@@ -819,16 +819,17 @@ a {
   align-items: center;
   gap: 0;
   padding: 0.3rem 0.1rem;
-  border: 1px solid var(--line);
+  border: 1px solid #5cb576;
   border-radius: var(--r-sm);
-  background: var(--surface);
-  color: var(--ink);
+  background: #bfe6cb; /* available — green, matching the admin operators grid */
+  color: #14532d;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, transform 0.1s ease;
+  transition: filter 0.12s ease, transform 0.1s ease;
 }
 
 .availability-day:hover {
-  border-color: var(--teal-bright);
+  filter: brightness(0.94);
+  transform: translateY(-1px);
 }
 
 .availability-day.is-on {
@@ -839,9 +840,9 @@ a {
 
 /* Time-off day states (operator calendar). Available = default surface. */
 .availability-day.is-off-pending {
-  background: #fff7e6;
-  border-color: var(--gold);
-  color: var(--ink);
+  background: var(--gold);
+  border-color: #cf8b00;
+  color: var(--teal-deep);
 }
 
 .availability-day.is-off-approved {
@@ -862,8 +863,8 @@ a {
 }
 
 .legend-available {
-  background: var(--surface);
-  border: 1px solid var(--line-2);
+  background: #bfe6cb;
+  border: 1px solid #5cb576;
 }
 
 .legend-pending {

@@ -693,7 +693,11 @@ export function App() {
             <Route
               path="/operator"
               element={
-                user && accessToken ? <OperatorDashboard user={user} accessToken={accessToken} /> : null
+                user && accessToken ? (
+                  <section className="card role-shell">
+                    <OperatorDashboard user={user} accessToken={accessToken} />
+                  </section>
+                ) : null
               }
             />
           </Route>
