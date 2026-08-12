@@ -8,6 +8,7 @@ import type {
   CreateAddressRequest,
   PickupDay,
   PickupDayInput,
+  PickupScheduleSuggestion,
   PricingDay
 } from "@gpp/shared";
 import {
@@ -27,6 +28,7 @@ import {
   createStripeCheckout,
   createStripePortal,
   getBillingSummary,
+  getPickupScheduleSuggestion,
   updateSubscription,
   listAddresses,
   listHistoryJobs,
@@ -105,6 +107,10 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   // Inline service-area check for the Add Address form.
   const [areaCheck, setAreaCheck] = useState<{ postalCode: string; eligible: boolean } | null>(null);
   const [areaChecking, setAreaChecking] = useState(false);
+  // Best-effort pre-fill of the first pickup day from the customer's trash hauler.
+  const [pickupSuggestion, setPickupSuggestion] = useState<PickupScheduleSuggestion | null>(null);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   // The add-address form is hidden once the user has addresses (opened via a button).
   const [showAddressForm, setShowAddressForm] = useState(false);
 
@@ -131,6 +137,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     createAddressMutation.reset();
     addressForm.reset(defaultAddressValues);
     setAreaCheck(null);
+    setPickupSuggestion(null);
+    setSuggestionDismissed(false);
   }
 
   async function checkAddressArea(postalCode: string): Promise<void> {
@@ -147,6 +155,50 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       setAreaCheck(null);
     } finally {
       setAreaChecking(false);
+    }
+    // Once we have a full address, try to pre-fill the first pickup day from the
+    // customer's trash hauler (Cascade Disposal, etc.).
+    void lookupPickupSchedule();
+  }
+
+  // datetime-local expects "YYYY-MM-DDTHH:mm"; seed a biweekly anchor from the
+  // hauler's next pickup date (time is irrelevant to week parity).
+  function toAnchorInput(isoDate: string): string {
+    return `${isoDate.slice(0, 10)}T08:00`;
+  }
+
+  function applyPickupSuggestion(suggestion: PickupScheduleSuggestion): void {
+    const garbage = suggestion.garbage;
+    if (!garbage) {
+      return;
+    }
+    addressForm.setValue("pickupDayOfWeek", garbage.dayOfWeek);
+    addressForm.setValue("cadence", garbage.cadence);
+    if (garbage.cadence === "BIWEEKLY" && garbage.nextDate) {
+      addressForm.setValue("biweeklyAnchorDate", toAnchorInput(garbage.nextDate));
+    }
+  }
+
+  async function lookupPickupSchedule(): Promise<void> {
+    const { line1, city, state, postalCode } = addressForm.getValues();
+    if (!line1?.trim() || !city?.trim() || !state?.trim() || !postalCode?.trim()) {
+      return;
+    }
+    setSuggestionLoading(true);
+    setSuggestionDismissed(false);
+    try {
+      const result = await getPickupScheduleSuggestion(
+        { line1: line1.trim(), city: city.trim(), state: state.trim(), postalCode: postalCode.trim() },
+        accessToken
+      );
+      setPickupSuggestion(result);
+      if (result.matched) {
+        applyPickupSuggestion(result);
+      }
+    } catch {
+      setPickupSuggestion(null);
+    } finally {
+      setSuggestionLoading(false);
     }
   }
 
@@ -192,6 +244,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       addressForm.reset(defaultAddressValues);
       setAreaCheck(null);
+      setPickupSuggestion(null);
+      setSuggestionDismissed(false);
       setShowAddressForm(false);
     }
   });
@@ -749,6 +803,42 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 />
               </label>
               <h4 className="form-section-title">First pickup day</h4>
+              {suggestionLoading ? (
+                <p className="subtext">Checking your hauler's pickup schedule…</p>
+              ) : pickupSuggestion?.matched && pickupSuggestion.garbage && !suggestionDismissed ? (
+                <div className="pickup-suggestion">
+                  <p>
+                    <strong>
+                      We found your schedule
+                      {pickupSuggestion.providerLabel ? ` — ${pickupSuggestion.providerLabel}` : ""}.
+                    </strong>{" "}
+                    Garbage is picked up{" "}
+                    <strong>
+                      {WEEKDAYS[pickupSuggestion.garbage.dayOfWeek]},{" "}
+                      {pickupSuggestion.garbage.cadence === "BIWEEKLY" ? "every 2 weeks" : "every week"}
+                    </strong>
+                    . We've set your first pickup below — adjust it if that's not right.
+                  </p>
+                  {pickupSuggestion.recycling ? (
+                    <p className="subtext">
+                      Recycling: {WEEKDAYS[pickupSuggestion.recycling.dayOfWeek]},{" "}
+                      {pickupSuggestion.recycling.cadence === "BIWEEKLY" ? "every 2 weeks" : "every week"}.
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => setSuggestionDismissed(true)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : pickupSuggestion && !pickupSuggestion.matched ? (
+                <p className="subtext">
+                  We couldn't look up your hauler's schedule automatically — set your first pickup day
+                  below.
+                </p>
+              ) : null}
               <div className="field-row">
                 <label>
                   Pickup day

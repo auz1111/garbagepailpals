@@ -161,6 +161,23 @@ model ServiceAddress {
   @@index([neighborhoodId])
 }
 
+// Cache of third-party hauler pickup-schedule lookups (e.g. Cascade Disposal via
+// ReCollect), keyed by a normalized address hash so it's reused across users at
+// the same address. Refreshed periodically; schedules change rarely.
+model HaulerScheduleLookup {
+  id          String   @id @default(cuid())
+  addressHash String   @unique
+  provider    String
+  externalId  String?
+  matched     Boolean  @default(false)
+  suggestion  Json
+  fetchedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([provider])
+}
+
 model Neighborhood {
   id        String           @id @default(cuid())
   name      String           @unique

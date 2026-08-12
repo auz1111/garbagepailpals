@@ -72,6 +72,39 @@ export const serviceAreaCheckResponseSchema = z.object({
   eligible: z.boolean()
 });
 
+// --- Hauler pickup-schedule lookup ---------------------------------------
+// When a customer adds a location we try to look up their real trash hauler's
+// collection schedule (e.g. Cascade Disposal via ReCollect) and pre-fill the
+// first pickup day. This is best-effort: `matched:false` means we couldn't
+// determine it and the customer sets it manually.
+export const PICKUP_STREAM_KINDS = ["GARBAGE", "RECYCLING", "YARD", "OTHER"] as const;
+
+export const pickupStreamSchema = z.object({
+  // Which collection stream this is.
+  kind: z.enum(PICKUP_STREAM_KINDS),
+  // Friendly hauler label, e.g. "Trash", "Mixed Recycling".
+  label: z.string(),
+  // 0=Sun..6=Sat, matching ServiceSchedule.pickupDayOfWeek / JS getDay.
+  dayOfWeek: z.number().int().min(0).max(6),
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
+  // ISO date of the next occurrence — used to seed a biweekly anchor date.
+  nextDate: z.string().optional()
+});
+
+export const pickupScheduleSuggestionSchema = z.object({
+  matched: z.boolean(),
+  // Machine id of the hauler that matched, e.g. "cascade".
+  provider: z.string().optional(),
+  // Friendly hauler name, e.g. "Cascade Disposal".
+  providerLabel: z.string().optional(),
+  // The garbage stream we suggest pre-filling into the first pickup day.
+  garbage: pickupStreamSchema.optional(),
+  // Recycling stream, shown as an informational hint.
+  recycling: pickupStreamSchema.optional(),
+  // Every stream we found (garbage, recycling, yard, …).
+  streams: z.array(pickupStreamSchema).default([])
+});
+
 export const serviceAddressInputSchema = z.object({
   line1: z.string().min(1).max(120),
   line2: z.string().max(120).optional(),
@@ -962,6 +995,8 @@ export type CurrentUser = z.infer<typeof currentUserSchema>;
 export type MeResponse = z.infer<typeof meResponseSchema>;
 export type ProtectedMessage = z.infer<typeof protectedMessageSchema>;
 export type ServiceAreaCheckResponse = z.infer<typeof serviceAreaCheckResponseSchema>;
+export type PickupStream = z.infer<typeof pickupStreamSchema>;
+export type PickupScheduleSuggestion = z.infer<typeof pickupScheduleSuggestionSchema>;
 export type ServiceAddressInput = z.infer<typeof serviceAddressInputSchema>;
 export type CreateAddressRequest = z.infer<typeof createAddressRequestSchema>;
 export type ServiceAddress = z.infer<typeof serviceAddressSchema>;

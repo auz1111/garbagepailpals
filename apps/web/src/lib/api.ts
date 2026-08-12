@@ -56,6 +56,7 @@ import type {
   ServiceAddressInput,
   CreateAddressRequest,
   ServiceAreaCheckResponse,
+  PickupScheduleSuggestion,
   ServiceJob,
   PickupDay,
   ScheduleUpdateInput,
@@ -615,6 +616,21 @@ export function reopenAdminIncident(
 export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {
   const params = new URLSearchParams({ postalCode });
   return request<undefined, ServiceAreaCheckResponse>(`/service-areas/check?${params.toString()}`, "GET");
+}
+
+// Best-effort lookup of the customer's trash hauler pickup schedule so the Add
+// Location form can pre-fill the first pickup day.
+export function getPickupScheduleSuggestion(
+  input: { line1: string; city: string; state: string; postalCode: string },
+  accessToken: string
+): Promise<PickupScheduleSuggestion> {
+  const params = new URLSearchParams(input);
+  return request<undefined, PickupScheduleSuggestion>(
+    `/service-areas/pickup-schedule?${params.toString()}`,
+    "GET",
+    undefined,
+    accessToken
+  );
 }
 
 type ServiceAreaRequestResponse = {

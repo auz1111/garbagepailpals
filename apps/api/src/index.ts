@@ -2,7 +2,11 @@ import { app } from "@azure/functions";
 import { healthHandler } from "./routes/health";
 import { loginHandler, refreshHandler, registerHandler } from "./routes/auth";
 import { meHandler } from "./routes/protected";
-import { requestServiceAreaHandler, serviceAreaCheckHandler } from "./routes/domain/serviceAreas";
+import {
+  pickupScheduleLookupHandler,
+  requestServiceAreaHandler,
+  serviceAreaCheckHandler
+} from "./routes/domain/serviceAreas";
 import {
   addressByIdHandler,
   addressHoldsHandler,
@@ -375,6 +379,13 @@ app.http("service-area-request", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: requestServiceAreaHandler
+});
+
+app.http("service-area-pickup-schedule", {
+  route: "service-areas/pickup-schedule",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pickupScheduleLookupHandler
 });
 
 app.http("addresses", {
