@@ -493,6 +493,9 @@ export const adminTimeOffUpdateSchema = z.object({
 export const neighborhoodSchema = z.object({
   id: z.string(),
   name: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  zipCodes: z.array(z.string()),
   locationCount: z.number().int().nonnegative()
 });
 
@@ -500,8 +503,21 @@ export const neighborhoodsResponseSchema = z.object({
   neighborhoods: z.array(neighborhoodSchema)
 });
 
+const zipCodesSchema = z.array(z.string().min(2).max(12)).max(50);
+
 export const neighborhoodCreateSchema = z.object({
-  name: z.string().min(1).max(80)
+  name: z.string().min(1).max(80),
+  city: z.string().max(80).nullable().optional(),
+  state: z.string().max(40).nullable().optional(),
+  zipCodes: zipCodesSchema.optional()
+});
+
+// Partial update — any subset of fields may be sent.
+export const neighborhoodUpdateSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  city: z.string().max(80).nullable().optional(),
+  state: z.string().max(40).nullable().optional(),
+  zipCodes: zipCodesSchema.optional()
 });
 
 export const adminLocationSchema = z.object({
@@ -809,6 +825,7 @@ export type OperatorRoutesResponse = z.infer<typeof operatorRoutesResponseSchema
 export type Neighborhood = z.infer<typeof neighborhoodSchema>;
 export type NeighborhoodsResponse = z.infer<typeof neighborhoodsResponseSchema>;
 export type NeighborhoodCreate = z.infer<typeof neighborhoodCreateSchema>;
+export type NeighborhoodUpdate = z.infer<typeof neighborhoodUpdateSchema>;
 export type AdminLocation = z.infer<typeof adminLocationSchema>;
 export type AdminLocationsResponse = z.infer<typeof adminLocationsResponseSchema>;
 export type AdminLocationNeighborhoodUpdate = z.infer<typeof adminLocationNeighborhoodUpdateSchema>;

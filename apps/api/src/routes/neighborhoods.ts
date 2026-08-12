@@ -4,6 +4,7 @@ import {
   adminLocationNeighborhoodUpdateSchema,
   adminLocationsResponseSchema,
   neighborhoodCreateSchema,
+  neighborhoodUpdateSchema,
   neighborhoodsResponseSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
@@ -15,7 +16,14 @@ async function neighborhoodList() {
     include: { _count: { select: { addresses: true } } }
   });
   return neighborhoodsResponseSchema.parse({
-    neighborhoods: rows.map((n) => ({ id: n.id, name: n.name, locationCount: n._count.addresses }))
+    neighborhoods: rows.map((n) => ({
+      id: n.id,
+      name: n.name,
+      city: n.city,
+      state: n.state,
+      zipCodes: n.zipCodes,
+      locationCount: n._count.addresses
+    }))
   });
 }
 
@@ -33,12 +41,19 @@ export async function adminNeighborhoodsHandler(
     withAuth(
       async (req) => {
         if (req.method === "POST") {
-          const { name } = await parseJson(req, neighborhoodCreateSchema);
-          const existing = await prisma.neighborhood.findUnique({ where: { name } });
+          const input = await parseJson(req, neighborhoodCreateSchema);
+          const existing = await prisma.neighborhood.findUnique({ where: { name: input.name } });
           if (existing) {
             throw new HttpError(409, "A neighborhood with that name already exists.");
           }
-          await prisma.neighborhood.create({ data: { name } });
+          await prisma.neighborhood.create({
+            data: {
+              name: input.name,
+              city: input.city ?? null,
+              state: input.state ?? null,
+              zipCodes: input.zipCodes ?? []
+            }
+          });
           return jsonResponse(201, await neighborhoodList());
         }
         return jsonResponse(200, await neighborhoodList());
@@ -69,12 +84,22 @@ export async function adminNeighborhoodByIdHandler(
           await prisma.neighborhood.delete({ where: { id } });
           return jsonResponse(200, await neighborhoodList());
         }
-        const { name } = await parseJson(req, neighborhoodCreateSchema);
-        const clash = await prisma.neighborhood.findUnique({ where: { name } });
-        if (clash && clash.id !== id) {
-          throw new HttpError(409, "A neighborhood with that name already exists.");
+        const input = await parseJson(req, neighborhoodUpdateSchema);
+        if (input.name) {
+          const clash = await prisma.neighborhood.findUnique({ where: { name: input.name } });
+          if (clash && clash.id !== id) {
+            throw new HttpError(409, "A neighborhood with that name already exists.");
+          }
         }
-        await prisma.neighborhood.update({ where: { id }, data: { name } });
+        await prisma.neighborhood.update({
+          where: { id },
+          data: {
+            ...(input.name !== undefined ? { name: input.name } : {}),
+            ...(input.city !== undefined ? { city: input.city } : {}),
+            ...(input.state !== undefined ? { state: input.state } : {}),
+            ...(input.zipCodes !== undefined ? { zipCodes: input.zipCodes } : {})
+          }
+        });
         return jsonResponse(200, await neighborhoodList());
       },
       { roles: ["ADMIN"] }

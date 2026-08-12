@@ -21,6 +21,7 @@ import type {
   AssignedRoutesResponse,
   NeighborhoodsResponse,
   NeighborhoodCreate,
+  NeighborhoodUpdate,
   AdminLocationsResponse,
   AdminLocationNeighborhoodUpdate,
   AvailableOperatorsResponse,
@@ -197,24 +198,27 @@ export function getNeighborhoods(accessToken: string): Promise<NeighborhoodsResp
   return request<undefined, NeighborhoodsResponse>("/ops-admin/neighborhoods", "GET", undefined, accessToken);
 }
 
-export function createNeighborhood(name: string, accessToken: string): Promise<NeighborhoodsResponse> {
+export function createNeighborhood(
+  input: NeighborhoodCreate,
+  accessToken: string
+): Promise<NeighborhoodsResponse> {
   return request<NeighborhoodCreate, NeighborhoodsResponse>(
     "/ops-admin/neighborhoods",
     "POST",
-    { name },
+    input,
     accessToken
   );
 }
 
-export function renameNeighborhood(
+export function updateNeighborhood(
   id: string,
-  name: string,
+  patch: NeighborhoodUpdate,
   accessToken: string
 ): Promise<NeighborhoodsResponse> {
-  return request<NeighborhoodCreate, NeighborhoodsResponse>(
+  return request<NeighborhoodUpdate, NeighborhoodsResponse>(
     `/ops-admin/neighborhoods/${id}`,
     "PATCH",
-    { name },
+    patch,
     accessToken
   );
 }

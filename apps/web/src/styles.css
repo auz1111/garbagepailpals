@@ -901,6 +901,38 @@ a {
   margin: 0.5rem 0 0.8rem;
 }
 
+/* Neighborhood create/edit form with name + city + state + zips. */
+.neighborhood-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0.5rem 0 0.8rem;
+  width: 100%;
+}
+
+.neighborhood-fields {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1.4fr) minmax(7rem, 1fr) minmax(4rem, 0.5fr) minmax(11rem, 1.6fr);
+  gap: 0.5rem;
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+
+.neighborhood-fields input {
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .neighborhood-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+  .neighborhood-fields .nb-name,
+  .neighborhood-fields .nb-zips {
+    grid-column: 1 / -1;
+  }
+}
+
 .neighborhood-add input {
   flex: 1;
   max-width: 340px;

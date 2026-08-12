@@ -5,8 +5,8 @@ import {
   deleteNeighborhood,
   getAdminLocations,
   getNeighborhoods,
-  renameNeighborhood,
-  setLocationNeighborhood
+  setLocationNeighborhood,
+  updateNeighborhood
 } from "../lib/api";
 
 type NeighborhoodsAdminProps = {
@@ -17,11 +17,29 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
+// Split a free-text field into a deduped list of zip codes (comma/space/newline).
+function parseZips(input: string): string[] {
+  return Array.from(
+    new Set(
+      input
+        .split(/[\s,]+/)
+        .map((z) => z.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JSX.Element {
   const queryClient = useQueryClient();
   const [newName, setNewName] = useState("");
+  const [newCity, setNewCity] = useState("");
+  const [newState, setNewState] = useState("");
+  const [newZips, setNewZips] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [editCity, setEditCity] = useState("");
+  const [editState, setEditState] = useState("");
+  const [editZips, setEditZips] = useState("");
   const [locFilter, setLocFilter] = useState<"UNASSIGNED" | "ALL">("UNASSIGNED");
 
   const neighborhoodsQuery = useQuery({
@@ -44,10 +62,22 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
   };
 
   const createMutation = useMutation({
-    mutationFn: () => createNeighborhood(newName.trim(), accessToken),
+    mutationFn: () =>
+      createNeighborhood(
+        {
+          name: newName.trim(),
+          city: newCity.trim() || null,
+          state: newState.trim() || null,
+          zipCodes: parseZips(newZips)
+        },
+        accessToken
+      ),
     onSuccess: (data) => {
       queryClient.setQueryData(["neighborhoods"], data);
       setNewName("");
+      setNewCity("");
+      setNewState("");
+      setNewZips("");
     }
   });
   const deleteMutation = useMutation({
@@ -57,13 +87,22 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
       void queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
     }
   });
-  const renameMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => renameNeighborhood(id, name, accessToken),
+  const updateMutation = useMutation({
+    mutationFn: ({ id }: { id: string }) =>
+      updateNeighborhood(
+        id,
+        {
+          name: editName.trim(),
+          city: editCity.trim() || null,
+          state: editState.trim() || null,
+          zipCodes: parseZips(editZips)
+        },
+        accessToken
+      ),
     onSuccess: (data) => {
       queryClient.setQueryData(["neighborhoods"], data);
       void queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
       setEditingId(null);
-      setEditName("");
     }
   });
   const assignMutation = useMutation({
@@ -82,23 +121,44 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
       <article className="panel">
         <h3>Neighborhoods</h3>
         <form
-          className="neighborhood-add"
+          className="neighborhood-form"
           onSubmit={(event) => {
             event.preventDefault();
             if (newName.trim()) createMutation.mutate();
           }}
         >
-          <input
-            value={newName}
-            onChange={(event) => setNewName(event.target.value)}
-            placeholder="New neighborhood name"
-          />
+          <div className="neighborhood-fields">
+            <input
+              className="nb-name"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder="Neighborhood name"
+            />
+            <input
+              className="nb-city"
+              value={newCity}
+              onChange={(event) => setNewCity(event.target.value)}
+              placeholder="City"
+            />
+            <input
+              className="nb-state"
+              value={newState}
+              onChange={(event) => setNewState(event.target.value)}
+              placeholder="State"
+            />
+            <input
+              className="nb-zips"
+              value={newZips}
+              onChange={(event) => setNewZips(event.target.value)}
+              placeholder="Zip codes (comma-separated)"
+            />
+          </div>
           <button type="submit" className="add-day-btn" disabled={!newName.trim() || createMutation.isPending}>
-            {createMutation.isPending ? "Adding…" : "+ Add"}
+            {createMutation.isPending ? "Adding…" : "+ Add neighborhood"}
           </button>
         </form>
         {createMutation.isError ? <p className="error">{getErrorMessage(createMutation.error)}</p> : null}
-        {renameMutation.isError ? <p className="error">{getErrorMessage(renameMutation.error)}</p> : null}
+        {updateMutation.isError ? <p className="error">{getErrorMessage(updateMutation.error)}</p> : null}
 
         {neighborhoodsQuery.isLoading ? (
           <p className="subtext">Loading…</p>
@@ -110,40 +170,64 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
               <li className="neighborhood-row" key={n.id}>
                 {editingId === n.id ? (
                   <form
-                    className="neighborhood-add"
+                    className="neighborhood-form"
                     onSubmit={(event) => {
                       event.preventDefault();
-                      const trimmed = editName.trim();
-                      if (trimmed && trimmed !== n.name) {
-                        renameMutation.mutate({ id: n.id, name: trimmed });
-                      } else {
-                        setEditingId(null);
-                      }
+                      if (editName.trim()) updateMutation.mutate({ id: n.id });
                     }}
                   >
-                    <input
-                      value={editName}
-                      onChange={(event) => setEditName(event.target.value)}
-                      autoFocus
-                    />
-                    <button type="submit" className="add-day-btn" disabled={!editName.trim() || renameMutation.isPending}>
-                      {renameMutation.isPending ? "Saving…" : "Save"}
-                    </button>
-                    <button
-                      type="button"
-                      className="address-row-remove"
-                      onClick={() => {
-                        setEditingId(null);
-                        setEditName("");
-                      }}
-                    >
-                      Cancel
-                    </button>
+                    <div className="neighborhood-fields">
+                      <input
+                        className="nb-name"
+                        value={editName}
+                        onChange={(event) => setEditName(event.target.value)}
+                        placeholder="Neighborhood name"
+                        autoFocus
+                      />
+                      <input
+                        className="nb-city"
+                        value={editCity}
+                        onChange={(event) => setEditCity(event.target.value)}
+                        placeholder="City"
+                      />
+                      <input
+                        className="nb-state"
+                        value={editState}
+                        onChange={(event) => setEditState(event.target.value)}
+                        placeholder="State"
+                      />
+                      <input
+                        className="nb-zips"
+                        value={editZips}
+                        onChange={(event) => setEditZips(event.target.value)}
+                        placeholder="Zip codes (comma-separated)"
+                      />
+                    </div>
+                    <div className="neighborhood-row-actions">
+                      <button
+                        type="submit"
+                        className="add-day-btn"
+                        disabled={!editName.trim() || updateMutation.isPending}
+                      >
+                        {updateMutation.isPending ? "Saving…" : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        className="address-row-remove"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </form>
                 ) : (
                   <>
                     <div>
                       <strong>{n.name}</strong>
+                      <span className="admin-table-sub">
+                        {[n.city, n.state].filter(Boolean).join(", ") || "No city/state set"}
+                        {n.zipCodes.length > 0 ? ` · ${n.zipCodes.join(", ")}` : ""}
+                      </span>
                       <span className="admin-table-sub">
                         {n.locationCount} location{n.locationCount === 1 ? "" : "s"}
                       </span>
@@ -155,9 +239,12 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                         onClick={() => {
                           setEditingId(n.id);
                           setEditName(n.name);
+                          setEditCity(n.city ?? "");
+                          setEditState(n.state ?? "");
+                          setEditZips(n.zipCodes.join(", "));
                         }}
                       >
-                        Rename
+                        Edit
                       </button>
                       <button
                         type="button"

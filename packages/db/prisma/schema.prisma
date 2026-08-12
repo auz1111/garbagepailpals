@@ -158,6 +158,9 @@ model ServiceAddress {
 model Neighborhood {
   id        String           @id @default(cuid())
   name      String           @unique
+  city      String?
+  state     String?
+  zipCodes  String[]         @default([])
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   addresses ServiceAddress[]
