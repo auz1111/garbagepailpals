@@ -1524,6 +1524,14 @@ a {
   color: var(--ink-soft);
 }
 
+.route-color-dot {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
 .assigned-route-lock {
   font-size: 1.1rem;
   padding: 0 0.3rem;

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { AdminTodaysLocation } from "@gpp/shared";
+import type { AdminTodaysLocation, DailyRoute } from "@gpp/shared";
 import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import {
   deleteRoute,
@@ -21,6 +21,38 @@ type TodaysRouteProps = {
 const COLOR_UNASSIGNED = "#9aa5ad"; // gray — not on any route
 const COLOR_AWAITING = "#f7a81b"; // gold — assigned, awaiting operator acceptance
 const COLOR_ACCEPTED = "#055a5f"; // teal — accepted / locked
+
+// Distinct line colors per assigned route (operator), avoiding the pin colors.
+const ROUTE_COLORS = ["#7b2ff7", "#1071e5", "#e5484d", "#d6336c", "#f76707", "#2b8a3e", "#8250df", "#0891b2"];
+
+// Decode an ORS/Google encoded polyline (precision 5) into [lat, lng] pairs.
+function decodePolyline(encoded: string): Array<[number, number]> {
+  const points: Array<[number, number]> = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let byte: number;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+  return points;
+}
 
 function locationColor(loc: AdminTodaysLocation): string {
   if (loc.routeStatus === "ACCEPTED") return COLOR_ACCEPTED;
@@ -52,9 +84,17 @@ function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+type MapRoute = { id: string; color: string; geometry: string | null; stops: DailyRoute["stops"] };
+
 // Read-only map of every serviceable location scheduled today. Pins are colored
-// by whether the location is already on a route.
-function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.Element {
+// by assignment state; each assigned route's path is drawn in its operator color.
+function LocationsMap({
+  locations,
+  routes
+}: {
+  locations: AdminTodaysLocation[];
+  routes: MapRoute[];
+}): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -85,6 +125,17 @@ function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.
       });
 
     const bounds: Array<[number, number]> = [];
+
+    // Draw route lines first, so location pins sit on top of them.
+    routes.forEach((route) => {
+      const path = route.geometry
+        ? decodePolyline(route.geometry)
+        : route.stops.map((s) => [s.lat, s.lng] as [number, number]);
+      if (path.length > 1) {
+        L.polyline(path, { color: route.color, weight: 4, opacity: 0.85 }).addTo(layer);
+      }
+    });
+
     locations.forEach((loc) => {
       L.marker([loc.lat, loc.lng], { icon: pin(locationColor(loc)) })
         .bindPopup(
@@ -100,7 +151,7 @@ function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.
       map.fitBounds(L.latLngBounds(bounds), { padding: [28, 28], maxZoom: 17 });
     }
     setTimeout(() => map.invalidateSize(), 0);
-  }, [locations]);
+  }, [locations, routes]);
 
   return <div className="route-map" ref={containerRef} />;
 }
@@ -121,6 +172,17 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     queryFn: async () => getAssignedRoutes(accessToken)
   });
   const assignedRoutes = assignedQuery.data?.routes ?? [];
+  // Stable color per assigned route, shared between the list and the map lines.
+  const routeColorById = new Map<string, string>();
+  assignedRoutes.forEach((r, i) =>
+    routeColorById.set(r.id, ROUTE_COLORS[i % ROUTE_COLORS.length] ?? "#7b2ff7")
+  );
+  const mapRoutes = assignedRoutes.map((r) => ({
+    id: r.id,
+    color: routeColorById.get(r.id) as string,
+    geometry: r.geometry,
+    stops: r.stops
+  }));
 
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
@@ -366,6 +428,11 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       onClick={() => setExpandedOperator(open ? null : ar.id)}
                     >
                       <span className="assigned-route-chevron">{open ? "▾" : "▸"}</span>
+                      <span
+                        className="route-color-dot"
+                        style={{ background: routeColorById.get(ar.id) }}
+                        aria-hidden="true"
+                      />
                       <strong>{ar.operatorName}</strong>
                       {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
                       <span className="assigned-route-count">
@@ -446,7 +513,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           <p className="subtext">Nothing to service today{scope} — no roll-outs or roll-ins due.</p>
         ) : (
           <>
-            <LocationsMap locations={scopeLocations} />
+            <LocationsMap locations={scopeLocations} routes={mapRoutes} />
             <div className="map-legend">
               <span>
                 <span className="legend-dot" style={{ background: COLOR_UNASSIGNED }} /> Unassigned (
