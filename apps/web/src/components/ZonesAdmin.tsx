@@ -17,6 +17,7 @@ export function ZonesAdmin({ accessToken }: ZonesAdminProps): JSX.Element {
   const [editName, setEditName] = useState("");
   const [editCity, setEditCity] = useState("");
   const [editState, setEditState] = useState("");
+  const [editIsTest, setEditIsTest] = useState(false);
 
   const zonesQuery = useQuery({ queryKey: ["zones"], queryFn: async () => getZones(accessToken) });
   const zones = zonesQuery.data?.zones ?? [];
@@ -43,7 +44,12 @@ export function ZonesAdmin({ accessToken }: ZonesAdminProps): JSX.Element {
     mutationFn: ({ id }: { id: string }) =>
       updateZone(
         id,
-        { name: editName.trim(), city: editCity.trim() || null, state: editState.trim() || null },
+        {
+          name: editName.trim(),
+          city: editCity.trim() || null,
+          state: editState.trim() || null,
+          isTest: editIsTest
+        },
         accessToken
       ),
     onSuccess: (data) => {
@@ -143,6 +149,17 @@ export function ZonesAdmin({ accessToken }: ZonesAdminProps): JSX.Element {
                         placeholder="State"
                       />
                     </div>
+                    <label
+                      className="nb-test-toggle"
+                      title="Excluded from the customer service area"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editIsTest}
+                        onChange={(e) => setEditIsTest(e.target.checked)}
+                      />
+                      Test
+                    </label>
                     <div className="neighborhood-row-actions">
                       <button
                         type="submit"
@@ -164,6 +181,7 @@ export function ZonesAdmin({ accessToken }: ZonesAdminProps): JSX.Element {
                   <>
                     <div>
                       <strong>{z.name}</strong>
+                      {z.isTest ? <span className="nb-test-chip">Test</span> : null}
                       <span className="admin-table-sub">
                         {[z.city, z.state].filter(Boolean).join(", ") || "No city/state set"} ·{" "}
                         {z.neighborhoodCount} neighborhood{z.neighborhoodCount === 1 ? "" : "s"}
@@ -178,6 +196,7 @@ export function ZonesAdmin({ accessToken }: ZonesAdminProps): JSX.Element {
                           setEditName(z.name);
                           setEditCity(z.city ?? "");
                           setEditState(z.state ?? "");
+                          setEditIsTest(z.isTest);
                         }}
                       >
                         Edit

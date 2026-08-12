@@ -523,9 +523,6 @@ export const neighborhoodSchema = z.object({
   city: z.string().nullable(),
   state: z.string().nullable(),
   zipCodes: z.array(z.string()),
-  // Test neighborhoods are for trialing routes/flows and are excluded from the
-  // real customer service area.
-  isTest: z.boolean(),
   // The zone (city/region) this neighborhood belongs to.
   zoneId: z.string().nullable(),
   locationCount: z.number().int().nonnegative()
@@ -541,6 +538,9 @@ export const zoneSchema = z.object({
   name: z.string(),
   city: z.string().nullable(),
   state: z.string().nullable(),
+  // Test zones are for trialing routes/flows and are excluded from the real
+  // customer service area.
+  isTest: z.boolean(),
   neighborhoodCount: z.number().int().nonnegative()
 });
 export const zonesResponseSchema = z.object({
@@ -577,7 +577,8 @@ export const zoneCreateSchema = z.object({
 export const zoneUpdateSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   city: z.string().max(80).nullable().optional(),
-  state: z.string().max(40).nullable().optional()
+  state: z.string().max(40).nullable().optional(),
+  isTest: z.boolean().optional()
 });
 
 const zipCodesSchema = z.array(z.string().min(2).max(12)).max(50);
@@ -587,7 +588,6 @@ export const neighborhoodCreateSchema = z.object({
   city: z.string().max(80).nullable().optional(),
   state: z.string().max(40).nullable().optional(),
   zipCodes: zipCodesSchema.optional(),
-  isTest: z.boolean().optional(),
   zoneId: z.string().nullable().optional()
 });
 
@@ -597,7 +597,6 @@ export const neighborhoodUpdateSchema = z.object({
   city: z.string().max(80).nullable().optional(),
   state: z.string().max(40).nullable().optional(),
   zipCodes: zipCodesSchema.optional(),
-  isTest: z.boolean().optional(),
   zoneId: z.string().nullable().optional()
 });
 

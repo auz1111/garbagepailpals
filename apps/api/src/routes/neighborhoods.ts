@@ -31,6 +31,7 @@ async function zonesList(userId: string, role: string) {
       name: z.name,
       city: z.city,
       state: z.state,
+      isTest: z.isTest,
       neighborhoodCount: z._count.neighborhoods
     }))
   });
@@ -48,7 +49,6 @@ async function neighborhoodList() {
       city: n.city,
       state: n.state,
       zipCodes: n.zipCodes,
-      isTest: n.isTest,
       zoneId: n.zoneId,
       locationCount: n._count.addresses
     }))
@@ -126,7 +126,8 @@ export async function adminZoneByIdHandler(
           data: {
             ...(input.name !== undefined ? { name: input.name } : {}),
             ...(input.city !== undefined ? { city: input.city } : {}),
-            ...(input.state !== undefined ? { state: input.state } : {})
+            ...(input.state !== undefined ? { state: input.state } : {}),
+            ...(input.isTest !== undefined ? { isTest: input.isTest } : {})
           }
         });
         return jsonResponse(200, await zonesList(auth.sub, auth.role));
@@ -161,7 +162,6 @@ export async function adminNeighborhoodsHandler(
               city: input.city ?? null,
               state: input.state ?? null,
               zipCodes: input.zipCodes ?? [],
-              isTest: input.isTest ?? false,
               zoneId: input.zoneId ?? null
             }
           });
@@ -209,7 +209,6 @@ export async function adminNeighborhoodByIdHandler(
             ...(input.city !== undefined ? { city: input.city } : {}),
             ...(input.state !== undefined ? { state: input.state } : {}),
             ...(input.zipCodes !== undefined ? { zipCodes: input.zipCodes } : {}),
-            ...(input.isTest !== undefined ? { isTest: input.isTest } : {}),
             ...(input.zoneId !== undefined ? { zoneId: input.zoneId } : {})
           }
         });

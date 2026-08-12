@@ -18,8 +18,10 @@ export async function isPostalServiceable(
   }
   const neighborhood = await prisma.neighborhood.findFirst({
     where: {
-      ...(opts.includeTest ? {} : { isTest: false }),
-      zipCodes: { has: zip }
+      zipCodes: { has: zip },
+      // A neighborhood in a test zone is excluded from the public service area
+      // (a neighborhood with no zone is treated as real).
+      ...(opts.includeTest ? {} : { OR: [{ zoneId: null }, { zone: { isTest: false } }] })
     },
     select: { id: true }
   });

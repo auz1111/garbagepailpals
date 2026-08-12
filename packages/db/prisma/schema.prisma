@@ -167,7 +167,6 @@ model Neighborhood {
   city      String?
   state     String?
   zipCodes  String[]         @default([])
-  isTest    Boolean          @default(false)
   zoneId    String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
@@ -184,6 +183,7 @@ model Zone {
   name          String         @unique
   city          String?
   state         String?
+  isTest        Boolean        @default(false)
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   neighborhoods Neighborhood[]

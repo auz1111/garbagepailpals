@@ -4,7 +4,7 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { DailyRoute, RouteHistoryResponse } from "@gpp/shared";
 import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
-import { getRouteHistory } from "../lib/api";
+import { getRouteHistory, getZones } from "../lib/api";
 
 type RouteHistoryProps = { accessToken: string };
 
@@ -132,11 +132,15 @@ function HistoryRouteMap({ route }: { route: DailyRoute }): JSX.Element {
 
 export function RouteHistory({ accessToken }: RouteHistoryProps): JSX.Element {
   const [rangeDays, setRangeDays] = useState(30);
+  const [zoneId, setZoneId] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const zonesQuery = useQuery({ queryKey: ["zones"], queryFn: async () => getZones(accessToken) });
+  const zones = zonesQuery.data?.zones ?? [];
+
   const historyQuery = useQuery({
-    queryKey: ["route-history", rangeDays],
-    queryFn: async () => getRouteHistory(rangeDays, accessToken)
+    queryKey: ["route-history", rangeDays, zoneId],
+    queryFn: async () => getRouteHistory(rangeDays, accessToken, zoneId || undefined)
   });
 
   const data: RouteHistoryResponse | undefined = historyQuery.data;
@@ -180,6 +184,28 @@ export function RouteHistory({ accessToken }: RouteHistoryProps): JSX.Element {
           </button>
         ))}
       </div>
+
+      {zones.length > 0 ? (
+        <div className="history-range" role="tablist" aria-label="Service area">
+          <button
+            type="button"
+            className={`history-range-btn${zoneId === "" ? " is-active" : ""}`}
+            onClick={() => setZoneId("")}
+          >
+            All areas
+          </button>
+          {zones.map((z) => (
+            <button
+              key={z.id}
+              type="button"
+              className={`history-range-btn${zoneId === z.id ? " is-active" : ""}`}
+              onClick={() => setZoneId(z.id)}
+            >
+              {z.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {historyQuery.isLoading ? (
         <p className="subtext">Loading route history…</p>

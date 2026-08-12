@@ -318,9 +318,13 @@ export function getAssignedRoutes(
   );
 }
 
-export function getRouteHistory(days: number, accessToken: string): Promise<RouteHistoryResponse> {
+export function getRouteHistory(
+  days: number,
+  accessToken: string,
+  zoneId?: string
+): Promise<RouteHistoryResponse> {
   return request<undefined, RouteHistoryResponse>(
-    `/ops-admin/routes/history?days=${days}`,
+    `/ops-admin/routes/history${scopeQuery({ days: String(days), zoneId })}`,
     "GET",
     undefined,
     accessToken

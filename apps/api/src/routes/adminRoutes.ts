@@ -433,18 +433,21 @@ export async function adminRouteHistoryHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (req) => {
-        const daysParam = Number(new URL(req.url).searchParams.get("days"));
+      async (req, _ctx, auth) => {
+        const url = new URL(req.url);
+        const daysParam = Number(url.searchParams.get("days"));
         const rangeDays = Number.isFinite(daysParam)
           ? Math.min(Math.max(Math.trunc(daysParam), 1), 365)
           : 30;
+        const zoneId = url.searchParams.get("zoneId") || undefined;
+        const zoneIds = await resolveZoneScope(auth, zoneId);
 
         const now = new Date();
         const from = new Date(todayServiceDate(now));
         from.setUTCDate(from.getUTCDate() - (rangeDays - 1));
 
         const rows = await prisma.dailyRoute.findMany({
-          where: { serviceDate: { gte: from } },
+          where: { serviceDate: { gte: from }, ...(zoneIds ? { zoneId: { in: zoneIds } } : {}) },
           include: DAILY_ROUTE_INCLUDE,
           orderBy: [{ serviceDate: "desc" }, { operator: { name: "asc" } }, { createdAt: "asc" }]
         });
