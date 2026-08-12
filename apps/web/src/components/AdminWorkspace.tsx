@@ -29,6 +29,7 @@ import {
   resolveAdminIncident
 } from "../lib/api";
 import { TodaysRoute } from "./TodaysRoute";
+import { TodaysRoutesHero } from "./TodaysRoutesHero";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
@@ -43,7 +44,8 @@ export const ADMIN_NAV = [
   { to: "/admin", label: "Dashboard", icon: "📊", end: true },
   { to: "/admin/routes", label: "Today's Routes", icon: "🗺️" },
   { to: "/admin/neighborhoods", label: "Neighborhoods", icon: "🏘️" },
-  { to: "/admin/users", label: "Users", icon: "👥" }
+  { to: "/admin/users", label: "Users", icon: "👥" },
+  { to: "/admin/incidents", label: "Incidents", icon: "🚨" }
 ] as const;
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -419,6 +421,8 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
         <h2>Admin Dashboard</h2>
       <p className="subtext">Signed in as {user.name}. Metrics refresh on page load.</p>
 
+      <TodaysRoutesHero accessToken={accessToken} />
+
       {!metrics ? (
         <p className="subtext">{metricsQuery.isLoading ? "Loading metrics..." : "No metrics available yet."}</p>
       ) : (
@@ -521,10 +525,17 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
       )}
 
       {runtimeMetricsQuery.error ? <p className="error">{getErrorMessage(runtimeMetricsQuery.error)}</p> : null}
+      </>
+    );
+  }
 
-      <section style={{ marginTop: "1rem" }}>
-        <h3>Incident Feed</h3>
-        <div className="panel" style={{ marginBottom: "0.75rem" }}>
+  function renderIncidents(): JSX.Element {
+    return (
+      <>
+        <h2>Incidents</h2>
+        <p className="subtext">Operational alerts from jobs, notifications, and webhooks.</p>
+
+        <div className="panel" style={{ margin: "1rem 0 0.75rem" }}>
           <div className="button-row" style={{ marginBottom: "0.75rem" }}>
             <span>Open: {incidentStats.open}</span>
             <span>Acknowledged: {incidentStats.acknowledged}</span>
@@ -644,13 +655,12 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
             ))}
           </div>
         )}
-      </section>
 
-      {incidentsQuery.error ? <p className="error">{getErrorMessage(incidentsQuery.error)}</p> : null}
-      {acknowledgeMutation.error ? <p className="error">{getErrorMessage(acknowledgeMutation.error)}</p> : null}
-      {assignMutation.error ? <p className="error">{getErrorMessage(assignMutation.error)}</p> : null}
-      {resolveMutation.error ? <p className="error">{getErrorMessage(resolveMutation.error)}</p> : null}
-      {reopenMutation.error ? <p className="error">{getErrorMessage(reopenMutation.error)}</p> : null}
+        {incidentsQuery.error ? <p className="error">{getErrorMessage(incidentsQuery.error)}</p> : null}
+        {acknowledgeMutation.error ? <p className="error">{getErrorMessage(acknowledgeMutation.error)}</p> : null}
+        {assignMutation.error ? <p className="error">{getErrorMessage(assignMutation.error)}</p> : null}
+        {resolveMutation.error ? <p className="error">{getErrorMessage(resolveMutation.error)}</p> : null}
+        {reopenMutation.error ? <p className="error">{getErrorMessage(reopenMutation.error)}</p> : null}
       </>
     );
   }
@@ -689,6 +699,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
             )
           }
         />
+        <Route path="incidents" element={renderIncidents()} />
         <Route path="users" element={renderUsers()} />
         <Route path="users/:userId" element={renderUserDetail()} />
         <Route path="*" element={<Navigate to="/admin" replace />} />

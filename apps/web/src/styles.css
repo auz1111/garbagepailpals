@@ -1083,6 +1083,218 @@ a {
   flex-wrap: wrap;
 }
 
+/* ===== Today's Routes hero (admin dashboard) ============================= */
+.routes-hero {
+  position: relative;
+  margin: 1rem 0 1.25rem;
+  min-height: 22rem;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  isolation: isolate;
+}
+
+.routes-hero-map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  filter: saturate(0.9);
+}
+
+/* Dark teal scrim so the overlaid text stays readable over the map. */
+.routes-hero-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(120deg, rgba(3, 46, 49, 0.92) 0%, rgba(4, 62, 66, 0.78) 45%, rgba(4, 62, 66, 0.5) 100%);
+}
+
+.routes-hero-overlay {
+  position: relative;
+  z-index: 2;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  color: #ffffff;
+}
+
+.routes-hero-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.routes-hero-eyebrow {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.routes-hero-head h2 {
+  margin: 0.15rem 0;
+  color: #ffffff;
+  font-size: 1.9rem;
+}
+
+.routes-hero-sub {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.95rem;
+  max-width: 42rem;
+}
+
+.routes-hero-cta {
+  flex-shrink: 0;
+  align-self: center;
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  color: var(--teal-deep);
+  font-weight: 800;
+  padding: 0.7rem 1.2rem;
+  border-radius: var(--pill);
+  text-decoration: none;
+  box-shadow: var(--shadow-gold);
+  white-space: nowrap;
+}
+
+.routes-hero-cta:hover {
+  transform: translateY(-1px);
+}
+
+.routes-hero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.rh-stat {
+  flex: 1 1 6rem;
+  min-width: 5rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(2px);
+}
+
+.rh-stat strong {
+  display: block;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.rh-stat span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.rh-stat.is-accepted strong {
+  color: #4ade80;
+}
+.rh-stat.is-awaiting strong {
+  color: var(--gold);
+}
+.rh-stat.is-unassigned strong {
+  color: #cbd5e1;
+}
+
+/* Overall split progress bar (accepted / awaiting / unassigned track). */
+.rh-progress {
+  display: flex;
+  height: 0.7rem;
+  border-radius: var(--pill);
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.rh-progress-seg.accepted {
+  background: #22c55e;
+}
+.rh-progress-seg.awaiting {
+  background: var(--gold);
+}
+
+.rh-routes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.6rem;
+}
+
+.rh-empty {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.85);
+  grid-column: 1 / -1;
+}
+
+.rh-route {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.rh-route-top {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.45rem;
+}
+
+.rh-route-top strong {
+  font-size: 0.95rem;
+}
+
+.rh-route-meta {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  flex: 1;
+  min-width: 0;
+}
+
+.rh-route-pill {
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--pill);
+}
+.rh-route-pill.accepted {
+  background: #22c55e;
+  color: #04321f;
+}
+.rh-route-pill.awaiting {
+  background: var(--gold);
+  color: var(--teal-deep);
+}
+
+.rh-route-bar {
+  height: 0.5rem;
+  border-radius: var(--pill);
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+}
+
+.rh-route-fill {
+  height: 100%;
+  border-radius: var(--pill);
+  transition: width 0.3s ease;
+}
+.rh-route-fill.accepted {
+  background: #22c55e;
+}
+.rh-route-fill.awaiting {
+  background: var(--gold);
+}
+
 /* Section label inside the drawer nav (e.g. "Operators"). */
 .drawer-section {
   margin: 0.75rem 0.8rem 0.2rem;
