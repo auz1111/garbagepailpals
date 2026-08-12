@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { CurrentUser, DailyRoute } from "@gpp/shared";
+import type { CurrentUser, DailyRoute, TimeOffStatus } from "@gpp/shared";
 import {
   acceptOperatorRoute,
-  getOperatorAvailability,
   getOperatorRoutes,
-  setOperatorAvailability
+  getOperatorTimeOff,
+  requestOperatorTimeOff
 } from "../lib/api";
 
 // Decode an ORS/Google encoded polyline (precision 5) to [lat, lng] pairs.
@@ -157,76 +157,65 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     }
   });
 
-  const availabilityQuery = useQuery({
-    queryKey: ["operator-availability"],
-    queryFn: async () => getOperatorAvailability(accessToken)
+  const timeOffQuery = useQuery({
+    queryKey: ["operator-timeoff"],
+    queryFn: async () => getOperatorTimeOff(accessToken)
   });
+  const timeOffByDate = new Map<string, TimeOffStatus>(
+    (timeOffQuery.data?.days ?? []).map((d) => [d.date, d.status])
+  );
 
-  const [selectedDays, setSelectedDays] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    if (availabilityQuery.data) {
-      setSelectedDays(new Set(availabilityQuery.data.dates));
-    }
-  }, [availabilityQuery.data]);
-
-  const saveAvailability = useMutation({
-    mutationFn: () => setOperatorAvailability([...selectedDays], accessToken),
+  const requestTimeOff = useMutation({
+    mutationFn: (date: string) => requestOperatorTimeOff(date, accessToken),
     onSuccess: (data) => {
-      queryClient.setQueryData(["operator-availability"], data);
+      queryClient.setQueryData(["operator-timeoff"], data);
     }
   });
-
-  const availabilityDirty = useMemo(() => {
-    const saved = new Set(availabilityQuery.data?.dates ?? []);
-    if (saved.size !== selectedDays.size) return true;
-    for (const d of selectedDays) if (!saved.has(d)) return true;
-    return false;
-  }, [availabilityQuery.data, selectedDays]);
-
-  function toggleDay(key: string): void {
-    setSelectedDays((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
 
   return (
     <div className="dash-page">
       <div className="dash-page-head">
         <h2>Operator Dashboard</h2>
-        <p className="subtext">Signed in as {user.name}. Manage your availability and today's route.</p>
+        <p className="subtext">Signed in as {user.name}. Request time off and run today's routes.</p>
       </div>
 
       <article className="panel">
-        <div className="panel-head-row">
-          <h3>My availability</h3>
-          {availabilityDirty ? (
-            <button
-              type="button"
-              className="add-day-btn"
-              onClick={() => saveAvailability.mutate()}
-              disabled={saveAvailability.isPending}
-            >
-              {saveAvailability.isPending ? "Saving…" : "Save availability"}
-            </button>
-          ) : null}
-        </div>
-        <p className="subtext">Tap the days over the next 30 you're available to run routes.</p>
-        {availabilityQuery.isLoading ? (
+        <h3>My time off</h3>
+        <p className="subtext">
+          You're available by default. Tap a day to request it off — an admin approves time off. Tap a
+          pending request again to cancel it.
+        </p>
+        {timeOffQuery.isLoading ? (
           <p className="subtext">Loading…</p>
         ) : (
           <div className="availability-grid">
             {NEXT_30_DAYS.map((d) => {
               const key = dayKey(d);
-              const on = selectedDays.has(key);
+              const status = timeOffByDate.get(key);
+              const cls =
+                status === "APPROVED"
+                  ? " is-off-approved"
+                  : status === "PENDING"
+                    ? " is-off-pending"
+                    : status === "DENIED"
+                      ? " is-off-denied"
+                      : "";
+              const title =
+                status === "APPROVED"
+                  ? "Approved day off — tap to ask an admin to change"
+                  : status === "PENDING"
+                    ? "Requested off (awaiting approval) — tap to cancel"
+                    : status === "DENIED"
+                      ? "Request denied — tap to request again"
+                      : "Available — tap to request off";
               return (
                 <button
                   type="button"
                   key={key}
-                  className={`availability-day${on ? " is-on" : ""}`}
-                  onClick={() => toggleDay(key)}
+                  className={`availability-day${cls}`}
+                  title={title}
+                  onClick={() => requestTimeOff.mutate(key)}
+                  disabled={requestTimeOff.isPending}
                 >
                   <span className="availability-dow">
                     {d.toLocaleDateString(undefined, { weekday: "short" })}
@@ -240,10 +229,18 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
             })}
           </div>
         )}
-        {saveAvailability.isSuccess && !availabilityDirty ? (
-          <p className="success-inline">Availability saved.</p>
-        ) : null}
-        {saveAvailability.isError ? <p className="error">{getErrorMessage(saveAvailability.error)}</p> : null}
+        <div className="map-legend timeoff-legend">
+          <span>
+            <span className="legend-dot legend-available" /> Available
+          </span>
+          <span>
+            <span className="legend-dot legend-pending" /> Requested off
+          </span>
+          <span>
+            <span className="legend-dot legend-approved" /> Approved off
+          </span>
+        </div>
+        {requestTimeOff.isError ? <p className="error">{getErrorMessage(requestTimeOff.error)}</p> : null}
       </article>
 
       <article className="panel">

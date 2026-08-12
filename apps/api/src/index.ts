@@ -41,6 +41,8 @@ import {
   adminTodaysRouteHandler
 } from "./routes/adminRoutes";
 import { operatorAcceptRouteHandler, operatorRoutesHandler } from "./routes/operatorRoutes";
+import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
+import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adminOperators";
 import {
   adminLocationByIdHandler,
   adminLocationsHandler,
@@ -195,6 +197,27 @@ app.http("operator-routes-accept", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: operatorAcceptRouteHandler
+});
+
+app.http("operator-timeoff", {
+  route: "operator/timeoff",
+  methods: ["GET", "POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: operatorTimeOffRouteHandler
+});
+
+app.http("admin-operators", {
+  route: "ops-admin/operators",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminOperatorsHandler
+});
+
+app.http("admin-operator-timeoff", {
+  route: "ops-admin/operators/{operatorId}/timeoff",
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminOperatorTimeOffHandler
 });
 
 app.http("admin-neighborhoods", {

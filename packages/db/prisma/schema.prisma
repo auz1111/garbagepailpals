@@ -63,6 +63,12 @@ enum RouteStatus {
   ACCEPTED
 }
 
+enum TimeOffStatus {
+  PENDING
+  APPROVED
+  DENIED
+}
+
 model User {
   id                   String         @id @default(cuid())
   email                String         @unique
@@ -86,6 +92,23 @@ model User {
   auditLogs            AuditLog[]     @relation("AuditActorLogs")
   availability         OperatorAvailability[]
   routes               DailyRoute[]   @relation("OperatorRoutes")
+  timeOff              OperatorTimeOff[] @relation("OperatorTimeOff")
+}
+
+// An operator is available by default. A record here is a request to take a day
+// off; it only removes them from routing once an admin APPROVES it.
+model OperatorTimeOff {
+  id         String        @id @default(cuid())
+  operatorId String
+  date       DateTime      @db.Date
+  status     TimeOffStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  operator   User          @relation("OperatorTimeOff", fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@unique([operatorId, date])
+  @@index([date])
+  @@index([operatorId, date])
 }
 
 model OperatorAvailability {

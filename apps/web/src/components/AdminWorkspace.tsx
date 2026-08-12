@@ -16,10 +16,8 @@ import {
   createAdminUser,
   getAdminLocations,
   getAdminUser,
-  getAdminUserAvailability,
   getAdminUsers,
   getNeighborhoods,
-  setAdminUserAvailability,
   setLocationNeighborhood,
   updateAddress,
   updateAddressSchedule,
@@ -32,7 +30,7 @@ import {
 } from "../lib/api";
 import { TodaysRoute } from "./TodaysRoute";
 import { OperatorDashboard } from "./OperatorDashboard";
-import { AvailabilityCalendar } from "./AvailabilityCalendar";
+import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
 
 type AdminWorkspaceProps = {
@@ -130,24 +128,6 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
     queryKey: ["admin-user", detailUserId],
     queryFn: async () => getAdminUser(detailUserId as string, accessToken),
     enabled: Boolean(detailUserId)
-  });
-
-  const detailUser = userDetailQuery.data?.user;
-  const detailIsOperator = detailUser
-    ? detailUser.role === "OPERATOR" || (detailUser.role === "ADMIN" && detailUser.operatorAccess)
-    : false;
-
-  const userAvailabilityQuery = useQuery({
-    queryKey: ["admin-user-availability", detailUserId],
-    queryFn: async () => getAdminUserAvailability(detailUserId as string, accessToken),
-    enabled: Boolean(detailUserId) && detailIsOperator
-  });
-
-  const setUserAvailabilityMutation = useMutation({
-    mutationFn: (dates: string[]) => setAdminUserAvailability(detailUserId as string, dates, accessToken),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["admin-user-availability", detailUserId], data);
-    }
   });
 
   const updateUserMutation = useMutation({
@@ -429,12 +409,6 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
         saving={updateUserMutation.isPending}
         saveError={updateUserMutation.isError ? getErrorMessage(updateUserMutation.error) : null}
         saved={updateUserMutation.isSuccess}
-        showAvailability={detailIsOperator}
-        availabilityDates={userAvailabilityQuery.data?.dates ?? []}
-        availabilityLoading={userAvailabilityQuery.isLoading}
-        onSaveAvailability={(dates) => setUserAvailabilityMutation.mutate(dates)}
-        savingAvailability={setUserAvailabilityMutation.isPending}
-        availabilitySaved={setUserAvailabilityMutation.isSuccess}
       />
     );
   }
@@ -704,6 +678,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
         <Route index element={renderDashboard()} />
         <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />
         <Route path="neighborhoods" element={<NeighborhoodsAdmin accessToken={accessToken} />} />
+        <Route path="operators" element={<OperatorsAdmin accessToken={accessToken} />} />
         <Route
           path="operator"
           element={
@@ -728,13 +703,7 @@ function AdminUserDetail({
   onSave,
   saving,
   saveError,
-  saved,
-  showAvailability,
-  availabilityDates,
-  availabilityLoading,
-  onSaveAvailability,
-  savingAvailability,
-  availabilitySaved
+  saved
 }: {
   user: AdminUserWithLocations;
   accessToken: string;
@@ -742,12 +711,6 @@ function AdminUserDetail({
   saving: boolean;
   saveError: string | null;
   saved: boolean;
-  showAvailability: boolean;
-  availabilityDates: string[];
-  availabilityLoading: boolean;
-  onSaveAvailability: (dates: string[]) => void;
-  savingAvailability: boolean;
-  availabilitySaved: boolean;
 }): JSX.Element {
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
@@ -896,22 +859,6 @@ function AdminUserDetail({
           {saveError ? <p className="error">{saveError}</p> : null}
         </article>
       </form>
-
-      {showAvailability ? (
-        <article className="panel">
-          <h3>Operator availability</h3>
-          <p className="subtext">
-            Set the days over the next 30 this operator is available to run routes.
-          </p>
-          <AvailabilityCalendar
-            dates={availabilityDates}
-            onSave={onSaveAvailability}
-            saving={savingAvailability}
-            loading={availabilityLoading}
-            saved={availabilitySaved}
-          />
-        </article>
-      ) : null}
 
       <article className="panel">
         <div className="panel-head-row">

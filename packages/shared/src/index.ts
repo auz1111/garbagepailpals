@@ -426,6 +426,43 @@ export const availableOperatorsResponseSchema = z.object({
   operators: z.array(availableOperatorSchema)
 });
 
+// --- Operator time-off (available by default; request days off) -------------
+export const timeOffStatusSchema = z.enum(["PENDING", "APPROVED", "DENIED"]);
+
+export const timeOffDaySchema = z.object({
+  date: z.string(), // YYYY-MM-DD
+  status: timeOffStatusSchema
+});
+
+// The signed-in operator's own time-off records (upcoming window).
+export const operatorTimeOffResponseSchema = z.object({
+  days: z.array(timeOffDaySchema)
+});
+
+export const operatorTimeOffRequestSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+});
+
+// Admin view: each operator with their time-off across the window.
+export const adminOperatorSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  days: z.array(timeOffDaySchema)
+});
+
+export const adminOperatorsResponseSchema = z.object({
+  from: z.string(), // YYYY-MM-DD (inclusive)
+  to: z.string(), // YYYY-MM-DD (inclusive)
+  operators: z.array(adminOperatorSchema)
+});
+
+// Admin sets a day's status for an operator. status null clears the day off.
+export const adminTimeOffUpdateSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  status: z.enum(["APPROVED", "DENIED"]).nullable()
+});
+
 // --- Neighborhoods (admin) ------------------------------------------------
 export const neighborhoodSchema = z.object({
   id: z.string(),
@@ -747,6 +784,13 @@ export type OperatorAvailabilityResponse = z.infer<typeof operatorAvailabilityRe
 export type OperatorAvailabilityUpdate = z.infer<typeof operatorAvailabilityUpdateSchema>;
 export type AvailableOperator = z.infer<typeof availableOperatorSchema>;
 export type AvailableOperatorsResponse = z.infer<typeof availableOperatorsResponseSchema>;
+export type TimeOffStatus = z.infer<typeof timeOffStatusSchema>;
+export type TimeOffDay = z.infer<typeof timeOffDaySchema>;
+export type OperatorTimeOffResponse = z.infer<typeof operatorTimeOffResponseSchema>;
+export type OperatorTimeOffRequest = z.infer<typeof operatorTimeOffRequestSchema>;
+export type AdminOperator = z.infer<typeof adminOperatorSchema>;
+export type AdminOperatorsResponse = z.infer<typeof adminOperatorsResponseSchema>;
+export type AdminTimeOffUpdate = z.infer<typeof adminTimeOffUpdateSchema>;
 export type AdminRuntimeMetrics = z.infer<typeof adminRuntimeMetricsSchema>;
 export type AdminIncident = z.infer<typeof adminIncidentSchema>;
 export type AdminIncidentFeed = z.infer<typeof adminIncidentFeedSchema>;

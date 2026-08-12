@@ -836,6 +836,43 @@ a {
   color: #ffffff;
 }
 
+/* Time-off day states (operator calendar). Available = default surface. */
+.availability-day.is-off-pending {
+  background: #fff7e6;
+  border-color: var(--gold);
+  color: var(--ink);
+}
+
+.availability-day.is-off-approved {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+
+.availability-day.is-off-denied {
+  background: var(--surface);
+  border-color: var(--line-2);
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.timeoff-legend {
+  flex-wrap: wrap;
+}
+
+.legend-available {
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+}
+
+.legend-pending {
+  background: var(--gold);
+}
+
+.legend-approved {
+  background: var(--danger);
+}
+
 .availability-dow {
   font-size: 0.68rem;
   font-weight: 800;
@@ -1012,6 +1049,18 @@ a {
   flex-wrap: wrap;
 }
 
+/* Section label inside the drawer nav (e.g. "Operators"). */
+.drawer-section {
+  margin: 0.75rem 0.8rem 0.2rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
 /* Alert bubble on a drawer nav link (e.g. Neighborhoods needing assignment). */
 .drawer-link-badge {
   margin-left: auto;
@@ -1055,6 +1104,143 @@ a {
 
 .assign-loc.is-unassigned {
   border-left: 3px solid var(--gold);
+}
+
+/* --- Admin Operators page ------------------------------------------------- */
+.request-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.request-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--gold);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+
+.coverage-threshold {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.coverage-threshold input {
+  width: 3.5rem;
+}
+
+.coverage-strip {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.coverage-chip {
+  flex: 0 0 auto;
+  width: 2.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.35rem 0.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 0.7rem;
+  color: var(--ink-soft);
+}
+
+.coverage-chip .coverage-count {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.coverage-chip.is-gap {
+  border-color: var(--danger);
+  background: #fff1f0;
+}
+
+.coverage-chip.is-gap .coverage-count {
+  color: var(--danger);
+}
+
+.ops-grid-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+}
+
+.ops-grid {
+  display: grid;
+  gap: 3px;
+  align-items: center;
+  min-width: max-content;
+}
+
+.ops-grid-corner {
+  position: sticky;
+  left: 0;
+}
+
+.ops-grid-daycol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.6rem;
+  color: var(--ink-soft);
+  line-height: 1.1;
+}
+
+.ops-grid-name {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding-right: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ops-cell {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  cursor: pointer;
+  padding: 0;
+}
+
+.ops-cell:hover {
+  border-color: var(--teal-bright);
+}
+
+.ops-cell.is-pending {
+  background: var(--gold);
+  border-color: var(--gold);
+}
+
+.ops-cell.is-approved {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.ops-cell.is-denied {
+  background: repeating-linear-gradient(45deg, var(--surface), var(--surface) 4px, var(--line) 4px, var(--line) 5px);
 }
 
 /* Admin assigned-route row: expandable head + remove/lock action */

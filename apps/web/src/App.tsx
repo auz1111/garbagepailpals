@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -13,7 +13,15 @@ import {
   type Role,
   type RegisterInput
 } from "@gpp/shared";
-import { getAdminLocations, getMe, getOperatorRoutes, login, refresh, register } from "./lib/api";
+import {
+  getAdminLocations,
+  getAdminOperators,
+  getMe,
+  getOperatorRoutes,
+  login,
+  refresh,
+  register
+} from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
@@ -190,13 +198,36 @@ export function App() {
   const pendingRouteCount = (operatorRoutesQuery.data?.routes ?? []).filter(
     (r) => r.status === "ASSIGNED"
   ).length;
+
+  // Admin alert: pending operator time-off requests awaiting approval.
+  const adminOperatorsQuery = useQuery({
+    queryKey: ["admin-operators"],
+    queryFn: async () => getAdminOperators(accessToken as string),
+    enabled: isAdmin && Boolean(accessToken)
+  });
+  const pendingTimeOffCount = (adminOperatorsQuery.data?.operators ?? []).reduce(
+    (total, op) => total + op.days.filter((d) => d.status === "PENDING").length,
+    0
+  );
   const showDashboardMenu =
     isAuthenticated &&
     ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
-  const dashboardNav = isAdmin
-    ? user?.operatorAccess
-      ? [...ADMIN_NAV, { to: "/admin/operator", label: "Operator", icon: "🚛" }]
-      : ADMIN_NAV
+  // Admin nav: core pages, then an "Operators" section pinned at the bottom —
+  // operator management, plus the admin's own operator view when they have access.
+  const adminOperatorSection = [
+    { to: "/admin/operators", label: "Operators", icon: "🧑‍🔧", group: "operators" },
+    ...(user?.operatorAccess
+      ? [{ to: "/admin/operator", label: "My operator view", icon: "🚛", group: "operators" }]
+      : [])
+  ];
+  const dashboardNav: ReadonlyArray<{
+    to: string;
+    label: string;
+    icon: string;
+    end?: boolean;
+    group?: string;
+  }> = isAdmin
+    ? [...ADMIN_NAV, ...adminOperatorSection]
     : isOperator
       ? OPERATOR_NAV
       : CUSTOMER_NAV;
@@ -278,32 +309,41 @@ export function App() {
                 </button>
               </div>
               <nav className="drawer-nav">
-                {dashboardNav.map((item) => {
-                  const isOperatorLink = item.to === "/operator" || item.to === "/admin/operator";
+                {dashboardNav.map((item, idx) => {
+                  const isPersonalOperatorLink =
+                    item.to === "/operator" || item.to === "/admin/operator";
                   const badge =
                     item.to === "/admin/neighborhoods" && unassignedLocationCount > 0
                       ? unassignedLocationCount
-                      : isOperatorLink && pendingRouteCount > 0
-                        ? pendingRouteCount
-                        : null;
+                      : item.to === "/admin/operators" && pendingTimeOffCount > 0
+                        ? pendingTimeOffCount
+                        : isPersonalOperatorLink && pendingRouteCount > 0
+                          ? pendingRouteCount
+                          : null;
+                  const showOperatorsHeader =
+                    item.group === "operators" && dashboardNav[idx - 1]?.group !== "operators";
                   return (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={"end" in item ? item.end : undefined}
-                      className={({ isActive }) => (isActive ? "drawer-link active" : "drawer-link")}
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      <span className="drawer-link-icon" aria-hidden="true">
-                        {item.icon}
-                      </span>
-                      {item.label}
-                      {badge !== null ? (
-                        <span className="drawer-link-badge" aria-label={`${badge} need attention`}>
-                          {badge}
-                        </span>
+                    <Fragment key={item.to}>
+                      {showOperatorsHeader ? (
+                        <div className="drawer-section">Operators</div>
                       ) : null}
-                    </NavLink>
+                      <NavLink
+                        to={item.to}
+                        end={item.end}
+                        className={({ isActive }) => (isActive ? "drawer-link active" : "drawer-link")}
+                        onClick={() => setMenuOpen(false)}
+                      >
+                        <span className="drawer-link-icon" aria-hidden="true">
+                          {item.icon}
+                        </span>
+                        {item.label}
+                        {badge !== null ? (
+                          <span className="drawer-link-badge" aria-label={`${badge} need attention`}>
+                            {badge}
+                          </span>
+                        ) : null}
+                      </NavLink>
+                    </Fragment>
                   );
                 })}
               </nav>

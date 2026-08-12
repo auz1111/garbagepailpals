@@ -113,7 +113,8 @@ export function serializeDailyRoute(route: DailyRouteRow) {
   };
 }
 
-// Operators marked available on a given date.
+// Operators available on a given date. Operators are available by default; they
+// are only excluded when they have an APPROVED day off on that date.
 export async function adminAvailableOperatorsHandler(
   request: HttpRequest,
   context: InvocationContext
@@ -131,7 +132,7 @@ export async function adminAvailableOperatorsHandler(
         const date = new Date(`${dateStr}T00:00:00Z`);
 
         const operators = await prisma.user.findMany({
-          where: { ...operatorWhere(), availability: { some: { date } } },
+          where: { ...operatorWhere(), timeOff: { none: { date, status: "APPROVED" } } },
           select: { id: true, name: true, email: true },
           orderBy: { name: "asc" }
         });

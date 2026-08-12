@@ -33,6 +33,10 @@ import type {
   OperatorJobStatusUpdate,
   OperatorQueueResponse,
   OperatorRoutesResponse,
+  OperatorTimeOffResponse,
+  OperatorTimeOffRequest,
+  AdminOperatorsResponse,
+  AdminTimeOffUpdate,
   PayPalCreateSubscriptionRequest,
   PayPalCreateSubscriptionResponse,
   BillingSummary,
@@ -287,6 +291,39 @@ export function deleteRoute(routeId: string, accessToken: string): Promise<Assig
 
 export function getOperatorRoutes(accessToken: string): Promise<OperatorRoutesResponse> {
   return request<undefined, OperatorRoutesResponse>("/operator/routes", "GET", undefined, accessToken);
+}
+
+export function getOperatorTimeOff(accessToken: string): Promise<OperatorTimeOffResponse> {
+  return request<undefined, OperatorTimeOffResponse>("/operator/timeoff", "GET", undefined, accessToken);
+}
+
+export function requestOperatorTimeOff(
+  date: string,
+  accessToken: string
+): Promise<OperatorTimeOffResponse> {
+  return request<OperatorTimeOffRequest, OperatorTimeOffResponse>(
+    "/operator/timeoff",
+    "POST",
+    { date },
+    accessToken
+  );
+}
+
+export function getAdminOperators(accessToken: string): Promise<AdminOperatorsResponse> {
+  return request<undefined, AdminOperatorsResponse>("/ops-admin/operators", "GET", undefined, accessToken);
+}
+
+export function setOperatorTimeOff(
+  operatorId: string,
+  input: AdminTimeOffUpdate,
+  accessToken: string
+): Promise<AdminOperatorsResponse> {
+  return request<AdminTimeOffUpdate, AdminOperatorsResponse>(
+    `/ops-admin/operators/${operatorId}/timeoff`,
+    "PATCH",
+    input,
+    accessToken
+  );
 }
 
 export function acceptOperatorRoute(
