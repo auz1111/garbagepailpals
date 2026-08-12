@@ -20,6 +20,7 @@ import {
 import {
   getAdminLocations,
   getAdminOperators,
+  getBillingSummary,
   getMe,
   getOperatorRoutes,
   login,
@@ -213,6 +214,19 @@ export function App() {
     (total, op) => total + op.days.filter((d) => d.status === "PENDING").length,
     0
   );
+
+  // Customer alert: plan not active or needs updating → gold badge on Billing.
+  // Shares the CustomerWorkspace query key so there's no extra fetch.
+  const isCustomer = user?.role === "CUSTOMER";
+  const customerBillingQuery = useQuery({
+    queryKey: ["customer-billing-summary"],
+    queryFn: async () => getBillingSummary(accessToken as string),
+    enabled: isCustomer && !customerBlocked && Boolean(accessToken)
+  });
+  const billingNeedsAttention =
+    isCustomer &&
+    Boolean(customerBillingQuery.data) &&
+    (customerBillingQuery.data?.active !== true || customerBillingQuery.data?.needsUpdate === true);
   const showDashboardMenu =
     isAuthenticated &&
     ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
@@ -320,16 +334,20 @@ export function App() {
                 {dashboardNav.map((item, idx) => {
                   const isPersonalOperatorLink =
                     item.to === "/operator" || item.to === "/admin/operator";
-                  const badge =
+                  const showBillingBadge = item.to === "/customer/billing" && billingNeedsAttention;
+                  const badge: string | number | null =
                     item.to === "/admin/neighborhoods" && unassignedLocationCount > 0
                       ? unassignedLocationCount
                       : item.to === "/admin/operators" && pendingTimeOffCount > 0
                         ? pendingTimeOffCount
                         : isPersonalOperatorLink && pendingRouteCount > 0
                           ? pendingRouteCount
-                          : null;
-                  // Routes awaiting acceptance use the brand gold; other alerts stay red.
-                  const badgeGold = isPersonalOperatorLink && pendingRouteCount > 0;
+                          : showBillingBadge
+                            ? "!"
+                            : null;
+                  // Routes awaiting acceptance and the billing prompt use the brand
+                  // gold; other alerts stay red.
+                  const badgeGold = (isPersonalOperatorLink && pendingRouteCount > 0) || showBillingBadge;
                   const showOperatorsHeader =
                     item.group === "operators" && dashboardNav[idx - 1]?.group !== "operators";
                   return (

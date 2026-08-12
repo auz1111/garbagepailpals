@@ -4719,3 +4719,73 @@ button[type="submit"]:disabled {
   letter-spacing: 0.04em;
   vertical-align: middle;
 }
+
+/* ===== Customer: Upcoming Jobs ===== */
+.jobs-explainer {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  border-left: 4px solid #16a34a;
+  background: #ecfdf5;
+}
+.jobs-explainer-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.jobs-explainer p {
+  margin: 0.2rem 0 0;
+}
+
+.jobs-schedule-list,
+.jobs-upcoming-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.jobs-schedule-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.jobs-schedule-day {
+  font-weight: 800;
+}
+
+.jobs-upcoming-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  flex-wrap: wrap;
+}
+.jobs-job-tag {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.12rem 0.55rem;
+  border-radius: var(--pill);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.jobs-job-tag.is-out {
+  background: var(--teal-bright-wash);
+  color: var(--teal-deep);
+}
+.jobs-job-tag.is-in {
+  background: #dcfce7;
+  color: #166534;
+}
+.jobs-job-date {
+  font-weight: 700;
+  min-width: 6rem;
+}

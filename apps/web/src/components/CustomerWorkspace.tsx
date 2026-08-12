@@ -25,7 +25,6 @@ import {
   createPayPalSubscription,
   createStripeCheckout,
   createStripePortal,
-  generateJobs,
   getBillingSummary,
   updateSubscription,
   listAddresses,
@@ -82,10 +81,10 @@ const WEEKDAYS = [
 
 export const CUSTOMER_NAV = [
   { to: "/customer", label: "Dashboard", icon: "🧭", end: true },
-  { to: "/customer/billing", label: "Billing", icon: "💳" },
-  { to: "/customer/addresses", label: "Locations", icon: "🏠" },
-  { to: "/customer/jobs", label: "Upcoming Jobs", icon: "🚚" },
-  { to: "/customer/history", label: "History", icon: "🕓" }
+  { to: "/customer/jobs", label: "My Routes", icon: "🚚" },
+  { to: "/customer/addresses", label: "My Locations", icon: "🏠" },
+  { to: "/customer/history", label: "History", icon: "🕓" },
+  { to: "/customer/billing", label: "Billing", icon: "💳" }
 ] as const;
 
 export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWorkspaceProps): JSX.Element {
@@ -180,14 +179,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
-    }
-  });
-
-  const generateJobsMutation = useMutation({
-    mutationFn: () => generateJobs(accessToken),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] });
     }
   });
 
@@ -652,7 +643,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     return (
       <div className="dash-page">
         <div className="dash-page-head">
-          <h2>Locations</h2>
+          <h2>My Locations</h2>
           <p className="subtext">Add a pickup location and review your saved locations.</p>
         </div>
 
@@ -899,43 +890,94 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   }
 
   function renderJobs(): JSX.Element {
+    const cadenceLabel = (c: "WEEKLY" | "BIWEEKLY") => (c === "BIWEEKLY" ? "every 2 weeks" : "weekly");
+    const upcoming = upcomingJobsQuery.data?.jobs ?? [];
+    const hasSchedule = addresses.some((a) => a.schedules.length > 0);
+
     return (
       <div className="dash-page">
         <div className="dash-page-head">
-          <h2>Upcoming Jobs</h2>
-          <p className="subtext">Your scheduled pickups over the next 30 days.</p>
+          <h2>My Routes</h2>
+          <p className="subtext">Your recurring schedule and the next pickups we have planned.</p>
         </div>
-        <article className="panel">
-          <div className="button-row">
-            <button
-              type="button"
-              onClick={() => generateJobsMutation.mutate()}
-              disabled={generateJobsMutation.isPending}
-            >
-              {generateJobsMutation.isPending ? "Running scheduler…" : "Run scheduler now"}
-            </button>
+
+        {/* Reassurance: what we handle, always — regardless of job generation. */}
+        <article className="panel jobs-explainer">
+          <div className="jobs-explainer-icon" aria-hidden="true">
+            ♻️
           </div>
-          {generateJobsMutation.isSuccess ? (
-            <p className={generateJobsMutation.data.created > 0 ? "success-inline" : "subtext"}>
-              {generateJobsMutation.data.created > 0
-                ? `Scheduled ${generateJobsMutation.data.created} job${generateJobsMutation.data.created === 1 ? "" : "s"}.`
-                : "No new jobs to schedule. You need an active subscription and a saved schedule for pickups to generate."}
+          <div>
+            <strong>We handle it all automatically.</strong>
+            <p className="subtext">
+              For every pickup day, we roll your carts <b>out</b> the evening before and roll them{" "}
+              <b>in</b> the day after — no reminders needed. New dates appear here on their own; there's
+              nothing for you to run.
             </p>
+          </div>
+        </article>
+
+        <article className="panel">
+          <h3>Your pickup schedule</h3>
+          {!hasSchedule ? (
+            <p className="subtext">
+              No pickup schedule yet. Add a location to set your pickup days.
+            </p>
+          ) : (
+            <ul className="jobs-schedule-list">
+              {addresses.map((a) =>
+                [...a.schedules]
+                  .sort((x, y) => x.dayOfWeek - y.dayOfWeek)
+                  .map((s) => (
+                    <li className="jobs-schedule-row" key={s.id}>
+                      <span className="jobs-schedule-day">{WEEKDAYS[s.dayOfWeek]}s</span>
+                      <span className="admin-table-sub">
+                        {a.line1} · {s.canCount} can{s.canCount === 1 ? "" : "s"} ·{" "}
+                        {cadenceLabel(s.cadence)} ·{" "}
+                        {s.rollIn ? "roll-out & roll-in" : "roll-out only"}
+                      </span>
+                    </li>
+                  ))
+              )}
+            </ul>
+          )}
+        </article>
+
+        <article className="panel">
+          <h3>Next scheduled pickups</h3>
+          {!hasActivePlan ? (
+            <p className="subtext">
+              Once your plan is active, your upcoming roll-out and roll-in dates will appear here.
+            </p>
+          ) : upcomingJobsQuery.isLoading ? (
+            <p className="subtext">Loading…</p>
+          ) : upcoming.length === 0 ? (
+            <p className="subtext">
+              You're all set — specific dates will appear here as they're scheduled.
+            </p>
+          ) : (
+            <ul className="jobs-upcoming-list">
+              {upcoming.slice(0, 20).map((job) => (
+                <li className="jobs-upcoming-row" key={job.id}>
+                  <span className={`jobs-job-tag ${job.type === "CURB_OUT" ? "is-out" : "is-in"}`}>
+                    {job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"}
+                  </span>
+                  <span className="jobs-job-date">
+                    {new Date(job.scheduledDate).toLocaleDateString(undefined, {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric"
+                    })}
+                  </span>
+                  <span className="admin-table-sub">
+                    {job.type === "CURB_OUT" ? "Carts to the curb" : "Carts back from the curb"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {upcomingJobsQuery.isError ? (
+            <p className="error">{getErrorMessage(upcomingJobsQuery.error)}</p>
           ) : null}
-          {generateJobsMutation.isError ? (
-            <p className="error">{getErrorMessage(generateJobsMutation.error)}</p>
-          ) : null}
-          <ul className="meta-list compact">
-            {upcomingJobsQuery.data?.jobs.slice(0, 8).map((job) => (
-              <li key={job.id}>
-                {new Date(job.scheduledDate).toLocaleString()} - {job.type} ({job.status})
-              </li>
-            ))}
-          </ul>
-          {upcomingJobsQuery.data && upcomingJobsQuery.data.jobs.length === 0 ? (
-            <p className="subtext">No upcoming jobs scheduled yet.</p>
-          ) : null}
-          {upcomingJobsQuery.isError ? <p className="error">{getErrorMessage(upcomingJobsQuery.error)}</p> : null}
         </article>
       </div>
     );
