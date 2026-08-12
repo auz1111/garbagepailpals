@@ -128,7 +128,7 @@ export type DailyRouteRow = {
   id: string;
   operatorId: string;
   operator: { name: string };
-  status: "ASSIGNED" | "ACCEPTED";
+  status: "ASSIGNED" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
   label: string | null;
   startLabel: string | null;
   startLat: number | null;
@@ -145,6 +145,7 @@ export type DailyRouteRow = {
     serviceAddressId: string;
     jobTypes: string;
     canCount: number;
+    servicedAt: Date | null;
     serviceAddress: {
       line1: string;
       city: string;
@@ -187,7 +188,8 @@ export function serializeDailyRoute(route: DailyRouteRow) {
       lat: s.serviceAddress.lat.toNumber(),
       lng: s.serviceAddress.lng.toNumber(),
       jobTypes: s.jobTypes.split(",").filter(Boolean),
-      canCount: s.canCount
+      canCount: s.canCount,
+      servicedAt: s.servicedAt ? s.servicedAt.toISOString() : null
     }))
   };
 }
@@ -287,6 +289,55 @@ export async function adminDeleteRouteHandler(
           throw new HttpError(409, "This route has been accepted by the operator and is locked.");
         }
         await prisma.dailyRoute.delete({ where: { id: routeId } });
+
+        const now = new Date();
+        const routes = await prisma.dailyRoute.findMany({
+          where: { serviceDate: todayServiceDate(now) },
+          include: DAILY_ROUTE_INCLUDE,
+          orderBy: [{ operator: { name: "asc" } }, { createdAt: "asc" }]
+        });
+        return jsonResponse(
+          200,
+          assignedRoutesResponseSchema.parse({
+            date: now.toISOString(),
+            routes: routes.map((r) => serializeDailyRoute(r as unknown as DailyRouteRow))
+          })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Admin cancels an accepted/completed route (e.g. operator can't finish). The
+// un-serviced stops are freed for reassignment; serviced stops stay on the
+// route as a record, and the route is marked CANCELLED.
+export async function adminCancelRouteHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const routeId = req.params.routeId;
+        if (!routeId) {
+          throw new HttpError(400, "routeId is required");
+        }
+        const route = await prisma.dailyRoute.findUnique({ where: { id: routeId } });
+        if (!route) {
+          throw new HttpError(404, "Route not found");
+        }
+        if (route.status === "CANCELLED") {
+          throw new HttpError(409, "This route is already cancelled.");
+        }
+        // Free the stops that weren't serviced yet, then mark the route cancelled.
+        await prisma.routeStop.deleteMany({ where: { routeId, servicedAt: null } });
+        await prisma.dailyRoute.update({ where: { id: routeId }, data: { status: "CANCELLED" } });
 
         const now = new Date();
         const routes = await prisma.dailyRoute.findMany({

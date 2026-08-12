@@ -61,6 +61,8 @@ enum PlanInterval {
 enum RouteStatus {
   ASSIGNED
   ACCEPTED
+  COMPLETED
+  CANCELLED
 }
 
 enum TimeOffStatus {
@@ -372,6 +374,7 @@ model RouteStop {
   sequence         Int
   jobTypes         String
   canCount         Int            @default(2)
+  servicedAt       DateTime?
   route            DailyRoute     @relation(fields: [routeId], references: [id], onDelete: Cascade)
   serviceAddress   ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
 

@@ -8,6 +8,7 @@ import {
   acceptOperatorRoute,
   getOperatorRoutes,
   getOperatorTimeOff,
+  markStopServiced,
   requestOperatorTimeOff
 } from "../lib/api";
 
@@ -153,6 +154,14 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     }
   });
 
+  const serviceMutation = useMutation({
+    mutationFn: ({ routeId, addressId, serviced }: { routeId: string; addressId: string; serviced: boolean }) =>
+      markStopServiced(routeId, addressId, serviced, accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["operator-routes"], data);
+    }
+  });
+
   const timeOffQuery = useQuery({
     queryKey: ["operator-timeoff"],
     queryFn: async () => getOperatorTimeOff(accessToken)
@@ -251,44 +260,94 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         ) : (
           <ul className="operator-route-list">
             {myRoutes.map((route) => {
-              const accepted = route.status === "ACCEPTED";
+              const total = route.stops.length;
+              const servicedCount = route.stops.filter((s) => s.servicedAt).length;
+              const isAssigned = route.status === "ASSIGNED";
+              const isAccepted = route.status === "ACCEPTED";
+              const isCompleted = route.status === "COMPLETED";
+              const isCancelled = route.status === "CANCELLED";
+              const canService = isAccepted || isCompleted;
+              const badge = isCompleted
+                ? { cls: "covered", text: "Completed ✓" }
+                : isCancelled
+                  ? { cls: "uncovered", text: "Cancelled by dispatch" }
+                  : isAccepted
+                    ? { cls: "covered", text: "Assigned to You" }
+                    : { cls: "uncovered", text: "Assigned to You — Awaiting Acceptance" };
               return (
-                <li className={`operator-route${accepted ? " is-accepted" : ""}`} key={route.id}>
+                <li
+                  className={`operator-route${canService ? " is-accepted" : ""}${isCancelled ? " is-cancelled" : ""}`}
+                  key={route.id}
+                >
                   <div className="operator-route-head">
                     <div>
                       <strong>{route.label ?? "Route"}</strong>
                       <span className="admin-table-sub">
-                        {route.stops.length} stop{route.stops.length === 1 ? "" : "s"} ·{" "}
-                        {formatMiles(route.totalDistanceMeters)} · ~{formatMinutes(estimatedRouteMinutes(route))}{" "}
-                        to complete
+                        {total} stop{total === 1 ? "" : "s"} · {formatMiles(route.totalDistanceMeters)} · ~
+                        {formatMinutes(estimatedRouteMinutes(route))} to complete
                       </span>
                     </div>
-                    <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
-                      {accepted ? "Assigned to You" : "Assigned to You — Awaiting Acceptance"}
-                    </span>
+                    <span className={`coverage-badge ${badge.cls}`}>{badge.text}</span>
                   </div>
+
+                  {canService && total > 0 ? (
+                    <div className="route-progress">
+                      <div className="route-progress-bar">
+                        <div
+                          className="route-progress-fill"
+                          style={{ width: `${(servicedCount / total) * 100}%` }}
+                        />
+                      </div>
+                      <span className="admin-table-sub">
+                        {servicedCount} of {total} serviced
+                      </span>
+                    </div>
+                  ) : null}
+
                   <div className="operator-route-body">
                     <ol className="route-stop-list">
-                      {route.stops.map((stop) => (
-                        <li className="route-stop" key={stop.addressId}>
-                          <span className="route-stop-num">{stop.order + 1}</span>
-                          <div>
-                            <strong>{stop.line1}</strong>
-                            <span className="admin-table-sub">
-                              {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
-                            </span>
-                            <span className="admin-table-sub">
-                              {stop.jobTypes
-                                .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                                .join(" + ")}{" "}
-                              · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
+                      {route.stops.map((stop) => {
+                        const done = Boolean(stop.servicedAt);
+                        return (
+                          <li className={`route-stop${done ? " is-serviced" : ""}`} key={stop.addressId}>
+                            <span className="route-stop-num">{stop.order + 1}</span>
+                            <div>
+                              <strong>{stop.line1}</strong>
+                              <span className="admin-table-sub">
+                                {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                              </span>
+                              <span className="admin-table-sub">
+                                {stop.jobTypes
+                                  .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                                  .join(" + ")}{" "}
+                                · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                              </span>
+                            </div>
+                            {canService ? (
+                              <button
+                                type="button"
+                                className={`stop-service-btn${done ? " is-done" : ""}`}
+                                disabled={serviceMutation.isPending}
+                                onClick={() =>
+                                  serviceMutation.mutate({
+                                    routeId: route.id,
+                                    addressId: stop.addressId,
+                                    serviced: !done
+                                  })
+                                }
+                              >
+                                {done ? "✓ Serviced" : "Mark serviced"}
+                              </button>
+                            ) : done ? (
+                              <span className="stop-service-tag">✓ Serviced</span>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ol>
                     <RouteMiniMap route={route} />
                   </div>
+
                   <div className="button-row">
                     <a
                       className="cta-secondary"
@@ -298,9 +357,7 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                     >
                       Open in Maps
                     </a>
-                    {accepted ? (
-                      <span className="operator-route-lock">🔒 Locked to you</span>
-                    ) : (
+                    {isAssigned ? (
                       <button
                         type="button"
                         className="cta-primary accept-route-btn"
@@ -309,6 +366,12 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                       >
                         {acceptMutation.isPending ? "Accepting…" : "✓ Accept route"}
                       </button>
+                    ) : isCompleted ? (
+                      <span className="operator-route-lock">✓ Route complete</span>
+                    ) : isCancelled ? (
+                      <span className="operator-route-lock">Dispatch pulled this route</span>
+                    ) : (
+                      <span className="operator-route-lock">🔒 Locked to you</span>
                     )}
                   </div>
                 </li>
@@ -318,6 +381,7 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         )}
         {routesQuery.isError ? <p className="error">{getErrorMessage(routesQuery.error)}</p> : null}
         {acceptMutation.isError ? <p className="error">{getErrorMessage(acceptMutation.error)}</p> : null}
+        {serviceMutation.isError ? <p className="error">{getErrorMessage(serviceMutation.error)}</p> : null}
       </article>
     </div>
   );

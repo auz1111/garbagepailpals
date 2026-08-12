@@ -35,12 +35,17 @@ import {
 import {
   adminAssignedRoutesHandler,
   adminAvailableOperatorsHandler,
+  adminCancelRouteHandler,
   adminDeleteRouteHandler,
   adminRouteSummaryHandler,
   adminTodaysLocationsHandler,
   adminTodaysRouteHandler
 } from "./routes/adminRoutes";
-import { operatorAcceptRouteHandler, operatorRoutesHandler } from "./routes/operatorRoutes";
+import {
+  operatorAcceptRouteHandler,
+  operatorRoutesHandler,
+  operatorServiceStopHandler
+} from "./routes/operatorRoutes";
 import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
 import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adminOperators";
 import {
@@ -185,6 +190,13 @@ app.http("admin-delete-route", {
   handler: adminDeleteRouteHandler
 });
 
+app.http("admin-cancel-route", {
+  route: "ops-admin/routes/{routeId}/cancel",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminCancelRouteHandler
+});
+
 app.http("operator-routes", {
   route: "operator/routes",
   methods: ["GET", "OPTIONS"],
@@ -197,6 +209,13 @@ app.http("operator-routes-accept", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: operatorAcceptRouteHandler
+});
+
+app.http("operator-route-stop-service", {
+  route: "operator/routes/{routeId}/stops",
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: operatorServiceStopHandler
 });
 
 app.http("operator-timeoff", {

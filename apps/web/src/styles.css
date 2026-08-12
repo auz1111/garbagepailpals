@@ -1197,6 +1197,9 @@ a {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.rh-stat.is-done strong {
+  color: #34d399;
+}
 .rh-stat.is-accepted strong {
   color: #4ade80;
 }
@@ -1216,6 +1219,9 @@ a {
   background: rgba(255, 255, 255, 0.22);
 }
 
+.rh-progress-seg.done {
+  background: #16a34a;
+}
 .rh-progress-seg.accepted {
   background: #22c55e;
 }
@@ -1267,6 +1273,10 @@ a {
   padding: 0.1rem 0.5rem;
   border-radius: var(--pill);
 }
+.rh-route-pill.done {
+  background: #16a34a;
+  color: #eafff3;
+}
 .rh-route-pill.accepted {
   background: #22c55e;
   color: #04321f;
@@ -1274,6 +1284,11 @@ a {
 .rh-route-pill.awaiting {
   background: var(--gold);
   color: var(--teal-deep);
+}
+.rh-route-pill.cancelled {
+  background: rgba(255, 255, 255, 0.3);
+  color: #fee2e2;
+  text-decoration: line-through;
 }
 
 .rh-route-bar {
@@ -1288,11 +1303,17 @@ a {
   border-radius: var(--pill);
   transition: width 0.3s ease;
 }
+.rh-route-fill.done {
+  background: #16a34a;
+}
 .rh-route-fill.accepted {
   background: #22c55e;
 }
 .rh-route-fill.awaiting {
   background: var(--gold);
+}
+.rh-route-fill.cancelled {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 /* Section label inside the drawer nav (e.g. "Operators"). */
@@ -1600,6 +1621,89 @@ a {
   align-self: center;
 }
 
+/* A route dispatch pulled after acceptance — de-emphasised, red accent. */
+.operator-route.is-cancelled {
+  border-left-color: #dc2626;
+  opacity: 0.78;
+}
+
+/* Per-route completion bar (operator + shared). */
+.route-progress {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.75rem;
+}
+
+.route-progress-bar {
+  flex: 1;
+  min-width: 0;
+  height: 0.55rem;
+  border-radius: var(--pill);
+  background: var(--line);
+  overflow: hidden;
+}
+
+.route-progress-fill {
+  height: 100%;
+  border-radius: var(--pill);
+  background: #16a34a;
+  transition: width 0.3s ease;
+}
+
+/* Let the address block grow so the service button pins to the right. */
+.route-stop > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.route-stop.is-serviced {
+  background: #ecfdf5;
+  border-color: #86efac;
+}
+
+.route-stop.is-serviced .route-stop-num {
+  background: #16a34a;
+}
+
+.stop-service-btn {
+  flex: none;
+  align-self: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--pill);
+  border: 1px solid var(--teal);
+  background: var(--surface);
+  color: var(--teal-deep);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.stop-service-btn:hover:not(:disabled) {
+  background: var(--teal-bright-wash);
+}
+
+.stop-service-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.stop-service-btn.is-done {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #ffffff;
+}
+
+.stop-service-tag {
+  flex: none;
+  align-self: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: #16a34a;
+  white-space: nowrap;
+}
+
 /* Make the primary Accept action stand out — the generic `.button-row button`
    rule would otherwise flatten it into a plain white pill. */
 .button-row .accept-route-btn {
@@ -1708,6 +1812,11 @@ a {
   border-radius: var(--r-sm);
   background: var(--surface);
   overflow: hidden;
+}
+
+.assigned-route.is-cancelled {
+  border-left-color: #dc2626;
+  opacity: 0.72;
 }
 
 .assigned-route-head {

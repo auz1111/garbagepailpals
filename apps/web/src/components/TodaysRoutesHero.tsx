@@ -82,6 +82,9 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
   const locations = locationsQuery.data?.locations ?? [];
 
   const total = locations.length;
+  const done = locations.filter(
+    (l) => l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
+  ).length;
   const accepted = locations.filter((l) => l.routeStatus === "ACCEPTED").length;
   const awaiting = locations.filter((l) => l.routeStatus === "ASSIGNED").length;
   const unassigned = locations.filter((l) => !l.assigned).length;
@@ -92,18 +95,20 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
     lat: l.lat,
     lng: l.lng,
     color:
-      l.routeStatus === "ACCEPTED"
+      l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
         ? COLOR_ACCEPTED
-        : l.routeStatus === "ASSIGNED"
-          ? COLOR_AWAITING
-          : COLOR_UNASSIGNED
+        : l.routeStatus === "ACCEPTED"
+          ? COLOR_ACCEPTED
+          : l.routeStatus === "ASSIGNED"
+            ? COLOR_AWAITING
+            : COLOR_UNASSIGNED
   }));
 
   const loading = routesQuery.isLoading || locationsQuery.isLoading;
   const summary =
     total === 0
       ? "No roll-outs or roll-ins are due today."
-      : `${accepted} accepted · ${awaiting} awaiting acceptance · ${unassigned} unassigned across ${total} location${total === 1 ? "" : "s"}.`;
+      : `${done} serviced · ${accepted} in progress · ${awaiting} awaiting acceptance · ${unassigned} unassigned across ${total} location${total === 1 ? "" : "s"}.`;
 
   return (
     <article className="routes-hero">
@@ -126,9 +131,13 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
             <strong>{total}</strong>
             <span>Locations</span>
           </div>
+          <div className="rh-stat is-done">
+            <strong>{done}</strong>
+            <span>Serviced</span>
+          </div>
           <div className="rh-stat is-accepted">
             <strong>{accepted}</strong>
-            <span>Accepted</span>
+            <span>In progress</span>
           </div>
           <div className="rh-stat is-awaiting">
             <strong>{awaiting}</strong>
@@ -142,6 +151,7 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
 
         {total > 0 ? (
           <div className="rh-progress" role="img" aria-label={summary}>
+            <div className="rh-progress-seg done" style={{ width: `${pct(done)}%` }} />
             <div className="rh-progress-seg accepted" style={{ width: `${pct(accepted)}%` }} />
             <div className="rh-progress-seg awaiting" style={{ width: `${pct(awaiting)}%` }} />
           </div>
@@ -152,24 +162,47 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
             <p className="rh-empty">No routes assigned yet — head to Today's Routes to assign operators.</p>
           ) : (
             routes.map((r) => {
-              const isAccepted = r.status === "ACCEPTED";
+              const servicedCount = r.stops.filter((s) => s.servicedAt !== null).length;
+              const totalStops = r.stops.length;
+              const statusClass =
+                r.status === "CANCELLED"
+                  ? "cancelled"
+                  : r.status === "COMPLETED"
+                    ? "done"
+                    : r.status === "ACCEPTED"
+                      ? "accepted"
+                      : "awaiting";
+              const statusLabel =
+                r.status === "CANCELLED"
+                  ? "Cancelled"
+                  : r.status === "COMPLETED"
+                    ? "Completed"
+                    : r.status === "ACCEPTED"
+                      ? "Accepted"
+                      : "Awaiting";
+              // Awaiting routes have no serviced work yet; show a hint of progress
+              // so the bar reads as "started" rather than empty.
+              const fillPct =
+                r.status === "CANCELLED"
+                  ? 100
+                  : totalStops > 0
+                    ? Math.max(r.status === "ASSIGNED" ? 8 : 0, (servicedCount / totalStops) * 100)
+                    : 0;
               return (
                 <div className="rh-route" key={r.id}>
                   <div className="rh-route-top">
                     <strong>{r.operatorName}</strong>
                     <span className="rh-route-meta">
                       {r.label ? `${r.label} · ` : ""}
-                      {r.stops.length} stop{r.stops.length === 1 ? "" : "s"} · ~
+                      {servicedCount}/{totalStops} serviced · ~
                       {formatMinutes(estimatedRouteMinutes(r))}
                     </span>
-                    <span className={`rh-route-pill ${isAccepted ? "accepted" : "awaiting"}`}>
-                      {isAccepted ? "Accepted" : "Awaiting"}
-                    </span>
+                    <span className={`rh-route-pill ${statusClass}`}>{statusLabel}</span>
                   </div>
                   <div className="rh-route-bar">
                     <div
-                      className={`rh-route-fill ${isAccepted ? "accepted" : "awaiting"}`}
-                      style={{ width: isAccepted ? "100%" : "45%" }}
+                      className={`rh-route-fill ${statusClass}`}
+                      style={{ width: `${fillPct}%` }}
                     />
                   </div>
                 </div>

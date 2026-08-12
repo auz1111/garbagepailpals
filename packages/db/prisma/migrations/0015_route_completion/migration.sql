@@ -1,0 +1,6 @@
+-- AlterEnum
+ALTER TYPE "RouteStatus" ADD VALUE IF NOT EXISTS 'COMPLETED';
+ALTER TYPE "RouteStatus" ADD VALUE IF NOT EXISTS 'CANCELLED';
+
+-- AlterTable
+ALTER TABLE "RouteStop" ADD COLUMN "servicedAt" TIMESTAMP(3);

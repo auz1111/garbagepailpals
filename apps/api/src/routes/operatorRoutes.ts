@@ -1,7 +1,7 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
-import { operatorRoutesResponseSchema } from "@gpp/shared";
-import { HttpError, handleOptions, jsonResponse, withErrorBoundary } from "../lib/http";
+import { operatorRoutesResponseSchema, operatorStopServiceSchema } from "@gpp/shared";
+import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import {
   DAILY_ROUTE_INCLUDE,
@@ -64,12 +64,68 @@ export async function operatorAcceptRouteHandler(
         if (!route || route.operatorId !== auth.sub) {
           throw new HttpError(404, "Route not found");
         }
-        if (route.status !== "ACCEPTED") {
+        if (route.status === "CANCELLED") {
+          throw new HttpError(409, "This route was cancelled by dispatch.");
+        }
+        if (route.status === "ASSIGNED") {
           await prisma.dailyRoute.update({
             where: { id: routeId },
             data: { status: "ACCEPTED", acceptedAt: new Date() }
           });
         }
+        return jsonResponse(200, await myRoutesResponse(auth.sub));
+      },
+      { roles: ["OPERATOR", "ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Operator marks a stop serviced (or un-marks it). The route auto-completes when
+// every stop is serviced. Only allowed once the route is accepted.
+export async function operatorServiceStopHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const routeId = req.params.routeId;
+        if (!routeId) {
+          throw new HttpError(400, "routeId is required");
+        }
+        const { addressId, serviced } = await parseJson(req, operatorStopServiceSchema);
+        const route = await prisma.dailyRoute.findUnique({ where: { id: routeId } });
+        if (!route || route.operatorId !== auth.sub) {
+          throw new HttpError(404, "Route not found");
+        }
+        if (route.status === "CANCELLED") {
+          throw new HttpError(409, "This route was cancelled by dispatch.");
+        }
+        if (route.status === "ASSIGNED") {
+          throw new HttpError(409, "Accept the route before marking stops serviced.");
+        }
+
+        await prisma.routeStop.updateMany({
+          where: { routeId, serviceAddressId: addressId },
+          data: { servicedAt: serviced ? new Date() : null }
+        });
+
+        // A route is COMPLETED once every stop is serviced; otherwise it's ACCEPTED.
+        const stops = await prisma.routeStop.findMany({
+          where: { routeId },
+          select: { servicedAt: true }
+        });
+        const allServiced = stops.length > 0 && stops.every((s) => s.servicedAt !== null);
+        await prisma.dailyRoute.update({
+          where: { id: routeId },
+          data: { status: allServiced ? "COMPLETED" : "ACCEPTED" }
+        });
+
         return jsonResponse(200, await myRoutesResponse(auth.sub));
       },
       { roles: ["OPERATOR", "ADMIN"] }

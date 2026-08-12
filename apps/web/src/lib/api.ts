@@ -34,6 +34,7 @@ import type {
   OperatorJobStatusUpdate,
   OperatorQueueResponse,
   OperatorRoutesResponse,
+  OperatorStopService,
   OperatorTimeOffResponse,
   OperatorTimeOffRequest,
   AdminOperatorsResponse,
@@ -336,6 +337,29 @@ export function acceptOperatorRoute(
 ): Promise<OperatorRoutesResponse> {
   return request<undefined, OperatorRoutesResponse>(
     `/operator/routes/${routeId}/accept`,
+    "POST",
+    undefined,
+    accessToken
+  );
+}
+
+export function markStopServiced(
+  routeId: string,
+  addressId: string,
+  serviced: boolean,
+  accessToken: string
+): Promise<OperatorRoutesResponse> {
+  return request<OperatorStopService, OperatorRoutesResponse>(
+    `/operator/routes/${routeId}/stops`,
+    "PATCH",
+    { addressId, serviced },
+    accessToken
+  );
+}
+
+export function cancelRoute(routeId: string, accessToken: string): Promise<AssignedRoutesResponse> {
+  return request<undefined, AssignedRoutesResponse>(
+    `/ops-admin/routes/${routeId}/cancel`,
     "POST",
     undefined,
     accessToken

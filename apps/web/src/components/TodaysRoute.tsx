@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import type { AdminTodaysLocation, DailyRoute } from "@gpp/shared";
 import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import {
+  cancelRoute,
   deleteRoute,
   getAssignedRoutes,
   getAvailableOperators,
@@ -21,6 +22,7 @@ type TodaysRouteProps = {
 const COLOR_UNASSIGNED = "#9aa5ad"; // gray — not on any route
 const COLOR_AWAITING = "#f7a81b"; // gold — assigned, awaiting operator acceptance
 const COLOR_ACCEPTED = "#055a5f"; // teal — accepted / locked
+const COLOR_SERVICED = "#22c55e"; // green — serviced (completed/cancelled routes)
 
 // Distinct line colors per assigned route (operator), avoiding the pin colors.
 const ROUTE_COLORS = ["#7b2ff7", "#1071e5", "#e5484d", "#d6336c", "#f76707", "#2b8a3e", "#8250df", "#0891b2"];
@@ -55,12 +57,15 @@ function decodePolyline(encoded: string): Array<[number, number]> {
 }
 
 function locationColor(loc: AdminTodaysLocation): string {
+  if (loc.routeStatus === "COMPLETED" || loc.routeStatus === "CANCELLED") return COLOR_SERVICED;
   if (loc.routeStatus === "ACCEPTED") return COLOR_ACCEPTED;
   if (loc.routeStatus === "ASSIGNED") return COLOR_AWAITING;
   return COLOR_UNASSIGNED;
 }
 
 function locationStatusLabel(loc: AdminTodaysLocation): string {
+  if (loc.routeStatus === "COMPLETED") return "Serviced (route complete)";
+  if (loc.routeStatus === "CANCELLED") return "Serviced (route cancelled)";
   if (loc.routeStatus === "ACCEPTED") return "Accepted";
   if (loc.routeStatus === "ASSIGNED") return "Awaiting acceptance";
   return "Unassigned";
@@ -177,12 +182,14 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   assignedRoutes.forEach((r, i) =>
     routeColorById.set(r.id, ROUTE_COLORS[i % ROUTE_COLORS.length] ?? "#7b2ff7")
   );
-  const mapRoutes = assignedRoutes.map((r) => ({
-    id: r.id,
-    color: routeColorById.get(r.id) as string,
-    geometry: r.geometry,
-    stops: r.stops
-  }));
+  const mapRoutes = assignedRoutes
+    .filter((r) => r.status !== "CANCELLED")
+    .map((r) => ({
+      id: r.id,
+      color: routeColorById.get(r.id) as string,
+      geometry: r.geometry,
+      stops: r.stops
+    }));
 
   const neighborhoodsQuery = useQuery({
     queryKey: ["neighborhoods"],
@@ -222,6 +229,9 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     : allLocations;
   const awaitingCount = scopeLocations.filter((l) => l.routeStatus === "ASSIGNED").length;
   const acceptedCount = scopeLocations.filter((l) => l.routeStatus === "ACCEPTED").length;
+  const servicedCount = scopeLocations.filter(
+    (l) => l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
+  ).length;
   const unassignedScope = scopeLocations.filter((l) => !l.assigned);
   const scopedUnassigned = unassignedScope.length;
   const nothingToAssign = scopedUnassigned === 0;
@@ -243,6 +253,14 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
 
   const deleteMutation = useMutation({
     mutationFn: (routeId: string) => deleteRoute(routeId, accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["assigned-routes"], data);
+      invalidateRouteViews();
+    }
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (routeId: string) => cancelRoute(routeId, accessToken),
     onSuccess: (data) => {
       queryClient.setQueryData(["assigned-routes"], data);
       invalidateRouteViews();
@@ -417,9 +435,19 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           <ul className="assigned-route-list">
             {assignedRoutes.map((ar) => {
               const open = expandedOperator === ar.id;
-              const accepted = ar.status === "ACCEPTED";
+              const serviced = ar.stops.filter((s) => s.servicedAt).length;
+              const status = ar.status;
+              const statusBadge =
+                status === "COMPLETED"
+                  ? { cls: "covered", text: "✓ Completed" }
+                  : status === "CANCELLED"
+                    ? { cls: "uncovered", text: "Cancelled" }
+                    : status === "ACCEPTED"
+                      ? { cls: "covered", text: "✓ Accepted" }
+                      : { cls: "uncovered", text: "Awaiting accept" };
+              const canCancel = status === "ACCEPTED" || status === "COMPLETED";
               return (
-                <li className="assigned-route" key={ar.id}>
+                <li className={`assigned-route${status === "CANCELLED" ? " is-cancelled" : ""}`} key={ar.id}>
                   <div className="assigned-route-row">
                     <button
                       type="button"
@@ -436,18 +464,13 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       <strong>{ar.operatorName}</strong>
                       {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
                       <span className="assigned-route-count">
-                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"} · ~
+                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"}
+                        {serviced > 0 ? ` · ${serviced} serviced` : ""} · ~
                         {formatMinutes(estimatedRouteMinutes(ar))}
                       </span>
-                      <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
-                        {accepted ? "✓ Accepted" : "Awaiting accept"}
-                      </span>
+                      <span className={`coverage-badge ${statusBadge.cls}`}>{statusBadge.text}</span>
                     </button>
-                    {accepted ? (
-                      <span className="assigned-route-lock" title="Locked — operator accepted this route">
-                        🔒
-                      </span>
-                    ) : (
+                    {status === "ASSIGNED" ? (
                       <button
                         type="button"
                         className="address-row-remove"
@@ -460,12 +483,31 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       >
                         Remove
                       </button>
+                    ) : canCancel ? (
+                      <button
+                        type="button"
+                        className="address-row-remove"
+                        disabled={cancelMutation.isPending}
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Cancel ${ar.operatorName}'s route? Un-serviced stops will be freed to reassign to another operator; serviced stops stay recorded.`
+                            )
+                          ) {
+                            cancelMutation.mutate(ar.id);
+                          }
+                        }}
+                      >
+                        Cancel route
+                      </button>
+                    ) : (
+                      <span className="assigned-route-lock">✓</span>
                     )}
                   </div>
                   {open ? (
                     <ol className="route-stop-list assigned-route-detail">
                       {ar.stops.map((stop) => (
-                        <li className="route-stop" key={stop.addressId}>
+                        <li className={`route-stop${stop.servicedAt ? " is-serviced" : ""}`} key={stop.addressId}>
                           <span className="route-stop-num">{stop.order + 1}</span>
                           <div>
                             <strong>{stop.line1}</strong>
@@ -477,6 +519,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                                 .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
                                 .join(" + ")}{" "}
                               · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                              {stop.servicedAt ? " · ✓ serviced" : ""}
                             </span>
                           </div>
                         </li>
@@ -493,6 +536,9 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         ) : null}
         {deleteMutation.isError ? (
           <p className="error">{getErrorMessage(deleteMutation.error)}</p>
+        ) : null}
+        {cancelMutation.isError ? (
+          <p className="error">{getErrorMessage(cancelMutation.error)}</p>
         ) : null}
       </article>
 
@@ -526,6 +572,10 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               <span>
                 <span className="legend-dot" style={{ background: COLOR_ACCEPTED }} /> Accepted (
                 {acceptedCount})
+              </span>
+              <span>
+                <span className="legend-dot" style={{ background: COLOR_SERVICED }} /> Serviced (
+                {servicedCount})
               </span>
             </div>
           </>

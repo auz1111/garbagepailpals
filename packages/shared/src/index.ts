@@ -594,7 +594,7 @@ export const adminRouteResponseSchema = z.object({
 
 // A persisted route assigned to an operator for a service day. Operators can
 // hold several per day; each is accepted independently, and accepting locks it.
-export const routeStatusSchema = z.enum(["ASSIGNED", "ACCEPTED"]);
+export const routeStatusSchema = z.enum(["ASSIGNED", "ACCEPTED", "COMPLETED", "CANCELLED"]);
 
 export const dailyRouteStopSchema = z.object({
   order: z.number().int().nonnegative(),
@@ -607,7 +607,14 @@ export const dailyRouteStopSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
-  canCount: z.number().int().nonnegative()
+  canCount: z.number().int().nonnegative(),
+  // Timestamp when the operator marked this stop serviced; null if not yet done.
+  servicedAt: z.string().nullable()
+});
+
+export const operatorStopServiceSchema = z.object({
+  addressId: z.string(),
+  serviced: z.boolean()
 });
 
 export const dailyRouteSchema = z.object({
@@ -822,6 +829,7 @@ export type AdminRouteSummary = z.infer<typeof adminRouteSummarySchema>;
 export type AdminTodaysLocation = z.infer<typeof adminTodaysLocationSchema>;
 export type AdminTodaysLocationsResponse = z.infer<typeof adminTodaysLocationsResponseSchema>;
 export type OperatorRoutesResponse = z.infer<typeof operatorRoutesResponseSchema>;
+export type OperatorStopService = z.infer<typeof operatorStopServiceSchema>;
 export type Neighborhood = z.infer<typeof neighborhoodSchema>;
 export type NeighborhoodsResponse = z.infer<typeof neighborhoodsResponseSchema>;
 export type NeighborhoodCreate = z.infer<typeof neighborhoodCreateSchema>;
