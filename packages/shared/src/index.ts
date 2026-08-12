@@ -657,6 +657,10 @@ export const adminTodaysLocationSchema = z.object({
   // The status of the route it's on: awaiting operator acceptance, accepted
   // (locked), or null when not on any route yet.
   routeStatus: routeStatusSchema.nullable(),
+  // When the operator marked this specific stop serviced (null if not yet, or
+  // not on a route). Independent of routeStatus — a stop can be serviced while
+  // the rest of its route is still in progress.
+  servicedAt: z.string().nullable(),
   // What's due here today: roll the cart out (evening before pickup) and/or
   // roll it in (day after pickup).
   jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),

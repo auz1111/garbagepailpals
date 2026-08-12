@@ -427,9 +427,12 @@ export async function adminTodaysLocationsHandler(
 
         const routeStopRows = await prisma.routeStop.findMany({
           where: { route: { serviceDate } },
-          select: { serviceAddressId: true, route: { select: { status: true } } }
+          select: { serviceAddressId: true, servicedAt: true, route: { select: { status: true } } }
         });
         const statusByAddress = new Map(routeStopRows.map((r) => [r.serviceAddressId, r.route.status]));
+        const servicedByAddress = new Map(
+          routeStopRows.map((r) => [r.serviceAddressId, r.servicedAt])
+        );
 
         const locations = work.map((w) => ({
           addressId: w.address.id,
@@ -442,6 +445,7 @@ export async function adminTodaysLocationsHandler(
           lng: w.address.lng.toNumber(),
           assigned: statusByAddress.has(w.address.id),
           routeStatus: statusByAddress.get(w.address.id) ?? null,
+          servicedAt: servicedByAddress.get(w.address.id)?.toISOString() ?? null,
           jobTypes: [...w.jobTypes].sort(),
           canCount: w.canCount,
           neighborhoodId: w.address.neighborhoodId,

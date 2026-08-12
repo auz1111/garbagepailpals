@@ -57,6 +57,8 @@ function decodePolyline(encoded: string): Array<[number, number]> {
 }
 
 function locationColor(loc: AdminTodaysLocation): string {
+  // A serviced stop is green regardless of the route's overall status.
+  if (loc.servicedAt) return COLOR_SERVICED;
   if (loc.routeStatus === "COMPLETED" || loc.routeStatus === "CANCELLED") return COLOR_SERVICED;
   if (loc.routeStatus === "ACCEPTED") return COLOR_ACCEPTED;
   if (loc.routeStatus === "ASSIGNED") return COLOR_AWAITING;
@@ -64,8 +66,9 @@ function locationColor(loc: AdminTodaysLocation): string {
 }
 
 function locationStatusLabel(loc: AdminTodaysLocation): string {
+  if (loc.servicedAt) return "Serviced";
   if (loc.routeStatus === "COMPLETED") return "Serviced (route complete)";
-  if (loc.routeStatus === "CANCELLED") return "Serviced (route cancelled)";
+  if (loc.routeStatus === "CANCELLED") return "Route cancelled";
   if (loc.routeStatus === "ACCEPTED") return "Accepted";
   if (loc.routeStatus === "ASSIGNED") return "Awaiting acceptance";
   return "Unassigned";
@@ -227,10 +230,16 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const scopeLocations = neighborhoodId
     ? allLocations.filter((l) => l.neighborhoodId === neighborhoodId)
     : allLocations;
-  const awaitingCount = scopeLocations.filter((l) => l.routeStatus === "ASSIGNED").length;
-  const acceptedCount = scopeLocations.filter((l) => l.routeStatus === "ACCEPTED").length;
+  // Serviced is counted per-stop and is mutually exclusive with the route-status
+  // buckets below, so the legend totals match the pin colors on the map.
   const servicedCount = scopeLocations.filter(
-    (l) => l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
+    (l) => l.servicedAt || l.routeStatus === "COMPLETED" || l.routeStatus === "CANCELLED"
+  ).length;
+  const awaitingCount = scopeLocations.filter(
+    (l) => !l.servicedAt && l.routeStatus === "ASSIGNED"
+  ).length;
+  const acceptedCount = scopeLocations.filter(
+    (l) => !l.servicedAt && l.routeStatus === "ACCEPTED"
   ).length;
   const unassignedScope = scopeLocations.filter((l) => !l.assigned);
   const scopedUnassigned = unassignedScope.length;

@@ -89,7 +89,9 @@ function RouteMiniMap({ route }: { route: DailyRoute }): JSX.Element {
       bounds.push([route.end.lat, route.end.lng]);
     }
     route.stops.forEach((s) => {
-      L.marker([s.lat, s.lng], { icon: pin(String(s.order + 1), color) }).addTo(layer);
+      // Serviced stops adopt the serviced-green so the map matches the list.
+      const stopColor = s.servicedAt ? "#16a34a" : color;
+      L.marker([s.lat, s.lng], { icon: pin(String(s.order + 1), stopColor) }).addTo(layer);
       bounds.push([s.lat, s.lng]);
     });
 
