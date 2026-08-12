@@ -1,0 +1,2 @@
+-- AddColumn
+ALTER TABLE "RouteStop" ADD COLUMN "canCount" INTEGER NOT NULL DEFAULT 2;

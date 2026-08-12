@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { CurrentUser, DailyRoute, TimeOffStatus } from "@gpp/shared";
+import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import {
   acceptOperatorRoute,
   getOperatorRoutes,
@@ -114,11 +115,6 @@ function routeMapsUrl(route: DailyRoute): string {
 
 function formatMiles(meters: number): string {
   return `${(meters / 1609.34).toFixed(1)} mi`;
-}
-
-function formatDuration(seconds: number): string {
-  const mins = Math.round(seconds / 60);
-  return mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
 type OperatorDashboardProps = {
@@ -263,7 +259,8 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                       <strong>{route.label ?? "Route"}</strong>
                       <span className="admin-table-sub">
                         {route.stops.length} stop{route.stops.length === 1 ? "" : "s"} ·{" "}
-                        {formatMiles(route.totalDistanceMeters)} · {formatDuration(route.totalDurationSeconds)}
+                        {formatMiles(route.totalDistanceMeters)} · ~{formatMinutes(estimatedRouteMinutes(route))}{" "}
+                        to complete
                       </span>
                     </div>
                     <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
@@ -283,7 +280,8 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                             <span className="admin-table-sub">
                               {stop.jobTypes
                                 .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                                .join(" + ")}
+                                .join(" + ")}{" "}
+                              · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
                             </span>
                           </div>
                         </li>

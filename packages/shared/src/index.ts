@@ -165,6 +165,32 @@ export function formatUsd(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// Estimated on-site service time per cart: finding the location + cans, rolling
+// them, and recording the job. ~2 min/can (a 2-can stop ≈ 4 min).
+export const SERVICE_MINUTES_PER_CAN = 2;
+
+// Estimated minutes to complete a route: driving time + per-can service time.
+export function estimatedRouteMinutes(route: {
+  totalDurationSeconds: number;
+  stops: Array<{ canCount: number }>;
+}): number {
+  const driveMinutes = route.totalDurationSeconds / 60;
+  const serviceMinutes = route.stops.reduce(
+    (sum, s) => sum + s.canCount * SERVICE_MINUTES_PER_CAN,
+    0
+  );
+  return Math.round(driveMinutes + serviceMinutes);
+}
+
+export function formatMinutes(mins: number): string {
+  if (mins < 60) {
+    return `${mins} min`;
+  }
+  const hours = Math.floor(mins / 60);
+  const rest = mins % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
 export const serviceHoldInputSchema = z.object({
   startDate: z.string().datetime(),
   endDate: z.string().datetime(),
@@ -523,7 +549,8 @@ export const adminRouteStopSchema = z.object({
   postalCode: z.string(),
   lat: z.number(),
   lng: z.number(),
-  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"]))
+  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
+  canCount: z.number().int().nonnegative()
 });
 
 export const adminRouteLegSchema = z.object({
@@ -563,7 +590,8 @@ export const dailyRouteStopSchema = z.object({
   postalCode: z.string(),
   lat: z.number(),
   lng: z.number(),
-  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"]))
+  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
+  canCount: z.number().int().nonnegative()
 });
 
 export const dailyRouteSchema = z.object({
@@ -609,6 +637,7 @@ export const adminTodaysLocationSchema = z.object({
   // What's due here today: roll the cart out (evening before pickup) and/or
   // roll it in (day after pickup).
   jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
+  canCount: z.number().int().nonnegative(),
   neighborhoodId: z.string().nullable(),
   neighborhoodName: z.string().nullable()
 });

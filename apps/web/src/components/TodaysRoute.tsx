@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { AdminTodaysLocation } from "@gpp/shared";
+import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import {
   deleteRoute,
   getAssignedRoutes,
@@ -89,7 +90,7 @@ function LocationsMap({ locations }: { locations: AdminTodaysLocation[] }): JSX.
         .bindPopup(
           `<strong>${loc.line1}</strong><br>${loc.city}, ${loc.state} ${loc.postalCode}<br>${loc.customerName}<br><b>${locationActionLabel(
             loc
-          )}</b> · ${locationStatusLabel(loc)}`
+          )}</b> · ${loc.canCount} can${loc.canCount === 1 ? "" : "s"} · ${locationStatusLabel(loc)}`
         )
         .addTo(layer);
       bounds.push([loc.lat, loc.lng]);
@@ -159,9 +160,20 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     : allLocations;
   const awaitingCount = scopeLocations.filter((l) => l.routeStatus === "ASSIGNED").length;
   const acceptedCount = scopeLocations.filter((l) => l.routeStatus === "ACCEPTED").length;
-  const scopedUnassigned = scopeLocations.filter((l) => !l.assigned).length;
+  const unassignedScope = scopeLocations.filter((l) => !l.assigned);
+  const scopedUnassigned = unassignedScope.length;
   const nothingToAssign = scopedUnassigned === 0;
   const summaryReason = scopeLocations.length === 0 ? "none_scheduled" : "all_assigned";
+
+  // Describe the unassigned work by action (roll-out / roll-in), not "pickups".
+  const rollOutCount = unassignedScope.filter((l) => l.jobTypes.includes("CURB_OUT")).length;
+  const rollInCount = unassignedScope.filter((l) => l.jobTypes.includes("CURB_IN")).length;
+  const workPhrase = [
+    rollOutCount ? `${rollOutCount} roll-out${rollOutCount === 1 ? "" : "s"}` : null,
+    rollInCount ? `${rollInCount} roll-in${rollInCount === 1 ? "" : "s"}` : null
+  ]
+    .filter(Boolean)
+    .join(" + ");
 
   const invalidateRouteViews = () => {
     void queryClient.invalidateQueries({ queryKey: ["today-locations"] });
@@ -211,8 +223,8 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const scope = selectedHood ? ` in ${selectedHood.name}` : "";
   const emptyMessage =
     summaryReason === "all_assigned"
-      ? `Every pickup${scope} today is already assigned to a route (awaiting operator acceptance or accepted). Remove a route above to free up its locations, then reassign.`
-      : `No pickups are scheduled for today${scope}.`;
+      ? `All of today's roll-outs and roll-ins${scope} are already assigned to a route (awaiting operator acceptance or accepted). Remove a route above to free up its locations, then reassign.`
+      : `No roll-outs or roll-ins are due today${scope}.`;
   const emptyIcon = summaryReason === "all_assigned" ? "⚠️" : "🗓️";
 
   return (
@@ -249,7 +261,8 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                       <strong>{ar.operatorName}</strong>
                       {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
                       <span className="assigned-route-count">
-                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"}
+                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"} · ~
+                        {formatMinutes(estimatedRouteMinutes(ar))}
                       </span>
                       <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
                         {accepted ? "✓ Accepted" : "Awaiting accept"}
@@ -284,6 +297,12 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                             <span className="admin-table-sub">
                               {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
                             </span>
+                            <span className="admin-table-sub">
+                              {stop.jobTypes
+                                .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                                .join(" + ")}{" "}
+                              · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                            </span>
                           </div>
                         </li>
                       ))}
@@ -311,7 +330,9 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                 <span className="assign-step-num">1</span>
                 <div>
                   <strong>Choose an area</strong>
-                  <span className="subtext">Route all of today's pickups, or just one neighborhood.</span>
+                  <span className="subtext">
+                    Route all of today's roll-outs and roll-ins, or just one neighborhood.
+                  </span>
                 </div>
               </div>
               <select
@@ -319,12 +340,13 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                 value={neighborhoodId}
                 onChange={(event) => setNeighborhoodId(event.target.value)}
               >
-                <option value="">All locations</option>
+                <option value="">All locations ({allLocations.length})</option>
                 {neighborhoods.map((n) => {
                   const fullyAssigned = isHoodFullyAssigned(n.id);
+                  const todayCount = hoodStats.get(n.id)?.total ?? 0;
                   return (
                     <option key={n.id} value={n.id} disabled={fullyAssigned}>
-                      {n.name} ({n.locationCount}){fullyAssigned ? " · assigned" : ""}
+                      {n.name} ({todayCount}){fullyAssigned ? " · assigned" : ""}
                     </option>
                   );
                 })}
@@ -336,7 +358,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                 </p>
               ) : scopedUnassigned > 0 ? (
                 <p className="assign-ready">
-                  {scopedUnassigned} pickup{scopedUnassigned === 1 ? "" : "s"} ready to assign{scope}.
+                  {workPhrase} ready to assign{scope}.
                 </p>
               ) : null}
             </li>
@@ -387,7 +409,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                   ? "Nothing to assign"
                   : !assigning
                     ? "Select an operator to assign"
-                    : `Assign ${scopedUnassigned} pickup${scopedUnassigned === 1 ? "" : "s"} to ${selected.size} operator${selected.size === 1 ? "" : "s"}`}
+                    : `Assign ${workPhrase} to ${selected.size} operator${selected.size === 1 ? "" : "s"}`}
             </button>
           </div>
           {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}

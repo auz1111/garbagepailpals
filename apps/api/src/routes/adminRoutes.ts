@@ -41,6 +41,7 @@ type ServiceWork = {
   };
   subscriptionId: string;
   jobTypes: string[]; // "CURB_OUT" (roll cart out) and/or "CURB_IN" (roll cart in)
+  canCount: number;
 };
 
 const SERVICE_ADDRESS_INCLUDE = {
@@ -77,24 +78,26 @@ async function collectTodaysWork(now: Date, neighborhoodId?: string): Promise<Se
     if (!subscriptionId) {
       continue;
     }
-    const rollOut = a.schedules.some(
+    const rollOutSched = a.schedules.find(
       (s) =>
         s.pickupDayOfWeek === rollOutWeekday &&
         (s.cadence === "WEEKLY" || biweeklyMatches(s.biweeklyAnchorDate, rollOutDate))
     );
-    const rollIn = a.schedules.some(
+    const rollInSched = a.schedules.find(
       (s) =>
         s.pickupDayOfWeek === rollInWeekday &&
         s.rollIn &&
         (s.cadence === "WEEKLY" || biweeklyMatches(s.biweeklyAnchorDate, rollInDate))
     );
     const jobTypes: string[] = [];
-    if (rollOut) jobTypes.push("CURB_OUT");
-    if (rollIn) jobTypes.push("CURB_IN");
+    if (rollOutSched) jobTypes.push("CURB_OUT");
+    if (rollInSched) jobTypes.push("CURB_IN");
     if (jobTypes.length === 0) {
       continue;
     }
-    work.push({ address: a as unknown as ServiceWork["address"], subscriptionId, jobTypes });
+    // Cans for the relevant pickup day (prefer the roll-out day's schedule).
+    const canCount = (rollOutSched ?? rollInSched)?.canCount ?? 0;
+    work.push({ address: a as unknown as ServiceWork["address"], subscriptionId, jobTypes, canCount });
   }
   return work;
 }
@@ -141,6 +144,7 @@ export type DailyRouteRow = {
     sequence: number;
     serviceAddressId: string;
     jobTypes: string;
+    canCount: number;
     serviceAddress: {
       line1: string;
       city: string;
@@ -182,7 +186,8 @@ export function serializeDailyRoute(route: DailyRouteRow) {
       postalCode: s.serviceAddress.postalCode,
       lat: s.serviceAddress.lat.toNumber(),
       lng: s.serviceAddress.lng.toNumber(),
-      jobTypes: s.jobTypes.split(",").filter(Boolean)
+      jobTypes: s.jobTypes.split(",").filter(Boolean),
+      canCount: s.canCount
     }))
   };
 }
@@ -387,6 +392,7 @@ export async function adminTodaysLocationsHandler(
           assigned: statusByAddress.has(w.address.id),
           routeStatus: statusByAddress.get(w.address.id) ?? null,
           jobTypes: [...w.jobTypes].sort(),
+          canCount: w.canCount,
           neighborhoodId: w.address.neighborhoodId,
           neighborhoodName: w.address.neighborhood?.name ?? null
         }));
@@ -412,6 +418,7 @@ type StopBuild = {
   lng: number;
   subscriptionId: string;
   jobTypes: string[];
+  canCount: number;
 };
 
 export async function adminTodaysRouteHandler(
@@ -465,7 +472,8 @@ export async function adminTodaysRouteHandler(
             lat: w.address.lat.toNumber(),
             lng: w.address.lng.toNumber(),
             subscriptionId: w.subscriptionId,
-            jobTypes: w.jobTypes
+            jobTypes: w.jobTypes,
+            canCount: w.canCount
           }));
 
         // Resolve operator names for labelling assigned legs.
@@ -556,7 +564,8 @@ export async function adminTodaysRouteHandler(
                     postalCode: stop.postalCode,
                     lat: stop.lat,
                     lng: stop.lng,
-                    jobTypes: [...stop.jobTypes].sort()
+                    jobTypes: [...stop.jobTypes].sort(),
+                    canCount: stop.canCount
                   }
                 : null;
             })
@@ -606,7 +615,8 @@ export async function adminTodaysRouteHandler(
                   create: leg.stops.map((stop) => ({
                     serviceAddressId: stop.addressId,
                     sequence: stop.order,
-                    jobTypes: [...stop.jobTypes].sort().join(",")
+                    jobTypes: [...stop.jobTypes].sort().join(","),
+                    canCount: stop.canCount
                   }))
                 }
               }
