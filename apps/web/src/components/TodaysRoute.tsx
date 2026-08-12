@@ -425,6 +425,35 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
       done: scopeTotal > 0 && servicedCount === scopeTotal
     }
   ];
+  const dayComplete = scopeTotal > 0 && routingSteps.every((step) => step.done);
+
+  // A live headline/subline that tracks where the day actually is, rather than a
+  // static "fully assigned" message.
+  const plural = scopeTotal === 1 ? "" : "s";
+  const routingStatus = dayComplete
+    ? {
+        title: "Today's routes are all complete",
+        sub: "Every roll-out and roll-in has been serviced."
+      }
+    : awaitingAccept === scopeTotal
+      ? {
+          title: "Assigned — waiting on operators to accept",
+          sub: `All ${scopeTotal} location${plural} are on a route. No routes accepted yet.`
+        }
+      : awaitingAccept > 0
+        ? {
+            title: "Partly accepted — a few routes still pending",
+            sub: `${acceptedTotal}/${scopeTotal} accepted · ${awaitingAccept} still awaiting operator acceptance.`
+          }
+        : servicedCount === 0
+          ? {
+              title: "Accepted — service hasn't started",
+              sub: `All ${scopeTotal} location${plural} accepted. No stops serviced yet.`
+            }
+          : {
+              title: "Service in progress",
+              sub: `${servicedCount}/${scopeTotal} stops serviced — operators are out on their routes.`
+            };
 
   return (
     <div className="dash-page">
@@ -440,12 +469,26 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         <article className="panel">
           {summaryReason === "all_assigned" ? (
             <div className="route-checklist">
-              <div className="route-checklist-head">
-                <span className="route-checklist-title">Today's routing is fully assigned{scope}</span>
-                <span className="route-checklist-sub">
-                  Every roll-out and roll-in is on a route. Here's where the day stands:
-                </span>
-              </div>
+              {dayComplete ? (
+                <div className="route-day-done" role="status">
+                  <span className="route-day-done-badge" aria-hidden="true">
+                    ✓
+                  </span>
+                  <div className="route-day-done-text">
+                    <strong>All routes complete for today{scope}!</strong>
+                    <span>Every roll-out and roll-in has been serviced. Great work. 🎉</span>
+                  </div>
+                </div>
+              ) : null}
+              {!dayComplete ? (
+                <div className="route-checklist-head">
+                  <span className="route-checklist-title">
+                    {routingStatus.title}
+                    {scope}
+                  </span>
+                  <span className="route-checklist-sub">{routingStatus.sub}</span>
+                </div>
+              ) : null}
               <ol className="route-steps">
                 {routingSteps.map((step, index) => (
                   <li key={step.label} className={`route-step${step.done ? " is-done" : ""}`}>
@@ -459,10 +502,6 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                   </li>
                 ))}
               </ol>
-              <p className="route-checklist-foot">
-                Need to change an assignment? Remove or cancel a route above to free its
-                locations, then reassign.
-              </p>
             </div>
           ) : (
             <div className="route-notice">
@@ -579,6 +618,11 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         ) : assignedRoutes.length === 0 ? (
           <p className="subtext">No routes are assigned for today yet.</p>
         ) : (
+          <>
+          <p className="subtext assigned-route-hint">
+            Cancel a route to pull it back (kept on record) or remove it to delete it — either
+            frees its un-serviced locations to reassign.
+          </p>
           <ul className="assigned-route-list">
             {assignedRoutes.map((ar) => {
               const open = expandedOperator === ar.id;
@@ -718,6 +762,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
               );
             })}
           </ul>
+          </>
         )}
         {assignedQuery.isError ? (
           <p className="error">{getErrorMessage(assignedQuery.error)}</p>

@@ -995,6 +995,50 @@ a {
   flex-shrink: 0;
 }
 
+/* Big celebratory badge when every route is complete for the day. */
+.route-day-done {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1rem;
+  border-radius: var(--r-md);
+  color: #ffffff;
+  background: linear-gradient(120deg, #16a34a, #22c55e);
+  box-shadow: 0 10px 24px rgba(22, 163, 74, 0.35);
+}
+
+.route-day-done-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3.4rem;
+  height: 3.4rem;
+  border-radius: 50%;
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: #16a34a;
+  background: #ffffff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.4);
+}
+
+.route-day-done-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.route-day-done-text strong {
+  font-size: 1.25rem;
+  line-height: 1.15;
+}
+
+.route-day-done-text span {
+  font-size: 0.92rem;
+  color: rgba(255, 255, 255, 0.92);
+}
+
 /* Day-progress checklist shown once everything is assigned. */
 .route-checklist-head {
   display: flex;
@@ -1969,6 +2013,10 @@ a {
 
 .assign-loc select {
   max-width: 220px;
+}
+
+.assigned-route-hint {
+  margin: 0.2rem 0 0.8rem;
 }
 
 .assigned-route-list {
