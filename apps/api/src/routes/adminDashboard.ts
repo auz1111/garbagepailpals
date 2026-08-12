@@ -16,13 +16,15 @@ import {
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
+import { allowedZoneIds } from "../lib/zoneScope";
 
 const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
 
 const USER_AGGREGATE_INCLUDE = {
   serviceAddresses: { where: { isActive: true }, include: { schedules: true } },
   subscriptions: true,
-  zones: { select: { zoneId: true } }
+  zones: { select: { zoneId: true } },
+  zoneRequests: { where: { status: "PENDING" as const }, select: { zoneId: true } }
 } as const;
 
 type ScheduleRow = {
@@ -55,6 +57,7 @@ type UserAggregateRow = {
   serviceAddresses: AddressRow[];
   subscriptions: Array<{ status: string }>;
   zones: Array<{ zoneId: string }>;
+  zoneRequests: Array<{ zoneId: string }>;
 };
 
 function pricingDays(schedules: ScheduleRow[]) {
@@ -93,6 +96,7 @@ function toAdminUserDetail(row: UserAggregateRow) {
   return {
     ...toAdminUser(row),
     grantedZoneIds: row.zones.map((z) => z.zoneId),
+    requestedZoneIds: row.zoneRequests.map((z) => z.zoneId),
     locations: row.serviceAddresses.map((address) => ({
       id: address.id,
       line1: address.line1,
@@ -145,7 +149,7 @@ export async function adminUsersHandler(
               role: input.role,
               passwordHash,
               authProviderId: `local:${input.email}`,
-              operatorAccess: input.role === "ADMIN" ? input.operatorAccess ?? false : false
+              operatorAccess: isSuperAdminRole(input.role) ? input.operatorAccess ?? false : false
             }
           });
           const row = await prisma.user.findUnique({
@@ -405,24 +409,46 @@ export async function adminUserZonesHandler(
   return withErrorBoundary(context, async () =>
     withAuth(
       async (req, _ctx, auth) => {
-        if (!isSuperAdminRole(auth.role)) {
-          throw new HttpError(403, "Only a super admin can grant zones.");
-        }
         const userId = req.params.userId;
         if (!userId) {
           throw new HttpError(400, "userId is required");
         }
         const { zoneIds } = await parseJson(req, operatorZonesUpdateSchema);
-        const unique = [...new Set(zoneIds)];
-        const valid = unique.length
-          ? (await prisma.zone.findMany({ where: { id: { in: unique } }, select: { id: true } })).map(
+        const requested = [...new Set(zoneIds)];
+        const valid = requested.length
+          ? (await prisma.zone.findMany({ where: { id: { in: requested } }, select: { id: true } })).map(
               (z) => z.id
             )
           : [];
+
+        // Super admin sets grants outright; a pro-operator may only add/remove
+        // zones within their own scope, and the user's grants outside that scope
+        // are preserved.
+        const scope = await allowedZoneIds(auth);
+        const existing = (
+          await prisma.userZone.findMany({ where: { userId }, select: { zoneId: true } })
+        ).map((r) => r.zoneId);
+        let finalGrants: string[];
+        if (scope === "ALL") {
+          finalGrants = valid;
+        } else {
+          const manageable = new Set(scope);
+          finalGrants = [
+            ...new Set([
+              ...existing.filter((z) => !manageable.has(z)),
+              ...valid.filter((z) => manageable.has(z))
+            ])
+          ];
+        }
+
         await prisma.$transaction([
           prisma.userZone.deleteMany({ where: { userId } }),
           prisma.userZone.createMany({
-            data: valid.map((zoneId) => ({ userId, zoneId, serves: true }))
+            data: finalGrants.map((zoneId) => ({ userId, zoneId, serves: true }))
+          }),
+          // Granting a zone approves (clears) any pending request for it.
+          prisma.operatorZoneRequest.deleteMany({
+            where: { operatorId: userId, zoneId: { in: finalGrants } }
           })
         ]);
         const row = await prisma.user.findUnique({

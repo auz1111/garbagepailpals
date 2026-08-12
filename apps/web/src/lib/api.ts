@@ -460,14 +460,15 @@ export function getOperatorZones(accessToken: string): Promise<OperatorZonesResp
   );
 }
 
-export function setOperatorZones(
-  zoneIds: string[],
+// Operator requests (or cancels a pending request for) a zone to serve.
+export function requestOperatorZone(
+  zoneId: string,
   accessToken: string
 ): Promise<OperatorZonesResponse> {
-  return request<{ zoneIds: string[] }, OperatorZonesResponse>(
-    "/operator/zones",
-    "PUT",
-    { zoneIds },
+  return request<{ zoneId: string }, OperatorZonesResponse>(
+    "/operator/zones/request",
+    "POST",
+    { zoneId },
     accessToken
   );
 }

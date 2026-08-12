@@ -98,6 +98,7 @@ model User {
   routes               DailyRoute[]   @relation("OperatorRoutes")
   timeOff              OperatorTimeOff[] @relation("OperatorTimeOff")
   zones                UserZone[]
+  zoneRequests         OperatorZoneRequest[] @relation("OperatorZoneRequests")
 }
 
 // An operator is available by default. A record here is a request to take a day
@@ -187,6 +188,24 @@ model Zone {
   updatedAt     DateTime       @updatedAt
   neighborhoods Neighborhood[]
   userZones     UserZone[]
+  zoneRequests  OperatorZoneRequest[]
+}
+
+// An operator's request to serve a zone (approved by a pro-operator/super admin,
+// mirroring the time-off request flow).
+model OperatorZoneRequest {
+  id         String        @id @default(cuid())
+  operatorId String
+  zoneId     String
+  status     TimeOffStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  operator   User          @relation("OperatorZoneRequests", fields: [operatorId], references: [id], onDelete: Cascade)
+  zone       Zone          @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+
+  @@unique([operatorId, zoneId])
+  @@index([operatorId])
+  @@index([zoneId])
 }
 
 // Grants a zone to a user: a PRO_OPERATOR's admin scope and/or the zones an

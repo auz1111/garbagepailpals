@@ -4661,3 +4661,46 @@ button[type="submit"]:disabled {
   font: inherit;
   color: var(--ink);
 }
+
+/* Serve-zone request states (operator dashboard + admin grant editor) */
+.serve-zone.is-requested {
+  border-color: var(--gold);
+  background: #fff8e6;
+}
+
+.serve-zone-static,
+.serve-zone-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+}
+
+.serve-zone-btn {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.serve-zone-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.serve-zone-tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--pill);
+  background: var(--gold);
+  color: var(--teal-deep);
+  white-space: nowrap;
+}
+.serve-zone-tag.is-serving {
+  background: #16a34a;
+  color: #ffffff;
+}

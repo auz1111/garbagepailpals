@@ -429,7 +429,9 @@ export const adminUserDetailSchema = adminUserSchema.extend({
   locations: z.array(adminUserLocationSchema),
   // Zones granted to this user (pro-operator admin scope / operator serviceable
   // areas). Only meaningful for staff roles.
-  grantedZoneIds: z.array(z.string())
+  grantedZoneIds: z.array(z.string()),
+  // Zones this operator has a pending request to serve (awaiting approval).
+  requestedZoneIds: z.array(z.string())
 });
 
 export const adminUserResponseSchema = z.object({
@@ -545,19 +547,26 @@ export const zonesResponseSchema = z.object({
   zones: z.array(zoneSchema)
 });
 
-// The zones an operator can serve, each flagged with whether they currently do.
+// The zones an operator can serve. `serves` = granted by an admin; `requested`
+// = a pending request awaiting admin approval.
 export const operatorZoneSchema = z.object({
   id: z.string(),
   name: z.string(),
   city: z.string().nullable(),
   state: z.string().nullable(),
-  serves: z.boolean()
+  serves: z.boolean(),
+  requested: z.boolean()
 });
 export const operatorZonesResponseSchema = z.object({
   zones: z.array(operatorZoneSchema)
 });
+// Admin sets an operator's granted zones directly.
 export const operatorZonesUpdateSchema = z.object({
   zoneIds: z.array(z.string()).max(200)
+});
+// Operator requests (or cancels a request for) a single zone.
+export const operatorZoneRequestSchema = z.object({
+  zoneId: z.string()
 });
 
 export const zoneCreateSchema = z.object({

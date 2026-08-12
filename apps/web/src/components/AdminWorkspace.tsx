@@ -9,7 +9,13 @@ import type {
   PickupDayInput,
   Role
 } from "@gpp/shared";
-import { addressMonthlyCents, formatUsd, pickupDayMonthlyCents, PRICING } from "@gpp/shared";
+import {
+  addressMonthlyCents,
+  formatUsd,
+  isSuperAdminRole,
+  pickupDayMonthlyCents,
+  PRICING
+} from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
@@ -761,9 +767,10 @@ function AdminUserDetail({
   const [operatorAccess, setOperatorAccess] = useState(user.operatorAccess);
   const [submitted, setSubmitted] = useState(false);
 
-  // Super-admin grants zones to a pro-operator (their admin scope + serviceable
-  // areas). Only shown for pro-operators.
-  const showZoneGrants = user.role === "PRO_OPERATOR";
+  // Admins grant zones to operators (serviceable areas) and pro-operators (admin
+  // scope). Approving a requested zone = checking it.
+  const showZoneGrants = user.role === "PRO_OPERATOR" || user.role === "OPERATOR";
+  const requestedSet = new Set(user.requestedZoneIds);
   const detailQueryClient = useQueryClient();
   const grantZonesQuery = useQuery({
     queryKey: ["zones"],
@@ -811,7 +818,7 @@ function AdminUserDetail({
     if (role !== user.role) patch.role = role;
     const nextArea = area.trim() ? area.trim() : null;
     if (nextArea !== (user.requestedServiceArea ?? null)) patch.requestedServiceArea = nextArea;
-    const nextOperatorAccess = role === "ADMIN" ? operatorAccess : false;
+    const nextOperatorAccess = isSuperAdminRole(role) ? operatorAccess : false;
     if (nextOperatorAccess !== user.operatorAccess) patch.operatorAccess = nextOperatorAccess;
 
     if (Object.keys(patch).length === 0) {
@@ -877,7 +884,7 @@ function AdminUserDetail({
               <option value="SUPER_ADMIN">Super admin</option>
             </select>
           </label>
-          {role === "ADMIN" ? (
+          {isSuperAdminRole(role) ? (
             <label className="checkbox-field">
               <input
                 type="checkbox"
@@ -951,28 +958,36 @@ function AdminUserDetail({
 
       {showZoneGrants ? (
         <article className="panel">
-          <h3>Granted zones</h3>
+          <h3>{user.role === "OPERATOR" ? "Serviceable areas" : "Granted zones"}</h3>
           <p className="subtext">
-            Zones this pro-operator can administer and operate in. They only see and route these
-            areas.
+            {user.role === "OPERATOR"
+              ? "Areas this operator serves. Check an area to grant it (approving any request); uncheck to remove."
+              : "Zones this pro-operator can administer and operate in. They only see and route these areas."}
           </p>
           {grantZones.length === 0 ? (
             <p className="subtext">No zones exist yet — create them under Service Areas.</p>
           ) : (
             <ul className="serve-zone-list">
-              {grantZones.map((z) => (
-                <li className={`serve-zone${grantedSet.has(z.id) ? " is-on" : ""}`} key={z.id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={grantedSet.has(z.id)}
-                      disabled={grantMutation.isPending}
-                      onChange={() => toggleGrant(z.id)}
-                    />
-                    <span className="serve-zone-name">{z.name}</span>
-                  </label>
-                </li>
-              ))}
+              {grantZones.map((z) => {
+                const pending = requestedSet.has(z.id) && !grantedSet.has(z.id);
+                return (
+                  <li
+                    className={`serve-zone${grantedSet.has(z.id) ? " is-on" : pending ? " is-requested" : ""}`}
+                    key={z.id}
+                  >
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={grantedSet.has(z.id)}
+                        disabled={grantMutation.isPending}
+                        onChange={() => toggleGrant(z.id)}
+                      />
+                      <span className="serve-zone-name">{z.name}</span>
+                      {pending ? <span className="serve-zone-tag">Requested</span> : null}
+                    </label>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {grantMutation.isError ? <p className="error">{getErrorMessage(grantMutation.error)}</p> : null}
@@ -1469,7 +1484,7 @@ function CreateUserForm({
       password,
       role,
       phone: phone.trim() ? phone.trim() : undefined,
-      operatorAccess: role === "ADMIN" ? operatorAccess : false
+      operatorAccess: isSuperAdminRole(role) ? operatorAccess : false
     });
   }
 
@@ -1492,7 +1507,7 @@ function CreateUserForm({
             <option value="SUPER_ADMIN">Super admin</option>
           </select>
         </label>
-        {role === "ADMIN" ? (
+        {isSuperAdminRole(role) ? (
           <label className="checkbox-field">
             <input
               type="checkbox"

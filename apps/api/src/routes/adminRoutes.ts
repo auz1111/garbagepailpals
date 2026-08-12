@@ -116,13 +116,14 @@ async function collectTodaysWork(
 }
 
 // Users who can run a route: operators, pro operators (scoped sub-admins who
-// also operate), plus legacy admins granted operator access.
+// also operate), plus super/legacy admins granted operator access.
 function operatorWhere() {
   return {
     OR: [
       { role: "OPERATOR" as const },
       { role: "PRO_OPERATOR" as const },
-      { role: "ADMIN" as const, operatorAccess: true }
+      { role: "ADMIN" as const, operatorAccess: true },
+      { role: "SUPER_ADMIN" as const, operatorAccess: true }
     ]
   };
 }
@@ -241,14 +242,16 @@ export async function adminAvailableOperatorsHandler(
           dateParam ?? serviceDateForZone(new Date(), defaultOperatingZone()).toISOString().slice(0, 10);
         const date = new Date(`${dateStr}T00:00:00Z`);
 
-        // When a zone is chosen, only operators who serve it are available.
-        // Operators who haven't configured any zones yet are treated as
-        // available everywhere (so assignment isn't dead before they opt in).
+        // When a zone is chosen, only operators who explicitly serve it are
+        // available — EXCEPT full admins (super/legacy), who administer all
+        // zones and are therefore available in every one. An operator who serves
+        // no zones is offered no routes.
+        const allZoneAdminRoles: ("SUPER_ADMIN" | "ADMIN")[] = ["SUPER_ADMIN", "ADMIN"];
         const zoneFilter = zoneId
           ? {
               OR: [
                 { zones: { some: { zoneId, serves: true } } },
-                { zones: { none: { serves: true } } }
+                { role: { in: allZoneAdminRoles } }
               ]
             }
           : {};

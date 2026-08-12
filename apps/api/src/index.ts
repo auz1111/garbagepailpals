@@ -49,7 +49,7 @@ import {
   operatorServiceStopHandler
 } from "./routes/operatorRoutes";
 import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
-import { operatorZonesHandler } from "./routes/operatorZones";
+import { operatorZoneRequestHandler, operatorZonesHandler } from "./routes/operatorZones";
 import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adminOperators";
 import {
   adminLocationByIdHandler,
@@ -239,9 +239,16 @@ app.http("operator-route-stop-service", {
 
 app.http("operator-zones", {
   route: "operator/zones",
-  methods: ["GET", "PUT", "OPTIONS"],
+  methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: operatorZonesHandler
+});
+
+app.http("operator-zone-request", {
+  route: "operator/zones/request",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: operatorZoneRequestHandler
 });
 
 app.http("operator-timeoff", {

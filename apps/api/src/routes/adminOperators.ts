@@ -12,7 +12,8 @@ function operatorWhere() {
     OR: [
       { role: "OPERATOR" as const },
       { role: "PRO_OPERATOR" as const },
-      { role: "ADMIN" as const, operatorAccess: true }
+      { role: "ADMIN" as const, operatorAccess: true },
+      { role: "SUPER_ADMIN" as const, operatorAccess: true }
     ]
   };
 }

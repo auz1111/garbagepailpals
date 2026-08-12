@@ -11,7 +11,7 @@ import {
   getOperatorZones,
   markStopServiced,
   requestOperatorTimeOff,
-  setOperatorZones
+  requestOperatorZone
 } from "../lib/api";
 
 // Decode an ORS/Google encoded polyline (precision 5) to [lat, lng] pairs.
@@ -190,15 +190,10 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     enabled: canManageZones
   });
   const serveZones = zonesQuery.data?.zones ?? [];
-  const zonesMutation = useMutation({
-    mutationFn: (zoneIds: string[]) => setOperatorZones(zoneIds, accessToken),
+  const requestZoneMutation = useMutation({
+    mutationFn: (zoneId: string) => requestOperatorZone(zoneId, accessToken),
     onSuccess: (data) => queryClient.setQueryData(["operator-zones"], data)
   });
-  const toggleServeZone = (id: string, currentlyServes: boolean) => {
-    const current = serveZones.filter((z) => z.serves).map((z) => z.id);
-    const next = currentlyServes ? current.filter((x) => x !== id) : [...current, id];
-    zonesMutation.mutate(next);
-  };
 
   return (
     <div className="dash-page">
@@ -275,8 +270,8 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         <article className="panel">
           <h3>Areas I serve</h3>
           <p className="subtext">
-            You're only offered routes in the areas you serve. Leave all unchecked to be available
-            everywhere.
+            You're offered routes only in the areas you serve. An admin grants areas — tap one you
+            don't serve to request it, and tap a pending request to cancel it.
           </p>
           {zonesQuery.isLoading ? (
             <p className="subtext">Loading…</p>
@@ -285,22 +280,34 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
           ) : (
             <ul className="serve-zone-list">
               {serveZones.map((z) => (
-                <li className={`serve-zone${z.serves ? " is-on" : ""}`} key={z.id}>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={z.serves}
-                      disabled={zonesMutation.isPending}
-                      onChange={() => toggleServeZone(z.id, z.serves)}
-                    />
-                    <span className="serve-zone-name">{z.name}</span>
-                  </label>
+                <li
+                  className={`serve-zone${z.serves ? " is-on" : z.requested ? " is-requested" : ""}`}
+                  key={z.id}
+                >
+                  {z.serves ? (
+                    <div className="serve-zone-static">
+                      <span className="serve-zone-name">{z.name}</span>
+                      <span className="serve-zone-tag is-serving">Serving</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="serve-zone-btn"
+                      disabled={requestZoneMutation.isPending}
+                      onClick={() => requestZoneMutation.mutate(z.id)}
+                    >
+                      <span className="serve-zone-name">{z.name}</span>
+                      <span className="serve-zone-tag">
+                        {z.requested ? "Requested — tap to cancel" : "Request"}
+                      </span>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
-          {zonesMutation.isError ? (
-            <p className="error">{getErrorMessage(zonesMutation.error)}</p>
+          {requestZoneMutation.isError ? (
+            <p className="error">{getErrorMessage(requestZoneMutation.error)}</p>
           ) : null}
         </article>
       ) : null}
