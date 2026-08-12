@@ -208,6 +208,9 @@ export function OperatorsAdmin({ accessToken }: OperatorsAdminProps): JSX.Elemen
             {operators.map((op) => (
               <div className="ops-operator" key={op.id}>
                 <div className="ops-operator-name" title={op.email}>
+                  <span className="ops-operator-icon" aria-hidden="true">
+                    👤
+                  </span>
                   {op.name}
                 </div>
                 <div className="ops-cal">

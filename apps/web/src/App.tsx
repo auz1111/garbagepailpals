@@ -320,6 +320,8 @@ export function App() {
                         : isPersonalOperatorLink && pendingRouteCount > 0
                           ? pendingRouteCount
                           : null;
+                  // Routes awaiting acceptance use the brand gold; other alerts stay red.
+                  const badgeGold = isPersonalOperatorLink && pendingRouteCount > 0;
                   const showOperatorsHeader =
                     item.group === "operators" && dashboardNav[idx - 1]?.group !== "operators";
                   return (
@@ -338,7 +340,10 @@ export function App() {
                         </span>
                         {item.label}
                         {badge !== null ? (
-                          <span className="drawer-link-badge" aria-label={`${badge} need attention`}>
+                          <span
+                            className={`drawer-link-badge${badgeGold ? " is-gold" : ""}`}
+                            aria-label={`${badge} need attention`}
+                          >
                             {badge}
                           </span>
                         ) : null}

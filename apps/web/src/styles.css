@@ -1323,6 +1323,11 @@ a {
   justify-content: center;
 }
 
+.drawer-link-badge.is-gold {
+  background: var(--gold);
+  color: var(--teal-deep);
+}
+
 /* "Locations needing a neighborhood" — a prominent, attention-grabbing panel. */
 .assign-attention {
   border-left: 5px solid var(--gold);
@@ -1437,6 +1442,13 @@ a {
   font-weight: 800;
   font-size: 0.95rem;
   margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ops-operator-icon {
+  font-size: 1.05rem;
 }
 
 .ops-cal {
