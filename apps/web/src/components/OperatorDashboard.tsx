@@ -50,7 +50,7 @@ function RouteMiniMap({ route }: { route: DailyRoute }): JSX.Element {
     if (!containerRef.current || mapRef.current) return;
     const map = L.map(containerRef.current, {
       scrollWheelZoom: false,
-      zoomControl: false,
+      zoomControl: true,
       attributionControl: false
     });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
