@@ -237,92 +237,20 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         </p>
       </div>
 
-      <article className="panel">
-        <h3>Assigned routes</h3>
-        {assignedQuery.isLoading ? (
-          <p className="subtext">Loading…</p>
-        ) : assignedRoutes.length === 0 ? (
-          <p className="subtext">No routes are assigned for today yet.</p>
-        ) : (
-          <ul className="assigned-route-list">
-            {assignedRoutes.map((ar) => {
-              const open = expandedOperator === ar.id;
-              const accepted = ar.status === "ACCEPTED";
-              return (
-                <li className="assigned-route" key={ar.id}>
-                  <div className="assigned-route-row">
-                    <button
-                      type="button"
-                      className="assigned-route-head"
-                      aria-expanded={open}
-                      onClick={() => setExpandedOperator(open ? null : ar.id)}
-                    >
-                      <span className="assigned-route-chevron">{open ? "▾" : "▸"}</span>
-                      <strong>{ar.operatorName}</strong>
-                      {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
-                      <span className="assigned-route-count">
-                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"} · ~
-                        {formatMinutes(estimatedRouteMinutes(ar))}
-                      </span>
-                      <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
-                        {accepted ? "✓ Accepted" : "Awaiting accept"}
-                      </span>
-                    </button>
-                    {accepted ? (
-                      <span className="assigned-route-lock" title="Locked — operator accepted this route">
-                        🔒
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="address-row-remove"
-                        disabled={deleteMutation.isPending}
-                        onClick={() => {
-                          if (window.confirm(`Remove ${ar.operatorName}'s route? Its locations become assignable again.`)) {
-                            deleteMutation.mutate(ar.id);
-                          }
-                        }}
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                  {open ? (
-                    <ol className="route-stop-list assigned-route-detail">
-                      {ar.stops.map((stop) => (
-                        <li className="route-stop" key={stop.addressId}>
-                          <span className="route-stop-num">{stop.order + 1}</span>
-                          <div>
-                            <strong>{stop.line1}</strong>
-                            <span className="admin-table-sub">
-                              {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
-                            </span>
-                            <span className="admin-table-sub">
-                              {stop.jobTypes
-                                .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                                .join(" + ")}{" "}
-                              · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
-                            </span>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {assignedQuery.isError ? (
-          <p className="error">{getErrorMessage(assignedQuery.error)}</p>
-        ) : null}
-        {deleteMutation.isError ? (
-          <p className="error">{getErrorMessage(deleteMutation.error)}</p>
-        ) : null}
-      </article>
+      {nothingToAssign ? (
+        <article className="panel">
+          <div className={`route-notice${summaryReason === "all_assigned" ? " is-warning" : ""}`}>
+            <span className="route-notice-icon" aria-hidden="true">
+              {emptyIcon}
+            </span>
+            <span>{emptyMessage}</span>
+          </div>
+        </article>
+      ) : null}
 
-      <article className="panel assign-panel">
-        <h3>Assign a route</h3>
+      {!nothingToAssign ? (
+        <article className="panel assign-panel">
+          <h3>Assign a route</h3>
         <form onSubmit={handleSubmit}>
           <ol className="assign-steps">
             <li className="assign-step">
@@ -414,18 +342,92 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           </div>
           {routeMutation.isError ? <p className="error">{getErrorMessage(routeMutation.error)}</p> : null}
         </form>
-      </article>
-
-      {nothingToAssign ? (
-        <article className="panel">
-          <div className={`route-notice${summaryReason === "all_assigned" ? " is-warning" : ""}`}>
-            <span className="route-notice-icon" aria-hidden="true">
-              {emptyIcon}
-            </span>
-            <span>{emptyMessage}</span>
-          </div>
         </article>
       ) : null}
+
+      <article className="panel">
+        <h3>Assigned routes</h3>
+        {assignedQuery.isLoading ? (
+          <p className="subtext">Loading…</p>
+        ) : assignedRoutes.length === 0 ? (
+          <p className="subtext">No routes are assigned for today yet.</p>
+        ) : (
+          <ul className="assigned-route-list">
+            {assignedRoutes.map((ar) => {
+              const open = expandedOperator === ar.id;
+              const accepted = ar.status === "ACCEPTED";
+              return (
+                <li className="assigned-route" key={ar.id}>
+                  <div className="assigned-route-row">
+                    <button
+                      type="button"
+                      className="assigned-route-head"
+                      aria-expanded={open}
+                      onClick={() => setExpandedOperator(open ? null : ar.id)}
+                    >
+                      <span className="assigned-route-chevron">{open ? "▾" : "▸"}</span>
+                      <strong>{ar.operatorName}</strong>
+                      {ar.label ? <span className="assigned-route-label">{ar.label}</span> : null}
+                      <span className="assigned-route-count">
+                        {ar.stops.length} stop{ar.stops.length === 1 ? "" : "s"} · ~
+                        {formatMinutes(estimatedRouteMinutes(ar))}
+                      </span>
+                      <span className={`coverage-badge ${accepted ? "covered" : "uncovered"}`}>
+                        {accepted ? "✓ Accepted" : "Awaiting accept"}
+                      </span>
+                    </button>
+                    {accepted ? (
+                      <span className="assigned-route-lock" title="Locked — operator accepted this route">
+                        🔒
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="address-row-remove"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => {
+                          if (window.confirm(`Remove ${ar.operatorName}'s route? Its locations become assignable again.`)) {
+                            deleteMutation.mutate(ar.id);
+                          }
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  {open ? (
+                    <ol className="route-stop-list assigned-route-detail">
+                      {ar.stops.map((stop) => (
+                        <li className="route-stop" key={stop.addressId}>
+                          <span className="route-stop-num">{stop.order + 1}</span>
+                          <div>
+                            <strong>{stop.line1}</strong>
+                            <span className="admin-table-sub">
+                              {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
+                            </span>
+                            <span className="admin-table-sub">
+                              {stop.jobTypes
+                                .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                                .join(" + ")}{" "}
+                              · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {assignedQuery.isError ? (
+          <p className="error">{getErrorMessage(assignedQuery.error)}</p>
+        ) : null}
+        {deleteMutation.isError ? (
+          <p className="error">{getErrorMessage(deleteMutation.error)}</p>
+        ) : null}
+      </article>
 
       <article className="panel">
         <div className="panel-head-row">
