@@ -341,6 +341,9 @@ export async function adminCancelRouteHandler(
         if (route.status === "CANCELLED") {
           throw new HttpError(409, "This route is already cancelled.");
         }
+        if (route.status === "COMPLETED") {
+          throw new HttpError(409, "A completed route can't be cancelled.");
+        }
         const { reason } = await parseJson(req, routeCancelSchema);
         // Free the stops that weren't serviced yet, then mark the route cancelled.
         await prisma.routeStop.deleteMany({ where: { routeId, servicedAt: null } });

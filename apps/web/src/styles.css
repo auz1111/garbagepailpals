@@ -1243,6 +1243,40 @@ a {
   background: linear-gradient(120deg, rgba(3, 46, 49, 0.92) 0%, rgba(4, 62, 66, 0.78) 45%, rgba(4, 62, 66, 0.5) 100%);
 }
 
+/* Everything serviced for the day → celebrate: green scrim + glow + badge. */
+.routes-hero.is-complete {
+  box-shadow: 0 0 0 2px #22c55e, 0 16px 34px rgba(22, 163, 74, 0.4);
+}
+
+/* Keep the readable dark-teal scrim; only a faint green wash at the far edge
+   hints at completion — the glow ring and badge carry the message. */
+.routes-hero.is-complete .routes-hero-scrim {
+  background: linear-gradient(
+    120deg,
+    rgba(3, 46, 49, 0.92) 0%,
+    rgba(4, 62, 66, 0.78) 45%,
+    rgba(16, 120, 70, 0.4) 100%
+  );
+}
+
+.routes-hero.is-complete .routes-hero-eyebrow {
+  color: #d1fae5;
+}
+
+.routes-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.7rem;
+  padding: 0.45rem 1rem;
+  border-radius: var(--pill);
+  background: #ffffff;
+  color: #16a34a;
+  font-weight: 800;
+  font-size: 0.95rem;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+}
+
 .routes-hero-overlay {
   position: relative;
   z-index: 2;

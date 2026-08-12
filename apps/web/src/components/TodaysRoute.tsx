@@ -639,7 +639,8 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                     : status === "ACCEPTED"
                       ? { cls: "covered", text: "✓ Accepted" }
                       : { cls: "uncovered", text: "Awaiting accept" };
-              const canCancel = status === "ACCEPTED" || status === "COMPLETED";
+              // A completed route is done — it can't be cancelled anymore.
+              const canCancel = status === "ACCEPTED";
               return (
                 <li className={`assigned-route${status === "CANCELLED" ? " is-cancelled" : ""}`} key={ar.id}>
                   <div className="assigned-route-row">

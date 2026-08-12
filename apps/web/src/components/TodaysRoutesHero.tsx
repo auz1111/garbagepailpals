@@ -109,13 +109,15 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
   }));
 
   const loading = routesQuery.isLoading || locationsQuery.isLoading;
-  const summary =
-    total === 0
+  const allComplete = total > 0 && done === total;
+  const summary = allComplete
+    ? `All ${total} location${total === 1 ? "" : "s"} serviced — today's routes are done.`
+    : total === 0
       ? "No roll-outs or roll-ins are due today."
       : `${done} serviced · ${accepted} in progress · ${awaiting} awaiting acceptance · ${unassigned} unassigned across ${total} location${total === 1 ? "" : "s"}.`;
 
   return (
-    <article className="routes-hero">
+    <article className={`routes-hero${allComplete ? " is-complete" : ""}`}>
       <HeroMap points={points} />
       <div className="routes-hero-scrim" />
       <div className="routes-hero-overlay">
@@ -124,6 +126,9 @@ export function TodaysRoutesHero({ accessToken }: TodaysRoutesHeroProps): JSX.El
             <span className="routes-hero-eyebrow">Today · {new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}</span>
             <h2>Today's Routes</h2>
             <p className="routes-hero-sub">{loading ? "Loading today's routes…" : summary}</p>
+            {allComplete ? (
+              <span className="routes-hero-badge">✓ All routes complete</span>
+            ) : null}
           </div>
           <Link to="/admin/routes" className="routes-hero-cta">
             View today's routes →
