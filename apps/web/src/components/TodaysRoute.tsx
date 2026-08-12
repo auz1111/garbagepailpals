@@ -12,7 +12,8 @@ import {
   getAvailableOperators,
   getNeighborhoods,
   getTodaysLocations,
-  getTodaysRoute
+  getTodaysRoute,
+  getZones
 } from "../lib/api";
 
 type TodaysRouteProps = {
@@ -239,6 +240,22 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const [expandedOperator, setExpandedOperator] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
+  // Zone (city/region) is the top scope. Super admins see all zones; pro
+  // operators only the ones granted to them. Everything below is scoped to the
+  // selected zone.
+  const zonesQuery = useQuery({
+    queryKey: ["zones"],
+    queryFn: async () => getZones(accessToken)
+  });
+  const zones = zonesQuery.data?.zones ?? [];
+  const [zoneId, setZoneId] = useState("");
+  useEffect(() => {
+    if (!zoneId && zones.length > 0) {
+      setZoneId(zones[0]!.id);
+    }
+  }, [zones, zoneId]);
+  const zoneScope = zoneId || undefined;
+
   const operatorsQuery = useQuery({
     queryKey: ["available-operators", todayIso()],
     queryFn: async () => getAvailableOperators(todayIso(), accessToken)
@@ -246,8 +263,8 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
   const operators = operatorsQuery.data?.operators ?? [];
 
   const assignedQuery = useQuery({
-    queryKey: ["assigned-routes"],
-    queryFn: async () => getAssignedRoutes(accessToken)
+    queryKey: ["assigned-routes", zoneId],
+    queryFn: async () => getAssignedRoutes(accessToken, zoneScope)
   });
   const assignedRoutes = assignedQuery.data?.routes ?? [];
   // Stable color per assigned route, shared between the list and the map lines.
@@ -268,16 +285,26 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     queryKey: ["neighborhoods"],
     queryFn: async () => getNeighborhoods(accessToken)
   });
-  const neighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
+  const allNeighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
+  // Only the neighborhoods in the selected zone are pickable.
+  const neighborhoods = zoneId
+    ? allNeighborhoods.filter((n) => n.zoneId === zoneId)
+    : allNeighborhoods;
   const [neighborhoodId, setNeighborhoodId] = useState("");
+  // Clear the neighborhood choice when it no longer belongs to the selected zone.
+  useEffect(() => {
+    if (neighborhoodId && !neighborhoods.some((n) => n.id === neighborhoodId)) {
+      setNeighborhoodId("");
+    }
+  }, [neighborhoods, neighborhoodId]);
   const selectedHood = neighborhoods.find((n) => n.id === neighborhoodId) ?? null;
 
-  // Every serviceable location scheduled today (across all neighborhoods). Drives
-  // the map, the assignable counts, and which neighborhoods are already fully
+  // Every serviceable location scheduled today in the selected zone. Drives the
+  // map, the assignable counts, and which neighborhoods are already fully
   // assigned — all from one fetch.
   const locationsQuery = useQuery({
-    queryKey: ["today-locations"],
-    queryFn: async () => getTodaysLocations(undefined, accessToken)
+    queryKey: ["today-locations", zoneId],
+    queryFn: async () => getTodaysLocations(undefined, accessToken, zoneScope)
   });
   const allLocations = locationsQuery.data?.locations ?? [];
 
@@ -328,23 +355,18 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
 
   const invalidateRouteViews = () => {
     void queryClient.invalidateQueries({ queryKey: ["today-locations"] });
+    void queryClient.invalidateQueries({ queryKey: ["assigned-routes"] });
   };
 
   const deleteMutation = useMutation({
     mutationFn: (routeId: string) => deleteRoute(routeId, accessToken),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["assigned-routes"], data);
-      invalidateRouteViews();
-    }
+    onSuccess: () => invalidateRouteViews()
   });
 
   const cancelMutation = useMutation({
     mutationFn: ({ routeId, reason }: { routeId: string; reason?: string }) =>
       cancelRoute(routeId, reason, accessToken),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["assigned-routes"], data);
-      invalidateRouteViews();
-    }
+    onSuccess: () => invalidateRouteViews()
   });
 
   // Cancel keeps a record (route stays, marked Cancelled) with an optional
@@ -364,13 +386,13 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
     mutationFn: () =>
       getTodaysRoute(
         {
+          zoneId: zoneScope,
           neighborhoodId: neighborhoodId || undefined,
           operatorIds: [...selected]
         },
         accessToken
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["assigned-routes"] });
       invalidateRouteViews();
       // Clean slate for the next assignment.
       setSelected(new Set());
@@ -460,12 +482,39 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
       <div className="dash-page-head">
         <h2>Today's Routes</h2>
         <p className="subtext">
-          Pick the operators working today, then assign each an optimized route of today's cart
+          Pick a service area, then assign operators an optimized route of that area's cart
           roll-outs (for tomorrow's pickups) and roll-ins (from yesterday's).
         </p>
       </div>
 
-      {nothingToAssign ? (
+      {zonesQuery.isLoading ? null : zones.length === 0 ? (
+        <article className="panel">
+          <p className="subtext">
+            No service areas yet. Add a neighborhood with a city (in Neighborhoods) to create a
+            zone.
+          </p>
+        </article>
+      ) : (
+        <div className="zone-tabs" role="tablist" aria-label="Service area">
+          {zones.map((z) => (
+            <button
+              key={z.id}
+              type="button"
+              role="tab"
+              aria-selected={z.id === zoneId}
+              className={`zone-tab${z.id === zoneId ? " is-active" : ""}`}
+              onClick={() => setZoneId(z.id)}
+            >
+              <span className="zone-tab-name">{z.name}</span>
+              <span className="zone-tab-count">
+                {z.neighborhoodCount} neighborhood{z.neighborhoodCount === 1 ? "" : "s"}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {zones.length === 0 ? null : nothingToAssign ? (
         <article className="panel">
           {summaryReason === "all_assigned" ? (
             <div className="route-checklist">

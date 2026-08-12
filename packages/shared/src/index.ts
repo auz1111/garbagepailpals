@@ -521,11 +521,25 @@ export const neighborhoodSchema = z.object({
   // Test neighborhoods are for trialing routes/flows and are excluded from the
   // real customer service area.
   isTest: z.boolean(),
+  // The zone (city/region) this neighborhood belongs to.
+  zoneId: z.string().nullable(),
   locationCount: z.number().int().nonnegative()
 });
 
 export const neighborhoodsResponseSchema = z.object({
   neighborhoods: z.array(neighborhoodSchema)
+});
+
+// ---- Zones (city / service region) ----
+export const zoneSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  neighborhoodCount: z.number().int().nonnegative()
+});
+export const zonesResponseSchema = z.object({
+  zones: z.array(zoneSchema)
 });
 
 const zipCodesSchema = z.array(z.string().min(2).max(12)).max(50);
@@ -567,6 +581,8 @@ export const adminLocationNeighborhoodUpdateSchema = z.object({
 
 // --- Today's route (admin) ------------------------------------------------
 export const adminRouteRequestSchema = z.object({
+  // Scope the route to a single zone (city/region). Required scoping unit.
+  zoneId: z.string().optional(),
   // Scope the route to a single neighborhood (recommended). Omit for all stops.
   neighborhoodId: z.string().optional(),
   // When present, jobs are split into a balanced optimized route per operator
@@ -896,6 +912,8 @@ export type AdminCreateUser = z.infer<typeof adminCreateUserSchema>;
 export type AdminUserLocation = z.infer<typeof adminUserLocationSchema>;
 export type AdminUserWithLocations = z.infer<typeof adminUserDetailSchema>;
 export type AdminRouteRequest = z.infer<typeof adminRouteRequestSchema>;
+export type Zone = z.infer<typeof zoneSchema>;
+export type ZonesResponse = z.infer<typeof zonesResponseSchema>;
 export type AdminRouteStop = z.infer<typeof adminRouteStopSchema>;
 export type AdminRoutePoint = z.infer<typeof adminRoutePointSchema>;
 export type AdminRouteLeg = z.infer<typeof adminRouteLegSchema>;

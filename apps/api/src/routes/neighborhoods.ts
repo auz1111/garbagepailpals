@@ -5,10 +5,12 @@ import {
   adminLocationsResponseSchema,
   neighborhoodCreateSchema,
   neighborhoodUpdateSchema,
-  neighborhoodsResponseSchema
+  neighborhoodsResponseSchema,
+  zonesResponseSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
+import { allowedZoneIds } from "../lib/zoneScope";
 
 async function neighborhoodList() {
   const rows = await prisma.neighborhood.findMany({
@@ -23,9 +25,47 @@ async function neighborhoodList() {
       state: n.state,
       zipCodes: n.zipCodes,
       isTest: n.isTest,
+      zoneId: n.zoneId,
       locationCount: n._count.addresses
     }))
   });
+}
+
+// GET zones the caller may administer (super admin: all; pro operator: granted).
+export async function adminZonesHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (_req, _ctx, auth) => {
+        const allowed = await allowedZoneIds(auth);
+        const rows = await prisma.zone.findMany({
+          where: allowed === "ALL" ? {} : { id: { in: allowed } },
+          orderBy: { name: "asc" },
+          include: { _count: { select: { neighborhoods: true } } }
+        });
+        return jsonResponse(
+          200,
+          zonesResponseSchema.parse({
+            zones: rows.map((z) => ({
+              id: z.id,
+              name: z.name,
+              city: z.city,
+              state: z.state,
+              neighborhoodCount: z._count.neighborhoods
+            }))
+          })
+        );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
 }
 
 // GET list / POST create.

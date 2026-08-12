@@ -20,6 +20,7 @@ import type {
   AdminTodaysLocationsResponse,
   AssignedRoutesResponse,
   RouteHistoryResponse,
+  ZonesResponse,
   NeighborhoodsResponse,
   NeighborhoodCreate,
   NeighborhoodUpdate,
@@ -251,9 +252,24 @@ export function setLocationNeighborhood(
   );
 }
 
-export function getAssignedRoutes(accessToken: string): Promise<AssignedRoutesResponse> {
+function scopeQuery(params: Record<string, string | undefined>): string {
+  const q = Object.entries(params)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`)
+    .join("&");
+  return q ? `?${q}` : "";
+}
+
+export function getZones(accessToken: string): Promise<ZonesResponse> {
+  return request<undefined, ZonesResponse>("/ops-admin/zones", "GET", undefined, accessToken);
+}
+
+export function getAssignedRoutes(
+  accessToken: string,
+  zoneId?: string
+): Promise<AssignedRoutesResponse> {
   return request<undefined, AssignedRoutesResponse>(
-    "/ops-admin/routes/assigned",
+    `/ops-admin/routes/assigned${scopeQuery({ zoneId })}`,
     "GET",
     undefined,
     accessToken
@@ -271,11 +287,11 @@ export function getRouteHistory(days: number, accessToken: string): Promise<Rout
 
 export function getRouteSummary(
   neighborhoodId: string | undefined,
-  accessToken: string
+  accessToken: string,
+  zoneId?: string
 ): Promise<AdminRouteSummary> {
-  const qs = neighborhoodId ? `?neighborhoodId=${encodeURIComponent(neighborhoodId)}` : "";
   return request<undefined, AdminRouteSummary>(
-    `/ops-admin/routes/summary${qs}`,
+    `/ops-admin/routes/summary${scopeQuery({ neighborhoodId, zoneId })}`,
     "GET",
     undefined,
     accessToken
@@ -284,11 +300,11 @@ export function getRouteSummary(
 
 export function getTodaysLocations(
   neighborhoodId: string | undefined,
-  accessToken: string
+  accessToken: string,
+  zoneId?: string
 ): Promise<AdminTodaysLocationsResponse> {
-  const qs = neighborhoodId ? `?neighborhoodId=${encodeURIComponent(neighborhoodId)}` : "";
   return request<undefined, AdminTodaysLocationsResponse>(
-    `/ops-admin/routes/locations${qs}`,
+    `/ops-admin/routes/locations${scopeQuery({ neighborhoodId, zoneId })}`,
     "GET",
     undefined,
     accessToken

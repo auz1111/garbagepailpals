@@ -21,6 +21,7 @@ import {
   zonedDay
 } from "../lib/timezone";
 import { withAuth } from "../lib/withAuth";
+import { resolveZoneScope } from "../lib/zoneScope";
 
 const ORS_BASE = "https://api.openrouteservice.org";
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
@@ -59,14 +60,19 @@ const SERVICE_ADDRESS_INCLUDE = {
 //
 // "Tomorrow"/"yesterday" are resolved in EACH location's own timezone, so a
 // UTC-hosted server never rolls the operating day over at the wrong moment.
-async function collectTodaysWork(now: Date, neighborhoodId?: string): Promise<ServiceWork[]> {
+async function collectTodaysWork(
+  now: Date,
+  scope: { neighborhoodId?: string; zoneIds?: string[] } = {}
+): Promise<ServiceWork[]> {
   // Candidate set = active, subscribed, has any schedule. Weekday matching is
   // done per-address in the address's zone below, so it can't be pre-filtered
-  // by weekday in SQL.
+  // by weekday in SQL. `zoneIds` restricts to neighborhoods in those zones (an
+  // empty list means "no accessible zones" → no work).
   const addresses = await prisma.serviceAddress.findMany({
     where: {
       isActive: true,
-      ...(neighborhoodId ? { neighborhoodId } : {}),
+      ...(scope.neighborhoodId ? { neighborhoodId: scope.neighborhoodId } : {}),
+      ...(scope.zoneIds ? { neighborhood: { zoneId: { in: scope.zoneIds } } } : {}),
       subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
       schedules: { some: {} }
     },
@@ -256,12 +262,14 @@ export async function adminAssignedRoutesHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async () => {
+      async (req, _ctx, auth) => {
+        const zoneId = new URL(req.url).searchParams.get("zoneId") || undefined;
+        const zoneIds = await resolveZoneScope(auth, zoneId);
         const now = new Date();
         const serviceDate = todayServiceDate(now);
 
         const routes = await prisma.dailyRoute.findMany({
-          where: { serviceDate },
+          where: { serviceDate, ...(zoneIds ? { zoneId: { in: zoneIds } } : {}) },
           include: DAILY_ROUTE_INCLUDE,
           orderBy: [{ operator: { name: "asc" } }, { createdAt: "asc" }]
         });
@@ -512,12 +520,15 @@ export async function adminRouteSummaryHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (req) => {
-        const neighborhoodId = new URL(req.url).searchParams.get("neighborhoodId") || undefined;
+      async (req, _ctx, auth) => {
+        const url = new URL(req.url);
+        const neighborhoodId = url.searchParams.get("neighborhoodId") || undefined;
+        const zoneId = url.searchParams.get("zoneId") || undefined;
+        const zoneIds = await resolveZoneScope(auth, zoneId);
         const now = new Date();
         const serviceDate = todayServiceDate(now);
 
-        const work = await collectTodaysWork(now, neighborhoodId);
+        const work = await collectTodaysWork(now, { neighborhoodId, zoneIds });
         const routedAddressIds = new Set(
           (
             await prisma.routeStop.findMany({
@@ -559,12 +570,15 @@ export async function adminTodaysLocationsHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (req) => {
-        const neighborhoodId = new URL(req.url).searchParams.get("neighborhoodId") || undefined;
+      async (req, _ctx, auth) => {
+        const url = new URL(req.url);
+        const neighborhoodId = url.searchParams.get("neighborhoodId") || undefined;
+        const zoneId = url.searchParams.get("zoneId") || undefined;
+        const zoneIds = await resolveZoneScope(auth, zoneId);
         const now = new Date();
         const serviceDate = todayServiceDate(now);
 
-        const work = await collectTodaysWork(now, neighborhoodId);
+        const work = await collectTodaysWork(now, { neighborhoodId, zoneIds });
 
         const routeStopRows = await prisma.routeStop.findMany({
           where: { route: { serviceDate } },
@@ -629,7 +643,7 @@ export async function adminTodaysRouteHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async (req) => {
+      async (req, _ctx, auth) => {
         if (!env.ORS_API_KEY) {
           throw new HttpError(400, "Routing is not configured (ORS_API_KEY missing).");
         }
@@ -637,6 +651,7 @@ export async function adminTodaysRouteHandler(
         const input = await parseJson(req, adminRouteRequestSchema);
         const operatorIds = input.operatorIds ?? [];
         const assigning = operatorIds.length > 0;
+        const zoneIds = await resolveZoneScope(auth, input.zoneId);
 
         const now = new Date();
         const serviceDate = todayServiceDate(now);
@@ -654,7 +669,10 @@ export async function adminTodaysRouteHandler(
 
         // Today's work = roll-outs for tomorrow's pickups + roll-ins from
         // yesterday's pickups, optionally scoped to a neighborhood.
-        const work = await collectTodaysWork(now, input.neighborhoodId);
+        const work = await collectTodaysWork(now, {
+          neighborhoodId: input.neighborhoodId,
+          zoneIds
+        });
         const scheduledTodayCount = work.length;
 
         const stops: StopBuild[] = work
@@ -799,6 +817,7 @@ export async function adminTodaysRouteHandler(
                 status: "ASSIGNED",
                 label: neighborhood?.name ?? null,
                 neighborhoodId: input.neighborhoodId ?? null,
+                zoneId: input.zoneId ?? null,
                 startLabel: start.label,
                 startLat: start.lat,
                 startLng: start.lng,

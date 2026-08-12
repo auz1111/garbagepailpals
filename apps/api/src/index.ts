@@ -53,7 +53,8 @@ import {
   adminLocationByIdHandler,
   adminLocationsHandler,
   adminNeighborhoodByIdHandler,
-  adminNeighborhoodsHandler
+  adminNeighborhoodsHandler,
+  adminZonesHandler
 } from "./routes/neighborhoods";
 import { operatorAvailabilityHandler } from "./routes/operatorAvailability";
 import {
@@ -245,6 +246,13 @@ app.http("admin-operator-timeoff", {
   methods: ["PATCH", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminOperatorTimeOffHandler
+});
+
+app.http("admin-zones", {
+  route: "ops-admin/zones",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminZonesHandler
 });
 
 app.http("admin-neighborhoods", {

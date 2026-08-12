@@ -385,6 +385,7 @@ model DailyRoute {
   status          RouteStatus @default(ASSIGNED)
   label           String?
   neighborhoodId  String?
+  zoneId          String?
   startLabel      String?
   startLat        Float?
   startLng        Float?
