@@ -11,6 +11,7 @@ import {
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
 import { geocodeAddressParts } from "../../services/geocoding";
+import { timezoneForCoords } from "../../lib/timezone";
 
 type ScheduleRow = {
   id: string;
@@ -120,6 +121,11 @@ export async function createAddressHandler(
           state: input.state,
           postalCode: input.postalCode
         });
+        const finalLat = geocoded?.lat ?? input.lat;
+        const finalLng = geocoded?.lng ?? input.lng;
+        // Derive the timezone from the resolved coordinates so routing/scheduling
+        // use the location's real zone regardless of what the form defaulted to.
+        const timezone = timezoneForCoords(finalLat, finalLng);
 
         // Seed a sensible default pickup day (Tuesday, weekly) from the form's
         // cans/roll-in, so a new location has a schedule and a price immediately.
@@ -131,9 +137,9 @@ export async function createAddressHandler(
             city: input.city,
             state: input.state,
             postalCode: input.postalCode,
-            lat: geocoded?.lat ?? input.lat,
-            lng: geocoded?.lng ?? input.lng,
-            timezone: input.timezone,
+            lat: finalLat,
+            lng: finalLng,
+            timezone,
             accessNotes: input.accessNotes,
             gateCode: input.gateCode,
             canCount: input.canCount,
@@ -232,6 +238,7 @@ export async function updateAddressHandler(
           input.state !== undefined ||
           input.postalCode !== undefined;
         let coords: { lat: number; lng: number } | undefined;
+        let derivedTimezone: string | undefined;
         if (addressChanged) {
           const geocoded = await geocodeAddressParts({
             line1: input.line1 ?? existing.line1,
@@ -241,12 +248,19 @@ export async function updateAddressHandler(
           });
           if (geocoded) {
             coords = { lat: geocoded.lat, lng: geocoded.lng };
+            // Re-derive the timezone whenever the address (and thus coordinates)
+            // moves, so the location keeps the correct zone.
+            derivedTimezone = timezoneForCoords(geocoded.lat, geocoded.lng);
           }
         }
 
         const updated = await prisma.serviceAddress.update({
           where: { id: addressId },
-          data: { ...input, ...(coords ?? {}) },
+          data: {
+            ...input,
+            ...(coords ?? {}),
+            ...(derivedTimezone ? { timezone: derivedTimezone } : {})
+          },
           include: { schedules: true }
         });
 

@@ -11,20 +11,18 @@ import {
 } from "@gpp/shared";
 import { env } from "../lib/env";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
+import {
+  biweeklyMatchesZoned,
+  defaultOperatingZone,
+  resolveZone,
+  serviceDateForZone,
+  weekdayInZone,
+  zonedDay
+} from "../lib/timezone";
 import { withAuth } from "../lib/withAuth";
 
 const ORS_BASE = "https://api.openrouteservice.org";
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
-
-// A biweekly day is "on" for a given date when a whole even number of weeks has
-// passed since its first-pickup anchor.
-function biweeklyMatches(anchor: Date | null, date: Date): boolean {
-  if (!anchor) {
-    return false;
-  }
-  const days = Math.floor((date.getTime() - anchor.getTime()) / 86_400_000);
-  return Math.floor(days / 7) % 2 === 0;
-}
 
 // The work for a single location on a given operating day.
 type ServiceWork = {
@@ -34,6 +32,7 @@ type ServiceWork = {
     city: string;
     state: string;
     postalCode: string;
+    timezone: string;
     neighborhoodId: string | null;
     neighborhood: { name: string } | null;
     user: { id: string; name: string };
@@ -56,19 +55,19 @@ const SERVICE_ADDRESS_INCLUDE = {
 //  - Roll OUT the cart the evening before pickup  → pickups scheduled TOMORROW.
 //  - Roll IN the cart the day after pickup (opted-in) → pickups that were YESTERDAY.
 // A location can need both on the same day (e.g. two pickups a week).
+//
+// "Tomorrow"/"yesterday" are resolved in EACH location's own timezone, so a
+// UTC-hosted server never rolls the operating day over at the wrong moment.
 async function collectTodaysWork(now: Date, neighborhoodId?: string): Promise<ServiceWork[]> {
-  const dayMs = 86_400_000;
-  const rollOutDate = new Date(now.getTime() + dayMs);
-  const rollInDate = new Date(now.getTime() - dayMs);
-  const rollOutWeekday = rollOutDate.getDay();
-  const rollInWeekday = rollInDate.getDay();
-
+  // Candidate set = active, subscribed, has any schedule. Weekday matching is
+  // done per-address in the address's zone below, so it can't be pre-filtered
+  // by weekday in SQL.
   const addresses = await prisma.serviceAddress.findMany({
     where: {
       isActive: true,
       ...(neighborhoodId ? { neighborhoodId } : {}),
       subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
-      schedules: { some: { pickupDayOfWeek: { in: [rollOutWeekday, rollInWeekday] } } }
+      schedules: { some: {} }
     },
     include: SERVICE_ADDRESS_INCLUDE
   });
@@ -79,16 +78,22 @@ async function collectTodaysWork(now: Date, neighborhoodId?: string): Promise<Se
     if (!subscriptionId) {
       continue;
     }
+    const zone = resolveZone(a.timezone);
+    const rollOutWeekday = weekdayInZone(now, zone, 1);
+    const rollInWeekday = weekdayInZone(now, zone, -1);
+    const rollOutDay = zonedDay(now, zone, 1);
+    const rollInDay = zonedDay(now, zone, -1);
+
     const rollOutSched = a.schedules.find(
       (s) =>
         s.pickupDayOfWeek === rollOutWeekday &&
-        (s.cadence === "WEEKLY" || biweeklyMatches(s.biweeklyAnchorDate, rollOutDate))
+        (s.cadence === "WEEKLY" || biweeklyMatchesZoned(s.biweeklyAnchorDate, rollOutDay))
     );
     const rollInSched = a.schedules.find(
       (s) =>
         s.pickupDayOfWeek === rollInWeekday &&
         s.rollIn &&
-        (s.cadence === "WEEKLY" || biweeklyMatches(s.biweeklyAnchorDate, rollInDate))
+        (s.cadence === "WEEKLY" || biweeklyMatchesZoned(s.biweeklyAnchorDate, rollInDay))
     );
     const jobTypes: string[] = [];
     if (rollOutSched) jobTypes.push("CURB_OUT");
@@ -111,9 +116,10 @@ function operatorWhere() {
 }
 
 // Today's service day as a date-only (UTC midnight) key, matching how routes
-// are stored/queried by day.
+// are stored/queried by day. Anchored to the business operating zone (not the
+// server clock) so "today" is stable across environments and hosts.
 export function todayServiceDate(now: Date): Date {
-  return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+  return serviceDateForZone(now, defaultOperatingZone());
 }
 
 // Prisma include shape shared by every query that serializes a DailyRoute.
@@ -214,7 +220,9 @@ export async function adminAvailableOperatorsHandler(
     withAuth(
       async (req) => {
         const dateParam = new URL(req.url).searchParams.get("date");
-        const dateStr = dateParam ?? new Date().toISOString().slice(0, 10);
+        // Default "today" in the business operating zone, not UTC.
+        const dateStr =
+          dateParam ?? serviceDateForZone(new Date(), defaultOperatingZone()).toISOString().slice(0, 10);
         const date = new Date(`${dateStr}T00:00:00Z`);
 
         const operators = await prisma.user.findMany({

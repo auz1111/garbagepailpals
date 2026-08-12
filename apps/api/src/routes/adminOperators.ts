@@ -2,6 +2,7 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import { prisma } from "@gpp/db";
 import { adminOperatorsResponseSchema, adminTimeOffUpdateSchema } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
+import { defaultOperatingZone, serviceDateForZone } from "../lib/timezone";
 import { withAuth } from "../lib/withAuth";
 
 // Users who can run routes: operators, plus admins granted operator access.
@@ -18,10 +19,11 @@ function utcToDateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-// 30-day window starting today (UTC), matching the operator/admin calendars.
+// 30-day window starting today, matching the operator/admin calendars. "Today"
+// is anchored to the business operating zone so the window lines up with routing
+// rather than the UTC host clock.
 async function operatorsResponse() {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = serviceDateForZone(new Date(), defaultOperatingZone());
   const to = new Date(start);
   to.setUTCDate(to.getUTCDate() + 29);
 

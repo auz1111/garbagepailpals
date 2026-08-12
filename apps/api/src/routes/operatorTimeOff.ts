@@ -2,6 +2,7 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import { prisma } from "@gpp/db";
 import { operatorTimeOffRequestSchema, operatorTimeOffResponseSchema } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
+import { defaultOperatingZone, serviceDateForZone } from "../lib/timezone";
 import { withAuth } from "../lib/withAuth";
 
 // Date-only helpers: time-off dates are opaque YYYY-MM-DD keys stored as UTC
@@ -12,14 +13,15 @@ function dateKeyToUtc(key: string): Date {
 function utcToDateKey(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
-function startOfTodayUtc(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+// "Today" as the date-only key, anchored to the business operating zone so the
+// day boundary matches routing (not the UTC host clock).
+function startOfToday(): Date {
+  return serviceDateForZone(new Date(), defaultOperatingZone());
 }
 
 async function myTimeOffResponse(operatorId: string) {
   const rows = await prisma.operatorTimeOff.findMany({
-    where: { operatorId, date: { gte: startOfTodayUtc() } },
+    where: { operatorId, date: { gte: startOfToday() } },
     orderBy: { date: "asc" }
   });
   return operatorTimeOffResponseSchema.parse({

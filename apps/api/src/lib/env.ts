@@ -12,6 +12,9 @@ const envSchema = z.object({
   JWT_ACCESS_TTL: z.string().default("15m"),
   JWT_REFRESH_TTL: z.string().default("30d"),
   WEB_ORIGIN: z.string().default("*"),
+  // Business/operating timezone used to key a service day when a more specific
+  // per-location zone isn't available. Must be a valid IANA zone.
+  SERVICE_DEFAULT_TIMEZONE: z.string().min(3).default("America/Los_Angeles"),
   DEV_FAKE_ENTITLEMENT: z.enum(["true", "false"]).default("true"),
   SCHEDULER_LOOKAHEAD_DAYS: z.coerce.number().int().min(1).max(31).default(14),
   STRIPE_SECRET_KEY: z.string().optional(),
