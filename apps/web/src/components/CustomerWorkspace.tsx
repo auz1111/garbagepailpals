@@ -31,6 +31,7 @@ import {
   listHistoryJobs,
   listUpcomingJobs,
   deleteAddress,
+  updateAddress,
   updateAddressSchedule
 } from "../lib/api";
 
@@ -221,6 +222,15 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
+    }
+  });
+
+  const glassMutation = useMutation({
+    mutationFn: ({ id, glass }: { id: string; glass: boolean }) =>
+      updateAddress(id, { glassRecycling: glass }, accessToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
     }
   });
 
@@ -903,6 +913,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
         savingSchedule={scheduleMutation.isPending}
         scheduleError={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
         scheduleSaved={scheduleMutation.isSuccess}
+        onToggleGlass={(id, glass) => glassMutation.mutate({ id, glass })}
+        togglingGlass={glassMutation.isPending}
       />
     );
   }
@@ -1131,7 +1143,9 @@ function LocationDetail({
   onSaveSchedule,
   savingSchedule,
   scheduleError,
-  scheduleSaved
+  scheduleSaved,
+  onToggleGlass,
+  togglingGlass
 }: {
   address: ServiceAddress;
   covered: boolean | undefined;
@@ -1141,6 +1155,8 @@ function LocationDetail({
   savingSchedule: boolean;
   scheduleError: string | null;
   scheduleSaved: boolean;
+  onToggleGlass: (id: string, glass: boolean) => void;
+  togglingGlass: boolean;
 }): JSX.Element {
   const initialDays: EditDay[] =
     address.schedules.length > 0
@@ -1382,6 +1398,27 @@ function LocationDetail({
         </div>
         {scheduleError ? <p className="error">{scheduleError}</p> : null}
       </form>
+
+      <article className="panel">
+        <h3>Add-ons</h3>
+        <label className="checkbox-field">
+          <input
+            type="checkbox"
+            checked={address.glassRecycling}
+            disabled={togglingGlass}
+            onChange={(event) => onToggleGlass(address.id, event.target.checked)}
+          />
+          <span>
+            <strong>
+              Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
+            </strong>
+            <span className="subtext">
+              We also roll your glass recycling container out and back
+              {togglingGlass ? " · saving…" : ""}.
+            </span>
+          </span>
+        </label>
+      </article>
 
       <article className="panel">
         <h3>Remove location</h3>

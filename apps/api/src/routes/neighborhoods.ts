@@ -1,6 +1,7 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
 import {
+  addressMonthlyCents,
   adminLocationNeighborhoodUpdateSchema,
   adminLocationsResponseSchema,
   isSuperAdminRole,
@@ -13,6 +14,7 @@ import {
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
+import { allowedZoneIds } from "../lib/zoneScope";
 
 async function zonesList(userId: string, role: string) {
   const allowed = isSuperAdminRole(role)
@@ -231,11 +233,21 @@ export async function adminLocationsHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(
-      async () => {
+      async (_req, _ctx, auth) => {
+        // Super admin sees every location; a pro operator only sees locations in
+        // the zones granted to them.
+        const scope = await allowedZoneIds(auth);
         const rows = await prisma.serviceAddress.findMany({
-          where: { isActive: true },
+          where: {
+            isActive: true,
+            ...(scope === "ALL" ? {} : { neighborhood: { zoneId: { in: scope } } })
+          },
           orderBy: { createdAt: "desc" },
-          include: { user: { select: { name: true } } }
+          include: {
+            user: { select: { name: true } },
+            neighborhood: { include: { zone: true } },
+            schedules: true
+          }
         });
         return jsonResponse(
           200,
@@ -247,7 +259,21 @@ export async function adminLocationsHandler(
               state: a.state,
               postalCode: a.postalCode,
               customerName: a.user.name,
-              neighborhoodId: a.neighborhoodId
+              neighborhoodId: a.neighborhoodId,
+              neighborhoodName: a.neighborhood?.name ?? null,
+              zoneId: a.neighborhood?.zoneId ?? null,
+              zoneName: a.neighborhood?.zone?.name ?? null,
+              canCount: a.canCount,
+              glassRecycling: a.glassRecycling,
+              monthlyCents: addressMonthlyCents(
+                a.schedules.map((s) => ({
+                  dayOfWeek: s.pickupDayOfWeek,
+                  canCount: s.canCount,
+                  cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+                  rollIn: s.rollIn
+                })),
+                { glassRecycling: a.glassRecycling }
+              )
             }))
           })
         );

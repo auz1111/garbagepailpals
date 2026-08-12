@@ -40,6 +40,7 @@ import { TodaysRoute } from "./TodaysRoute";
 import { TodaysRoutesHero } from "./TodaysRoutesHero";
 import { RouteHistory } from "./RouteHistory";
 import { ZonesAdmin } from "./ZonesAdmin";
+import { AdminLocations } from "./AdminLocations";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
@@ -56,6 +57,7 @@ export const ADMIN_NAV = [
   { to: "/admin/history", label: "Route History", icon: "🕓" },
   { to: "/admin/zones", label: "Service Areas", icon: "🗺", superOnly: true },
   { to: "/admin/neighborhoods", label: "Neighborhoods", icon: "🏘️" },
+  { to: "/admin/locations", label: "Locations", icon: "📍" },
   { to: "/admin/users", label: "Users", icon: "👥" },
   { to: "/admin/incidents", label: "Incidents", icon: "🚨" }
 ] as const;
@@ -723,6 +725,7 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
         <Route path="routes" element={<TodaysRoute accessToken={accessToken} />} />
         <Route path="history" element={<RouteHistory accessToken={accessToken} />} />
         <Route path="zones" element={<ZonesAdmin accessToken={accessToken} />} />
+        <Route path="locations" element={<AdminLocations accessToken={accessToken} />} />
         <Route path="neighborhoods" element={<NeighborhoodsAdmin accessToken={accessToken} />} />
         <Route path="operators" element={<OperatorsAdmin accessToken={accessToken} />} />
         <Route

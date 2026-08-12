@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   createNeighborhood,
   deleteNeighborhood,
@@ -45,6 +46,9 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
   const [editZoneId, setEditZoneId] = useState("");
   const [locFilter, setLocFilter] = useState<"UNASSIGNED" | "ALL">("UNASSIGNED");
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const zoneFilter = searchParams.get("zone") ?? "";
+
   const zonesQuery = useQuery({ queryKey: ["zones"], queryFn: async () => getZones(accessToken) });
   const zones = zonesQuery.data?.zones ?? [];
   const zoneName = (id: string | null) => (id ? zones.find((z) => z.id === id)?.name ?? null : null);
@@ -58,7 +62,11 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
     queryFn: async () => getAdminLocations(accessToken)
   });
 
-  const neighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
+  const allNeighborhoods = neighborhoodsQuery.data?.neighborhoods ?? [];
+  // When drilled in from a zone, show only that zone's neighborhoods.
+  const neighborhoods = zoneFilter
+    ? allNeighborhoods.filter((n) => n.zoneId === zoneFilter)
+    : allNeighborhoods;
   const locations = locationsQuery.data?.locations ?? [];
   const unassignedLocations = locations.filter((loc) => !loc.neighborhoodId);
   const visibleLocations = locFilter === "UNASSIGNED" ? unassignedLocations : locations;
@@ -130,6 +138,22 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
 
       <article className="panel">
         <h3>Neighborhoods</h3>
+        {zoneFilter ? (
+          <p className="subtext">
+            Showing neighborhoods in <strong>{zoneName(zoneFilter) ?? "this zone"}</strong>.{" "}
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("zone");
+                setSearchParams(next, { replace: true });
+              }}
+            >
+              Show all
+            </button>
+          </p>
+        ) : null}
         <form
           className="neighborhood-form"
           onSubmit={(event) => {
@@ -268,6 +292,9 @@ export function NeighborhoodsAdmin({ accessToken }: NeighborhoodsAdminProps): JS
                       </span>
                     </div>
                     <div className="neighborhood-row-actions">
+                      <Link className="ghost-btn" to={`/admin/locations?neighborhood=${n.id}`}>
+                        Locations →
+                      </Link>
                       <button
                         type="button"
                         className="ghost-btn"

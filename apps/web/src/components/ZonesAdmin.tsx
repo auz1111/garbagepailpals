@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { createZone, deleteZone, getZones, updateZone } from "../lib/api";
 
 type ZonesAdminProps = { accessToken: string };
@@ -188,6 +189,9 @@ export function ZonesAdmin({ accessToken }: ZonesAdminProps): JSX.Element {
                       </span>
                     </div>
                     <div className="neighborhood-row-actions">
+                      <Link className="ghost-btn" to={`/admin/neighborhoods?zone=${z.id}`}>
+                        Neighborhoods →
+                      </Link>
                       <button
                         type="button"
                         className="ghost-btn"

@@ -617,7 +617,13 @@ export const adminLocationSchema = z.object({
   state: z.string(),
   postalCode: z.string(),
   customerName: z.string(),
-  neighborhoodId: z.string().nullable()
+  neighborhoodId: z.string().nullable(),
+  neighborhoodName: z.string().nullable(),
+  zoneId: z.string().nullable(),
+  zoneName: z.string().nullable(),
+  canCount: z.number().int().nonnegative(),
+  glassRecycling: z.boolean(),
+  monthlyCents: z.number().int().nonnegative()
 });
 
 export const adminLocationsResponseSchema = z.object({

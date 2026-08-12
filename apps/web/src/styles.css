@@ -4796,3 +4796,115 @@ button[type="submit"]:disabled {
   padding-top: 0;
   margin-top: 0.2rem;
 }
+
+/* Inline text button (e.g. "Show all"). */
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--teal-2);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ===== Admin Locations page ===== */
+.loc-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.loc-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate-2);
+}
+.loc-filter select,
+.loc-filter input {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 400;
+  color: var(--ink);
+  min-width: 12rem;
+}
+.loc-filter-search {
+  flex: 1;
+  min-width: 12rem;
+}
+.loc-filter-search input {
+  width: 100%;
+}
+
+.loc-summary {
+  font-size: 0.9rem;
+  color: var(--slate-2);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.loc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.loc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.loc-row-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 16rem;
+}
+.loc-row-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.loc-row-price {
+  font-weight: 800;
+  color: var(--teal-deep);
+  white-space: nowrap;
+}
+.loc-chip {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--pill);
+  background: var(--teal-bright-wash);
+  color: var(--teal-deep);
+  white-space: nowrap;
+}
+.loc-chip.is-zone {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+.loc-chip.is-none {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.loc-chip.is-plain {
+  background: var(--line);
+  color: var(--slate-2);
+}
+.loc-chip.is-glass {
+  background: #dcfce7;
+  color: #166534;
+}
