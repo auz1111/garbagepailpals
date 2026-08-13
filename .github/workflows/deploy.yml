@@ -123,6 +123,7 @@ jobs:
             "main": "dist/index.cjs",
             "dependencies": {
               "@azure/functions": "^4.16.2",
+              "@azure/storage-blob": "^12.26.0",
               "@prisma/client": "^5.22.0"
             }
           }
