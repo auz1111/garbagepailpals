@@ -42,7 +42,9 @@ export async function upcomingJobsHandler(
             status: job.status,
             completedAt: job.completedAt?.toISOString() ?? null,
             photoBlobPath: job.photoBlobPath ?? null,
-            failureReason: job.failureReason ?? null
+            failureReason: job.failureReason ?? null,
+            shiftedFromDate: job.shiftedFromDate?.toISOString() ?? null,
+            shiftReason: job.shiftReason ?? null
           }))
         });
 
@@ -115,7 +117,9 @@ export async function historyJobsHandler(
             status: job.status,
             completedAt: job.completedAt?.toISOString() ?? null,
             photoBlobPath: job.photoBlobPath ?? null,
-            failureReason: job.failureReason ?? null
+            failureReason: job.failureReason ?? null,
+            shiftedFromDate: job.shiftedFromDate?.toISOString() ?? null,
+            shiftReason: job.shiftReason ?? null
           }))
         });
 

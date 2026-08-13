@@ -1,5 +1,10 @@
-import type { PickupScheduleSuggestion, PickupStream } from "@gpp/shared";
-import type { HaulerLookupInput, HaulerProvider, ProviderResult } from "./types";
+import type { HaulerUpcomingPickup, PickupScheduleSuggestion, PickupStream } from "@gpp/shared";
+import type {
+  HaulerLookupInput,
+  HaulerProvider,
+  ProviderResult,
+  UpcomingPickupsRequest
+} from "./types";
 
 // ReCollect (a RouteWare product) powers the pickup-schedule widget/app for many
 // North American haulers, including Cascade Disposal. The endpoints below are
@@ -51,6 +56,23 @@ async function fetchJson(url: string): Promise<unknown | null> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+// Fetch normalized pickup events for a place over a date window. ReCollect's
+// event dates already reflect holiday shifts, so the returned dates are truth.
+async function fetchEvents(
+  placeId: string,
+  serviceId: number,
+  after: string,
+  before: string
+): Promise<RecollectEvent[]> {
+  const url =
+    `${API_ROOT}/api/places/${placeId}/services/${serviceId}/events` +
+    `?nomerge=1&hide=reminder_only&after=${after}&before=${before}&locale=en-US`;
+  const payload = await fetchJson(url);
+  return Array.isArray(payload)
+    ? (payload as RecollectEvent[])
+    : ((payload as { events?: RecollectEvent[] } | null)?.events ?? []);
 }
 
 function classify(name: string): PickupStream["kind"] {
@@ -172,13 +194,7 @@ export function createRecollectProvider(config: RecollectConfig): HaulerProvider
       const now = new Date();
       const after = now.toISOString().slice(0, 10);
       const before = new Date(now.getTime() + WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
-      const eventsUrl =
-        `${API_ROOT}/api/places/${match.place_id}/services/${config.serviceId}/events` +
-        `?nomerge=1&hide=reminder_only&after=${after}&before=${before}&locale=en-US`;
-      const eventsPayload = await fetchJson(eventsUrl);
-      const events: RecollectEvent[] = Array.isArray(eventsPayload)
-        ? (eventsPayload as RecollectEvent[])
-        : ((eventsPayload as { events?: RecollectEvent[] } | null)?.events ?? []);
+      const events = await fetchEvents(match.place_id, config.serviceId, after, before);
 
       const streams = toStreams(events);
       const garbage = streams.find((s) => s.kind === "GARBAGE");
@@ -198,6 +214,30 @@ export function createRecollectProvider(config: RecollectConfig): HaulerProvider
         return null;
       }
       return { externalId: match.place_id, suggestion };
+    },
+
+    async getUpcomingPickups(req: UpcomingPickupsRequest): Promise<HaulerUpcomingPickup[] | null> {
+      const events = await fetchEvents(req.externalId, config.serviceId, req.from, req.to);
+      if (events.length === 0) {
+        return null;
+      }
+      const pickups: HaulerUpcomingPickup[] = [];
+      for (const event of events) {
+        if (!event.day) {
+          continue;
+        }
+        for (const flag of event.flags ?? []) {
+          if (flag.event_type && flag.event_type !== "pickup") {
+            continue;
+          }
+          const name = flag.name ?? flag.subject ?? "";
+          if (!name) {
+            continue;
+          }
+          pickups.push({ date: event.day, kind: classify(name) });
+        }
+      }
+      return pickups;
     }
   };
 }

@@ -105,6 +105,22 @@ export const pickupScheduleSuggestionSchema = z.object({
   streams: z.array(pickupStreamSchema).default([])
 });
 
+// A single concrete, holiday-accurate collection date for an address.
+export const haulerUpcomingPickupSchema = z.object({
+  // ISO date (YYYY-MM-DD) of the actual collection, holiday shifts applied.
+  date: z.string(),
+  kind: z.enum(PICKUP_STREAM_KINDS)
+});
+
+// The cached list of upcoming concrete pickups for an address, plus the window
+// it covers so we can tell "no pickup that week (cancelled)" apart from "outside
+// the data we have".
+export const haulerUpcomingSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  pickups: z.array(haulerUpcomingPickupSchema)
+});
+
 export const serviceAddressInputSchema = z.object({
   line1: z.string().min(1).max(120),
   line2: z.string().max(120).optional(),
@@ -297,7 +313,11 @@ export const serviceJobSchema = z.object({
   status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"]),
   completedAt: z.string().nullable(),
   photoBlobPath: z.string().nullable(),
-  failureReason: z.string().nullable()
+  failureReason: z.string().nullable(),
+  // When the hauler moved this pickup for a holiday, the date it would normally
+  // have fallen on, and why (e.g. "Labor Day"). Null when unshifted.
+  shiftedFromDate: z.string().nullable().optional(),
+  shiftReason: z.string().nullable().optional()
 });
 
 export const serviceJobsResponseSchema = z.object({
@@ -392,7 +412,9 @@ export const operatorQueueJobSchema = z.object({
   state: z.string(),
   postalCode: z.string(),
   accessNotes: z.string(),
-  gateCode: z.string().nullable()
+  gateCode: z.string().nullable(),
+  // Set when a hauler holiday moved this pickup, so the operator has context.
+  shiftReason: z.string().nullable().optional()
 });
 
 export const operatorQueueResponseSchema = z.object({
@@ -997,6 +1019,8 @@ export type ProtectedMessage = z.infer<typeof protectedMessageSchema>;
 export type ServiceAreaCheckResponse = z.infer<typeof serviceAreaCheckResponseSchema>;
 export type PickupStream = z.infer<typeof pickupStreamSchema>;
 export type PickupScheduleSuggestion = z.infer<typeof pickupScheduleSuggestionSchema>;
+export type HaulerUpcomingPickup = z.infer<typeof haulerUpcomingPickupSchema>;
+export type HaulerUpcoming = z.infer<typeof haulerUpcomingSchema>;
 export type ServiceAddressInput = z.infer<typeof serviceAddressInputSchema>;
 export type CreateAddressRequest = z.infer<typeof createAddressRequestSchema>;
 export type ServiceAddress = z.infer<typeof serviceAddressSchema>;

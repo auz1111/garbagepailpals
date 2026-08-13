@@ -165,15 +165,23 @@ model ServiceAddress {
 // ReCollect), keyed by a normalized address hash so it's reused across users at
 // the same address. Refreshed periodically; schedules change rarely.
 model HaulerScheduleLookup {
-  id          String   @id @default(cuid())
-  addressHash String   @unique
-  provider    String
-  externalId  String?
-  matched     Boolean  @default(false)
-  suggestion  Json
-  fetchedAt   DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                String    @id @default(cuid())
+  addressHash       String    @unique
+  provider          String
+  externalId        String?
+  matched           Boolean   @default(false)
+  suggestion        Json
+  fetchedAt         DateTime  @default(now())
+  // Resolved coordinates (some providers, e.g. Republic, need lat/lng to fetch
+  // the holiday schedule during a refresh).
+  lat               Float?
+  lng               Float?
+  // Cached concrete, holiday-accurate upcoming collection dates (HaulerUpcoming
+  // JSON) used by the scheduler to shift/skip jobs; refreshed periodically.
+  upcomingPickups   Json?
+  upcomingFetchedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([provider])
 }
@@ -330,6 +338,10 @@ model ServiceJob {
   completedAt         DateTime?
   photoBlobPath       String?
   failureReason       String?
+  // When a hauler holiday moved this pickup: the date it would normally fall on,
+  // and the reason (holiday name). Null for normal, unshifted jobs.
+  shiftedFromDate     DateTime?
+  shiftReason         String?
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
   serviceAddress      ServiceAddress   @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)

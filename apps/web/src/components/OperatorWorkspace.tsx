@@ -98,6 +98,9 @@ export function OperatorWorkspace({ user, accessToken }: OperatorWorkspaceProps)
               <p className="subtext">Customer: {selectedJob.customerName}</p>
               <p className="subtext">Access: {selectedJob.accessNotes}</p>
               <p className="subtext">Gate: {selectedJob.gateCode ?? "none"}</p>
+              {selectedJob.shiftReason ? (
+                <p className="subtext">📅 {selectedJob.shiftReason} — date adjusted from the normal day.</p>
+              ) : null}
               <div className="button-row">
                 <button
                   type="button"

@@ -1108,23 +1108,39 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </p>
           ) : (
             <ul className="jobs-upcoming-list">
-              {upcoming.slice(0, 20).map((job) => (
-                <li className="jobs-upcoming-row" key={job.id}>
-                  <span className={`jobs-job-tag ${job.type === "CURB_OUT" ? "is-out" : "is-in"}`}>
-                    {job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"}
-                  </span>
-                  <span className="jobs-job-date">
-                    {new Date(job.scheduledDate).toLocaleDateString(undefined, {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric"
-                    })}
-                  </span>
-                  <span className="admin-table-sub">
-                    {job.type === "CURB_OUT" ? "Carts to the curb" : "Carts back from the curb"}
-                  </span>
-                </li>
-              ))}
+              {upcoming.slice(0, 20).map((job) => {
+                const skipped = job.status === "SKIPPED";
+                const shifted = !skipped && Boolean(job.shiftReason);
+                const fmt = (iso: string) =>
+                  new Date(iso).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric"
+                  });
+                return (
+                  <li className={`jobs-upcoming-row${skipped ? " is-skipped" : ""}`} key={job.id}>
+                    <span
+                      className={`jobs-job-tag ${
+                        skipped ? "is-skip" : job.type === "CURB_OUT" ? "is-out" : "is-in"
+                      }`}
+                    >
+                      {skipped ? "No pickup" : job.type === "CURB_OUT" ? "Roll-out" : "Roll-in"}
+                    </span>
+                    <span className="jobs-job-date">{fmt(job.scheduledDate)}</span>
+                    <span className="admin-table-sub">
+                      {skipped
+                        ? "Hauler holiday — no collection this week"
+                        : shifted
+                          ? `Holiday-adjusted${
+                              job.shiftedFromDate ? ` — normally ${fmt(job.shiftedFromDate)}` : ""
+                            }`
+                          : job.type === "CURB_OUT"
+                            ? "Carts to the curb"
+                            : "Carts back from the curb"}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {upcomingJobsQuery.isError ? (

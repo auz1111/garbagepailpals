@@ -63,7 +63,8 @@ export async function operatorQueueHandler(
             state: job.serviceAddress.state,
             postalCode: job.serviceAddress.postalCode,
             accessNotes: job.serviceAddress.accessNotes,
-            gateCode: job.serviceAddress.gateCode ?? null
+            gateCode: job.serviceAddress.gateCode ?? null,
+            shiftReason: job.shiftReason ?? null
           }))
         });
 

@@ -4799,6 +4799,13 @@ button[type="submit"]:disabled {
   background: #dcfce7;
   color: #166534;
 }
+.jobs-job-tag.is-skip {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.jobs-upcoming-row.is-skipped {
+  opacity: 0.75;
+}
 .jobs-job-date {
   font-weight: 700;
   min-width: 6rem;
