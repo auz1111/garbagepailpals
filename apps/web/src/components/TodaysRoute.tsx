@@ -17,6 +17,7 @@ import {
 } from "../lib/api";
 import { formatCans } from "./CanRowsEditor";
 import { DayStatusPanel } from "./DayStatusPanel";
+import { StopServicePhotos } from "./StopServicePhotos";
 
 type TodaysRouteProps = {
   accessToken: string;
@@ -802,6 +803,10 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                                   : `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`}
                                 {stop.servicedAt ? " · ✓ serviced" : ""}
                               </span>
+                              <StopServicePhotos
+                                verification={stop.serviceVerification}
+                                accessToken={accessToken}
+                              />
                             </div>
                           </li>
                         ))}

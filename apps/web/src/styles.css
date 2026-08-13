@@ -779,11 +779,13 @@ a {
 .route-stop {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
   padding: 0.6rem 0.75rem;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--surface);
+  /* Serviced button/tag drops below the address on narrow cards. */
+  flex-wrap: wrap;
 }
 
 .route-stop.is-endpoint {
@@ -1887,8 +1889,16 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.4rem 0.75rem;
   margin-bottom: 0.5rem;
+  /* Status badge drops below the title on narrow cards instead of overflowing. */
+  flex-wrap: wrap;
+}
+.operator-route-head > div {
+  min-width: 0;
+}
+.operator-route-head > .coverage-badge {
+  white-space: normal;
 }
 
 /* Stops on the left, route map on the right (stacks on narrow screens). */
@@ -1959,10 +1969,16 @@ a {
   transition: width 0.3s ease;
 }
 
-/* Let the address block grow so the service button pins to the right. */
+/* Let the address block grow so the service button pins to the right; give it a
+   wide basis so the button wraps below it (not off the edge) on narrow cards. */
 .route-stop > div {
-  flex: 1;
+  flex: 1 1 60%;
   min-width: 0;
+}
+/* Right-align the serviced button/tag, whether inline or wrapped to its own row. */
+.route-stop .stop-service-btn,
+.route-stop .stop-service-tag {
+  margin-left: auto;
 }
 
 .route-stop.is-serviced {
@@ -2010,6 +2026,62 @@ a {
   font-size: 0.8rem;
   color: #16a34a;
   white-space: nowrap;
+}
+
+/* Verification photos captured for a serviced stop, grouped by can/service. */
+.stop-photos {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.stop-photo-group {
+  display: grid;
+  gap: 0.25rem;
+}
+.stop-photo-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--slate-2);
+  text-transform: uppercase;
+}
+.stop-photo-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.stop-photo-thumb {
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-2, #eef2f4);
+  display: block;
+  flex: none;
+}
+.stop-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.stop-photo-thumb.is-loading {
+  animation: stop-photo-pulse 1.2s ease-in-out infinite;
+}
+.stop-photo-thumb.is-unavailable {
+  display: grid;
+  place-items: center;
+  color: var(--muted, #94a3b8);
+  font-size: 1.1rem;
+  background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 6px, #e7edf1 6px, #e7edf1 12px);
+}
+@keyframes stop-photo-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stop-photo-thumb.is-loading { animation: none; }
 }
 
 /* Make the primary Accept action stand out — the generic `.button-row button`

@@ -22,6 +22,7 @@ import {
   requestOperatorZone
 } from "../lib/api";
 import { formatCans } from "./CanRowsEditor";
+import { StopServicePhotos } from "./StopServicePhotos";
 
 // Decode an ORS/Google encoded polyline (precision 5) to [lat, lng] pairs.
 function decodePolyline(encoded: string): Array<[number, number]> {
@@ -413,6 +414,10 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                                   ? formatCans(stop.cans)
                                   : `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`}
                               </span>
+                              <StopServicePhotos
+                                verification={stop.serviceVerification}
+                                accessToken={accessToken}
+                              />
                             </div>
                             {canService ? (
                               <button
