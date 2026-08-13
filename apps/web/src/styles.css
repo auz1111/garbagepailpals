@@ -1258,6 +1258,10 @@ a {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
+  /* Buttons wrap to multiple rows on narrow screens instead of forcing the card
+     wider than the viewport. */
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 .admin-loc-title {
@@ -2539,11 +2543,18 @@ a {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.4rem 1rem;
+  /* Price wraps below the title on narrow cards. */
+  flex-wrap: wrap;
+}
+/* Let the title column shrink and its chips/text wrap instead of overflowing. */
+.admin-loc-head > div {
+  min-width: 0;
 }
 
 .admin-loc-head strong {
   display: block;
+  overflow-wrap: anywhere;
 }
 
 .admin-loc-price {
@@ -2563,11 +2574,17 @@ a {
 .admin-loc-pickups li {
   display: flex;
   align-items: baseline;
-  gap: 0.6rem;
+  gap: 0.3rem 0.6rem;
   font-size: 0.88rem;
   padding: 0.35rem 0.6rem;
   border-radius: 8px;
   background: var(--teal-bright-wash);
+  /* Cans/cadence text + "Not synced" chip wrap instead of overflowing. */
+  flex-wrap: wrap;
+}
+.admin-loc-pickups li span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .admin-loc-pickups li strong {
