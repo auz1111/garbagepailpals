@@ -34,19 +34,12 @@ function parseVerification(value: unknown): StopServiceVerificationItem[] {
   return parsed.success ? parsed.data : [];
 }
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
-import {
-  biweeklyMatchesZoned,
-  defaultOperatingZone,
-  resolveZone,
-  serviceDateForZone,
-  weekdayInZone,
-  zonedDay
-} from "../lib/timezone";
+import { defaultOperatingZone, serviceDateForZone } from "../lib/timezone";
 import { withAuth } from "../lib/withAuth";
 import { resolveZoneScope } from "../lib/zoneScope";
+import { reconcileTodaysWork, type WorkScope } from "../services/todaysWork";
 
 const ORS_BASE = "https://api.openrouteservice.org";
-const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
 
 // The work for a single location on a given operating day.
 type ServiceWork = {
@@ -70,80 +63,34 @@ type ServiceWork = {
   petWasteDogs: number;
 };
 
-const SERVICE_ADDRESS_INCLUDE = {
-  schedules: true,
-  user: { select: { id: true, name: true } },
-  neighborhood: { select: { name: true } },
-  subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
-} as const;
-
 // The cart-handling work due on the operating day `now`:
 //  - Roll OUT the cart the evening before pickup  → pickups scheduled TOMORROW.
 //  - Roll IN the cart the day after pickup (opted-in) → pickups that were YESTERDAY.
 // A location can need both on the same day (e.g. two pickups a week).
 //
-// "Tomorrow"/"yesterday" are resolved in EACH location's own timezone, so a
-// UTC-hosted server never rolls the operating day over at the wrong moment.
-async function collectTodaysWork(
-  now: Date,
-  scope: { neighborhoodId?: string; zoneIds?: string[] } = {}
-): Promise<ServiceWork[]> {
-  // Candidate set = active, subscribed, has any schedule. Weekday matching is
-  // done per-address in the address's zone below, so it can't be pre-filtered
-  // by weekday in SQL. `zoneIds` restricts to neighborhoods in those zones (an
-  // empty list means "no accessible zones" → no work).
-  const addresses = await prisma.serviceAddress.findMany({
-    where: {
-      isActive: true,
-      ...(scope.neighborhoodId ? { neighborhoodId: scope.neighborhoodId } : {}),
-      ...(scope.zoneIds ? { neighborhood: { zoneId: { in: scope.zoneIds } } } : {}),
-      subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
-      schedules: { some: {} }
-    },
-    include: SERVICE_ADDRESS_INCLUDE
-  });
-
+// Provider-synced pickup days are reconciled against the trash provider's actual
+// (holiday-accurate) dates by reconcileTodaysWork, so a shifted/cancelled pickup
+// doesn't land on a route. "Tomorrow"/"yesterday" resolve in EACH location's own
+// timezone, so a UTC-hosted server never rolls the operating day over wrong.
+async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promise<ServiceWork[]> {
+  const reconciled = await reconcileTodaysWork(now, scope);
   const work: ServiceWork[] = [];
-  for (const a of addresses) {
-    const subscriptionId = a.subscriptions[0]?.id;
-    if (!subscriptionId) {
-      continue;
-    }
-    const zone = resolveZone(a.timezone);
-    const rollOutWeekday = weekdayInZone(now, zone, 1);
-    const rollInWeekday = weekdayInZone(now, zone, -1);
-    const rollOutDay = zonedDay(now, zone, 1);
-    const rollInDay = zonedDay(now, zone, -1);
-
-    const rollOutSched = a.schedules.find(
-      (s) =>
-        s.pickupDayOfWeek === rollOutWeekday &&
-        (s.cadence === "WEEKLY" || biweeklyMatchesZoned(s.biweeklyAnchorDate, rollOutDay))
-    );
-    const rollInSched = a.schedules.find(
-      (s) =>
-        s.pickupDayOfWeek === rollInWeekday &&
-        s.rollIn &&
-        (s.cadence === "WEEKLY" || biweeklyMatchesZoned(s.biweeklyAnchorDate, rollInDay))
-    );
+  for (const r of reconciled) {
     const jobTypes: string[] = [];
-    if (rollOutSched) jobTypes.push("CURB_OUT");
-    if (rollInSched) jobTypes.push("CURB_IN");
+    if (r.rollOut.due) jobTypes.push("CURB_OUT");
+    if (r.rollIn.due) jobTypes.push("CURB_IN");
     if (jobTypes.length === 0) {
       continue;
     }
     // Cans for the relevant pickup day (prefer the roll-out day's schedule).
-    const chosenSched = rollOutSched ?? rollInSched;
-    const canCount = chosenSched?.canCount ?? 0;
-    const cans = parseCans(chosenSched?.cans);
-    const petWasteDogs = chosenSched?.petWasteDogs ?? 0;
+    const chosenSched = r.rollOut.schedule ?? r.rollIn.schedule;
     work.push({
-      address: a as unknown as ServiceWork["address"],
-      subscriptionId,
+      address: r.address as unknown as ServiceWork["address"],
+      subscriptionId: r.subscriptionId,
       jobTypes,
-      canCount,
-      cans,
-      petWasteDogs
+      canCount: chosenSched?.canCount ?? 0,
+      cans: parseCans(chosenSched?.cans),
+      petWasteDogs: chosenSched?.petWasteDogs ?? 0
     });
   }
   return work;

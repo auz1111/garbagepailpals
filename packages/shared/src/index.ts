@@ -152,6 +152,47 @@ export const haulerCoverageResponseSchema = z.object({
   areas: z.array(haulerCoverageAreaSchema)
 });
 
+// --- Admin "is today on track?" day-status panel --------------------------
+export const dayStatusHeadlineSchema = z.enum(["ON_TRACK", "NEEDS_ATTENTION", "OFF_SCHEDULE"]);
+
+// Per-provider health for today: NORMAL, or a holiday shift/skip, or UNKNOWN
+// when a synced location has no cached provider schedule to check against.
+export const dayStatusProviderSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  status: z.enum(["NORMAL", "SHIFTED", "NO_COLLECTION", "UNKNOWN"]),
+  affected: z.number().int().nonnegative()
+});
+
+export const dayStatusIssueSchema = z.object({
+  type: z.enum([
+    "UNASSIGNED",
+    "AWAITING_ACCEPTANCE",
+    "UNSERVICED",
+    "PROVIDER_NO_COLLECTION",
+    "PROVIDER_SHIFTED",
+    "PROVIDER_UNKNOWN",
+    "ROUTED_BUT_SKIPPED"
+  ]),
+  addressId: z.string().nullable(),
+  line1: z.string().nullable(),
+  detail: z.string()
+});
+
+export const dayStatusResponseSchema = z.object({
+  date: z.string(),
+  headline: dayStatusHeadlineSchema,
+  providers: z.array(dayStatusProviderSchema),
+  coverage: z.object({
+    scheduled: z.number().int().nonnegative(),
+    assigned: z.number().int().nonnegative(),
+    accepted: z.number().int().nonnegative(),
+    serviced: z.number().int().nonnegative(),
+    unassigned: z.number().int().nonnegative()
+  }),
+  issues: z.array(dayStatusIssueSchema)
+});
+
 export const serviceAddressInputSchema = z.object({
   line1: z.string().min(1).max(120),
   line2: z.string().max(120).optional(),
@@ -1126,6 +1167,9 @@ export type HaulerUpcoming = z.infer<typeof haulerUpcomingSchema>;
 export type HaulerProviderInfo = z.infer<typeof haulerProviderInfoSchema>;
 export type HaulerCoverageArea = z.infer<typeof haulerCoverageAreaSchema>;
 export type HaulerCoverageResponse = z.infer<typeof haulerCoverageResponseSchema>;
+export type DayStatusResponse = z.infer<typeof dayStatusResponseSchema>;
+export type DayStatusProvider = z.infer<typeof dayStatusProviderSchema>;
+export type DayStatusIssue = z.infer<typeof dayStatusIssueSchema>;
 export type ServiceAddressInput = z.infer<typeof serviceAddressInputSchema>;
 export type CreateAddressRequest = z.infer<typeof createAddressRequestSchema>;
 export type ServiceAddress = z.infer<typeof serviceAddressSchema>;

@@ -3,6 +3,7 @@ import { prisma } from "@gpp/db";
 import type { HaulerUpcoming } from "@gpp/shared";
 import { env } from "../lib/env";
 import { getUpcomingForAddress } from "./haulerSchedule";
+import { parseHaulerStreams, weekdayIndexFromLuxon } from "./providerReconcile";
 
 type Cadence = "WEEKLY" | "BIWEEKLY";
 type ServiceJobType = "CURB_OUT" | "CURB_IN";
@@ -80,10 +81,6 @@ export function shouldRunForAddressNow(timezone: string, now: Date): boolean {
   return localNow.hour === 2;
 }
 
-function weekdayIndexFromLuxon(dt: DateTime): number {
-  return dt.weekday % 7;
-}
-
 function isHoldCovered(date: DateTime, holds: SchedulerAddress["holds"]): boolean {
   return holds.some((hold) => {
     const start = DateTime.fromJSDate(hold.startDate).startOf("day");
@@ -109,66 +106,6 @@ function isBiweeklyMatch(targetDate: DateTime, anchorDate: Date): boolean {
   const candidate = targetDate.startOf("day");
   const diffWeeks = Math.floor(candidate.diff(anchor, "days").days / 7);
   return diffWeeks % 2 === 0;
-}
-
-// The actual collection dates for one provider stream that normally lands on a
-// given weekday: date per (Monday-)week, plus the covered window.
-type StreamSchedule = {
-  byWeek: Map<number, DateTime>;
-  from: DateTime;
-  to: DateTime;
-};
-
-// The provider collects several streams (garbage/recycling/yard) on different
-// weekdays. Distill the cached concrete dates into a map keyed by each stream's
-// NORMAL weekday, so a synced pickup day can be reconciled against the provider
-// collection that falls on the same weekday.
-function parseHaulerStreams(upcoming: HaulerUpcoming, zone: string): Map<number, StreamSchedule> {
-  const from = DateTime.fromISO(upcoming.from, { zone }).startOf("day");
-  const to = DateTime.fromISO(upcoming.to, { zone }).endOf("day");
-
-  const byKind = new Map<string, DateTime[]>();
-  for (const pickup of upcoming.pickups) {
-    const d = DateTime.fromISO(pickup.date, { zone }).startOf("day");
-    if (!d.isValid) {
-      continue;
-    }
-    const list = byKind.get(pickup.kind) ?? [];
-    list.push(d);
-    byKind.set(pickup.kind, list);
-  }
-
-  const byWeekday = new Map<number, StreamSchedule>();
-  for (const dates of byKind.values()) {
-    if (dates.length === 0) {
-      continue;
-    }
-    // Normal weekday = the mode (holiday-shifted dates are the minority).
-    const counts = new Map<number, number>();
-    for (const d of dates) {
-      const w = weekdayIndexFromLuxon(d);
-      counts.set(w, (counts.get(w) ?? 0) + 1);
-    }
-    let normalWeekday = weekdayIndexFromLuxon(dates[0]!);
-    let best = -1;
-    for (const [w, c] of counts) {
-      if (c > best) {
-        best = c;
-        normalWeekday = w;
-      }
-    }
-    // Earliest actual date per week (handles a holiday moving a date within its week).
-    const target = byWeekday.get(normalWeekday) ?? { byWeek: new Map<number, DateTime>(), from, to };
-    for (const d of dates) {
-      const wk = d.startOf("week").toMillis();
-      const existing = target.byWeek.get(wk);
-      if (!existing || d < existing) {
-        target.byWeek.set(wk, d);
-      }
-    }
-    byWeekday.set(normalWeekday, target);
-  }
-  return byWeekday;
 }
 
 export function calculateJobsForAddress(

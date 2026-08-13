@@ -19,6 +19,7 @@ import type {
   AdminRouteSummary,
   AdminTodaysLocationsResponse,
   AssignedRoutesResponse,
+  DayStatusResponse,
   RouteHistoryResponse,
   ZonesResponse,
   ZoneCreate,
@@ -340,6 +341,30 @@ export function getAssignedRoutes(
   return request<undefined, AssignedRoutesResponse>(
     `/ops-admin/routes/assigned${scopeQuery({ zoneId })}`,
     "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function getDayStatus(
+  accessToken: string,
+  scope: { zoneId?: string; neighborhoodId?: string } = {}
+): Promise<DayStatusResponse> {
+  return request<undefined, DayStatusResponse>(
+    `/ops-admin/routes/day-status${scopeQuery(scope)}`,
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function refreshDaySchedules(
+  accessToken: string,
+  scope: { zoneId?: string; neighborhoodId?: string } = {}
+): Promise<DayStatusResponse> {
+  return request<undefined, DayStatusResponse>(
+    `/ops-admin/routes/refresh-schedules${scopeQuery(scope)}`,
+    "POST",
     undefined,
     accessToken
   );

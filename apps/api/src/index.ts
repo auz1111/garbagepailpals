@@ -55,6 +55,7 @@ import {
 } from "./routes/operatorRoutes";
 import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
 import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
+import { dayStatusHandler, refreshSchedulesHandler } from "./routes/dayStatus";
 import { operatorZoneRequestHandler, operatorZonesHandler } from "./routes/operatorZones";
 import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adminOperators";
 import {
@@ -208,6 +209,20 @@ app.http("admin-route-history", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminRouteHistoryHandler
+});
+
+app.http("admin-day-status", {
+  route: "ops-admin/routes/day-status",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: dayStatusHandler
+});
+
+app.http("admin-refresh-schedules", {
+  route: "ops-admin/routes/refresh-schedules",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: refreshSchedulesHandler
 });
 
 app.http("admin-delete-route", {

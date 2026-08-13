@@ -16,6 +16,7 @@ import {
   getZones
 } from "../lib/api";
 import { formatCans } from "./CanRowsEditor";
+import { DayStatusPanel } from "./DayStatusPanel";
 
 type TodaysRouteProps = {
   accessToken: string;
@@ -517,6 +518,13 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
           ))}
         </div>
       )}
+
+      {zones.length > 0 && zoneId ? (
+        <DayStatusPanel
+          accessToken={accessToken}
+          scope={{ zoneId: zoneScope, neighborhoodId: neighborhoodId || undefined }}
+        />
+      ) : null}
 
       {zones.length === 0 ? null : nothingToAssign ? (
         <article className="panel">
