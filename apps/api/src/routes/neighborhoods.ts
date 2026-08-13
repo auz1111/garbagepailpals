@@ -447,6 +447,17 @@ export async function adminLocationApprovalHandler(
         if (!existing) {
           throw new HttpError(404, "Location not found");
         }
+        // A location can't be approved for service until its plan is active — the
+        // customer must complete billing first.
+        if (approved) {
+          const activeSub = await prisma.subscription.findFirst({
+            where: { serviceAddressId: addressId, status: { in: ["ACTIVE", "TRIALING"] } },
+            select: { id: true }
+          });
+          if (!activeSub) {
+            throw new HttpError(409, "Billing must be active before this location can be approved.");
+          }
+        }
         await prisma.serviceAddress.update({
           where: { id: addressId },
           data: {

@@ -155,11 +155,13 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                 <div className="loc-row-tags">
                   {l.serviceApproved ? (
                     <span className="loc-chip is-approved">✓ Approved</span>
+                  ) : !l.billed ? (
+                    <span className="loc-chip is-awaiting" title="Waiting for the customer to activate their plan">
+                      💳 Awaiting billing
+                    </span>
                   ) : (
                     <>
-                      <span className="loc-chip is-pending">
-                        ⏳ Pending approval{l.billed ? " · billed" : ""}
-                      </span>
+                      <span className="loc-chip is-pending">⏳ Pending approval</span>
                       <button
                         type="button"
                         className="loc-approve-btn"

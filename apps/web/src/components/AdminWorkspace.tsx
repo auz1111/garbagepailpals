@@ -1207,8 +1207,10 @@ function AdminLocationCard({
             )}
             {loc.serviceApproved ? (
               <span className="loc-chip is-approved">✓ Approved</span>
-            ) : (
+            ) : loc.billed ? (
               <span className="loc-chip is-pending">⏳ Pending approval</span>
+            ) : (
+              <span className="loc-chip is-awaiting">💳 Awaiting billing</span>
             )}
           </div>
           <span className="admin-table-sub">
@@ -1268,7 +1270,7 @@ function AdminLocationCard({
             >
               {approvalMutation.isPending ? "Saving…" : "Revoke approval"}
             </button>
-          ) : (
+          ) : loc.billed ? (
             <button
               type="button"
               className="cta-primary"
@@ -1277,6 +1279,8 @@ function AdminLocationCard({
             >
               {approvalMutation.isPending ? "Approving…" : "✓ Approve for service"}
             </button>
+          ) : (
+            <span className="loc-awaiting-note">💳 Waiting for the customer to activate their plan</span>
           )}
           <button type="button" className="ghost-btn" onClick={() => setEditing(true)}>
             Edit schedule

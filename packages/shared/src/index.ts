@@ -613,6 +613,9 @@ export const adminUserLocationSchema = z.object({
   monthlyCents: z.number().int().nonnegative(),
   // Whether an admin approved this location for service (independent of billing).
   serviceApproved: z.boolean().default(false),
+  // Whether the location's plan is active (billing complete) — required before
+  // it can be approved.
+  billed: z.boolean().default(false),
   // The trash hauler this location is connected to for schedule lookups /
   // holiday shifts, if any (null = not connected).
   haulerProvider: z.string().nullable(),

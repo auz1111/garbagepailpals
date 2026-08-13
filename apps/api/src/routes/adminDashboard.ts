@@ -2,6 +2,7 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@gpp/db";
+import { Prisma } from "@prisma/client";
 import {
   addressMonthlyCents,
   adminCreateUserSchema,
@@ -25,11 +26,21 @@ import { describeProviders, haulerAddressHash } from "../services/haulerSchedule
 const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
 
 const USER_AGGREGATE_INCLUDE = {
-  serviceAddresses: { where: { isActive: true }, include: { schedules: true } },
+  serviceAddresses: {
+    where: { isActive: true },
+    include: {
+      schedules: true,
+      subscriptions: {
+        where: { status: { in: ["ACTIVE", "TRIALING"] } },
+        select: { id: true },
+        take: 1
+      }
+    }
+  },
   subscriptions: true,
   zones: { select: { zoneId: true } },
-  zoneRequests: { where: { status: "PENDING" as const }, select: { zoneId: true } }
-} as const;
+  zoneRequests: { where: { status: "PENDING" }, select: { zoneId: true } }
+} satisfies Prisma.UserInclude;
 
 type ScheduleRow = {
   pickupDayOfWeek: number;
@@ -57,6 +68,7 @@ type AddressRow = {
   postalCode: string;
   neighborhoodId: string | null;
   serviceApprovedAt: Date | null;
+  subscriptions: { id: string }[];
   schedules: ScheduleRow[];
 };
 
@@ -137,6 +149,7 @@ async function toAdminUserDetail(row: UserAggregateRow) {
       neighborhoodId: address.neighborhoodId,
       glassRecycling: address.schedules.some((s) => s.glassRecycling),
       serviceApproved: address.serviceApprovedAt != null,
+      billed: address.subscriptions.length > 0,
       monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
       haulerProvider: providerByHash.get(hashOf(address)) ?? null,
       haulerProviderLabel: providerByHash.has(hashOf(address))

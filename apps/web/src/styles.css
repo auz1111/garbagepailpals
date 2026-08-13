@@ -2965,6 +2965,17 @@ a {
   background: #fff4d6;
   color: #92600a;
 }
+.loc-chip.is-awaiting {
+  background: #fde68a;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  font-weight: 800;
+}
+.loc-awaiting-note {
+  font-size: 0.82rem;
+  color: #92400e;
+  font-weight: 700;
+}
 .loc-approve-btn {
   border: 1px solid #16a34a;
   background: #16a34a;
