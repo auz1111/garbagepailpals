@@ -52,6 +52,7 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
         ) : providers.length === 0 ? (
           <p className="subtext">No trash providers are configured.</p>
         ) : (
+          <div className="table-scroll">
           <table className="admin-table">
             <thead>
               <tr>
@@ -64,13 +65,13 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
             <tbody>
               {providers.map((p) => (
                 <tr key={p.id}>
-                  <td>
+                  <td data-label="Trash provider">
                     <strong>{p.label}</strong>
                     <span className="admin-table-sub">{p.id}</span>
                   </td>
-                  <td>{p.platform}</td>
-                  <td>{p.coverageLabel}</td>
-                  <td>
+                  <td data-label="Platform">{p.platform}</td>
+                  <td data-label="Coverage">{p.coverageLabel}</td>
+                  <td data-label="Schedule lookup">
                     <a
                       className="provider-schedule-link"
                       href={p.scheduleUrl}
@@ -84,6 +85,7 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </article>
 
@@ -157,6 +159,7 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
         ) : areas.length === 0 ? (
           <p className="subtext">No service areas yet.</p>
         ) : (
+          <div className="table-scroll">
           <table className="admin-table">
             <thead>
               <tr>
@@ -169,25 +172,27 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
             <tbody>
               {areas.map((area) => (
                 <tr key={area.zoneId ?? "none"}>
-                  <td>
+                  <td data-label="Zone">
                     <strong>{area.name}</strong>
                     {area.isTest ? <span className="loc-chip is-none">Test</span> : null}
                     <span className="admin-table-sub">
                       {[area.city, area.state].filter(Boolean).join(", ") || "—"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="Configured">
                     {area.configuredProviders.length === 0 ? (
                       <span className="admin-table-sub">None</span>
                     ) : (
-                      area.configuredProviders.map((p) => (
-                        <span key={p.id} className="loc-chip is-zone">
-                          {p.label}
-                        </span>
-                      ))
+                      <span className="cell-chips">
+                        {area.configuredProviders.map((p) => (
+                          <span key={p.id} className="loc-chip is-zone">
+                            {p.label}
+                          </span>
+                        ))}
+                      </span>
                     )}
                   </td>
-                  <td>
+                  <td data-label="Matched">
                     <strong>
                       {area.matched}/{area.totalAddresses}
                     </strong>
@@ -195,7 +200,7 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
                       <span className="admin-table-sub">{area.unmatched} no match</span>
                     ) : null}
                   </td>
-                  <td>
+                  <td data-label="Breakdown">
                     {area.matchedByProvider.length === 0 ? (
                       <span className="admin-table-sub">—</span>
                     ) : (
@@ -208,6 +213,7 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </article>
     </div>

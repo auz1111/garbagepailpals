@@ -650,6 +650,27 @@ a {
   color: var(--slate-2);
 }
 
+/* Wide tables scroll inside their panel rather than breaking the page width. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Let a card-row cell's value wrap (and long tokens break) so multi-chip or
+   long-text cells never overflow on mobile. */
+.admin-table td {
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A wrapping group of chips inside a card-row cell (e.g. configured providers). */
+.cell-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
 .admin-table td.admin-cell-user {
   flex-direction: column;
   align-items: flex-start;
