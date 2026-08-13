@@ -318,19 +318,29 @@ export const serviceAddressSchema = serviceAddressInputSchema.extend({
 });
 
 // --- Subscription pricing -------------------------------------------------
-// Cost is a sum over every can on every pickup day: each can is priced by its
-// own cadence (a biweekly can costs half a weekly one). Roll-in credit and pet
-// waste are per-day adjustments.
+// Pricing is per SERVICE VISIT, not a flat per-can fee: each visit has a fixed
+// "stop" cost (driving to and handling the location) plus a per-can cost for the
+// carts actually handled that visit. Biweekly cans are only handled on ~half the
+// visits, so they cost proportionally less and — importantly — a location is
+// priced on the cans it puts out PER VISIT (e.g. trash + one alternating extra),
+// never the raw sum of every can it owns.
 // NOTE: placeholder rates — adjust to real pricing before launch.
 export const PRICING = {
-  // One weekly cart's monthly price. A biweekly cart is half this.
-  perCanMonthlyCents: 2250,
+  // Fixed fee per service visit (the stop: drive, park, roll, record). Calibrated
+  // with perCanVisitCents so a 2-weekly-can day prices at ~$45/mo.
+  visitBaseCents: 500,
+  // Fee per can handled on a visit.
+  perCanVisitCents: 269,
   // Credit per can when the customer opts out of roll-in on a day.
   rollInCreditMonthlyCentsPerCan: 300,
   // Pet waste removal: base for the first dog, plus a per-extra-dog surcharge.
   petWasteBaseMonthlyCents: 6000,
   petWasteExtraDogMonthlyCents: 1500
 } as const;
+
+// Average number of service visits per month for a weekly vs a fortnightly day.
+export const VISITS_PER_MONTH_WEEKLY = 52 / 12; // ~4.33
+export const VISITS_PER_MONTH_BIWEEKLY = 26 / 12; // ~2.17
 
 // Monthly pet-waste fee for `dogs` dogs (0 dogs = no service).
 export function petWasteMonthlyCents(dogs: number): number {
@@ -339,12 +349,24 @@ export function petWasteMonthlyCents(dogs: number): number {
     : 0;
 }
 
-// Monthly price of a single can, by its cadence and count.
-export function scheduleCanMonthlyCents(can: ScheduleCan): number {
-  const perCan = can.cadence === "BIWEEKLY"
-    ? Math.round(PRICING.perCanMonthlyCents / 2)
-    : PRICING.perCanMonthlyCents;
-  return perCan * can.count;
+// How often we visit a pickup day each month: weekly if any can is weekly,
+// otherwise fortnightly (all-biweekly day).
+export function dayVisitsPerMonth(cans: ScheduleCan[]): number {
+  return cans.some((c) => c.cadence === "WEEKLY")
+    ? VISITS_PER_MONTH_WEEKLY
+    : VISITS_PER_MONTH_BIWEEKLY;
+}
+
+// Total can-handlings a month across a day's cans (each can counts once per
+// visit it's actually collected: weekly ~4.33x/mo, biweekly ~2.17x/mo). Dividing
+// this by the visit count gives the AVERAGE cans handled per visit.
+export function dayCanHandlingsPerMonth(cans: ScheduleCan[]): number {
+  return cans.reduce(
+    (sum, c) =>
+      sum +
+      c.count * (c.cadence === "WEEKLY" ? VISITS_PER_MONTH_WEEKLY : VISITS_PER_MONTH_BIWEEKLY),
+    0
+  );
 }
 
 export type PricingDay = {
@@ -354,10 +376,16 @@ export type PricingDay = {
 };
 
 export function pickupDayMonthlyCents(day: PricingDay): number {
-  let cents = day.cans.reduce((sum, can) => sum + scheduleCanMonthlyCents(can), 0);
-  const totalCans = day.cans.reduce((sum, can) => sum + can.count, 0);
-  if (day.rollIn === false) {
-    cents -= totalCans * PRICING.rollInCreditMonthlyCentsPerCan;
+  const cans = day.cans;
+  let cents = 0;
+  if (cans.length > 0) {
+    const visits = dayVisitsPerMonth(cans);
+    const handlings = dayCanHandlingsPerMonth(cans);
+    cents = Math.round(visits * PRICING.visitBaseCents + handlings * PRICING.perCanVisitCents);
+    const totalCans = cans.reduce((sum, can) => sum + can.count, 0);
+    if (day.rollIn === false) {
+      cents -= totalCans * PRICING.rollInCreditMonthlyCentsPerCan;
+    }
   }
   cents += petWasteMonthlyCents(day.petWasteDogs ?? 0);
   return Math.max(0, cents);

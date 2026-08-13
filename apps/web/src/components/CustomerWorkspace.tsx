@@ -568,10 +568,12 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </>
           )}
           <p className="subtext">
-            Each can we service is {formatUsd(PRICING.perCanMonthlyCents)}/mo (a biweekly can is
-            half that). Skipping roll-in on a day credits{" "}
-            {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo per can; pet waste removal adds{" "}
-            {formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo for the first dog.
+            Pricing is per service visit: a {formatUsd(PRICING.visitBaseCents)} stop fee plus{" "}
+            {formatUsd(PRICING.perCanVisitCents)} per can we roll that visit. Biweekly cans are
+            collected every other visit, so you're only charged for the cans that actually go out
+            each week. Skipping roll-in credits {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo
+            per can; pet waste removal adds {formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo for the
+            first dog.
           </p>
         </article>
       </div>
