@@ -1,15 +1,8 @@
 import { useState } from "react";
 import type { CanType, PickupDayInput, PickupStream, ScheduleCan } from "@gpp/shared";
+import { streamToCanTypes } from "../lib/providerCans";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-// Map a provider collection stream to the can type we bill/service.
-const STREAM_TO_CAN: Record<PickupStream["kind"], CanType> = {
-  GARBAGE: "TRASH",
-  RECYCLING: "RECYCLING",
-  YARD: "YARD",
-  OTHER: "TRASH"
-};
 
 // The pickup-day shape both workspaces already have on hand (admin location +
 // customer schedule), enough to rebuild a schedule payload.
@@ -61,13 +54,15 @@ export function ProviderSyncReview({
     if (stream.nextDate && (!entry.nextDate || stream.nextDate < entry.nextDate)) {
       entry.nextDate = stream.nextDate;
     }
-    const type = STREAM_TO_CAN[stream.kind];
-    const existing = entry.cans.get(type);
-    if (existing) {
-      existing.count += 1;
-      if (stream.cadence === "WEEKLY") existing.cadence = "WEEKLY";
-    } else {
-      entry.cans.set(type, { type, cadence: stream.cadence, count: 1 });
+    // One stream can yield more than one can (e.g. a combined glass/yard stream).
+    for (const type of streamToCanTypes(stream)) {
+      const existing = entry.cans.get(type);
+      if (existing) {
+        existing.count += 1;
+        if (stream.cadence === "WEEKLY") existing.cadence = "WEEKLY";
+      } else {
+        entry.cans.set(type, { type, cadence: stream.cadence, count: 1 });
+      }
     }
     dayMap.set(stream.dayOfWeek, entry);
   }

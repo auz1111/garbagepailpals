@@ -18,6 +18,7 @@ import {
   updateAddress,
   updateAddressSchedule
 } from "../lib/api";
+import { streamToCanTypes } from "../lib/providerCans";
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { CanRowsEditor } from "./CanRowsEditor";
 
@@ -25,25 +26,19 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 const FRIDAY = 5;
 const DEFAULT_CANS: ScheduleCan[] = [{ type: "TRASH", cadence: "WEEKLY", count: 1 }];
 
-const STREAM_TO_CAN: Record<PickupStream["kind"], CanType> = {
-  GARBAGE: "TRASH",
-  RECYCLING: "RECYCLING",
-  YARD: "YARD",
-  OTHER: "TRASH"
-};
-
 // Build the cans a given weekday services from the provider's collection streams
-// (one can per stream, count 1, each keeping its own cadence).
+// (one can per stream — but a combined glass/yard stream splits into two).
 function cansFromStreams(streams: PickupStream[], dayOfWeek: number): ScheduleCan[] {
   const byType = new Map<CanType, ScheduleCan>();
   for (const s of streams.filter((x) => x.dayOfWeek === dayOfWeek)) {
-    const type = STREAM_TO_CAN[s.kind];
-    const existing = byType.get(type);
-    if (existing) {
-      existing.count += 1;
-      if (s.cadence === "WEEKLY") existing.cadence = "WEEKLY";
-    } else {
-      byType.set(type, { type, cadence: s.cadence, count: 1 });
+    for (const type of streamToCanTypes(s)) {
+      const existing = byType.get(type);
+      if (existing) {
+        existing.count += 1;
+        if (s.cadence === "WEEKLY") existing.cadence = "WEEKLY";
+      } else {
+        byType.set(type, { type, cadence: s.cadence, count: 1 });
+      }
     }
   }
   const cans = [...byType.values()];
