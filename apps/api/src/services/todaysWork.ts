@@ -1,11 +1,34 @@
 import { prisma } from "@gpp/db";
-import type { HaulerUpcoming } from "@gpp/shared";
-import { haulerUpcomingSchema } from "@gpp/shared";
+import type { CanType, HaulerUpcoming, PickupStream, ScheduleCan } from "@gpp/shared";
+import { haulerUpcomingSchema, scheduleCanSchema } from "@gpp/shared";
+import { z } from "zod";
 import { biweeklyMatchesZoned, resolveZone, weekdayInZone, zonedDay } from "../lib/timezone";
 import { describeProviders, haulerAddressHash } from "./haulerSchedule";
 import { parseHaulerStreams } from "./providerReconcile";
 
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
+
+const cansArraySchema = z.array(scheduleCanSchema);
+function parseCans(value: unknown): ScheduleCan[] {
+  const parsed = cansArraySchema.safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
+
+// Which provider collection stream a can type corresponds to (glass rides along
+// with the yard stream, since haulers bundle glass into yard waste).
+function canTypeToStreamKind(type: CanType): PickupStream["kind"] {
+  switch (type) {
+    case "TRASH":
+      return "GARBAGE";
+    case "RECYCLING":
+      return "RECYCLING";
+    case "YARD":
+    case "GLASS":
+      return "YARD";
+    default:
+      return "GARBAGE";
+  }
+}
 
 const SERVICE_ADDRESS_INCLUDE = {
   schedules: true,
@@ -36,6 +59,10 @@ type ReconciledAction = {
   // Whether this roll action is actually due today (drives routing).
   due: boolean;
   schedule: ScheduleRow | null;
+  // The cans actually collected on this action's date (weekly cans always; a
+  // biweekly can only on its on-week — reconciled to the provider's per-stream
+  // dates when synced). Empty when the action isn't due.
+  cans: ScheduleCan[];
   providerStatus: ActionProviderStatus;
   // ISO date the provider actually collects, when SHIFTED.
   shiftedTo: string | null;
@@ -129,6 +156,28 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
     const cached = streamsByHash.get(hash);
     const streams = cached ? parseHaulerStreams(cached.upcoming, zone) : null;
 
+    // The cans actually collected at this address on a given date: for a synced
+    // schedule, keep only cans whose stream the provider collects that date (so a
+    // biweekly recycling can drops on its off-week); otherwise keep all the day's
+    // cans. Falls back to the full list if filtering would leave nothing.
+    const dueCansFor = (s: ScheduleRow, day: ReturnType<typeof zonedDay>): ScheduleCan[] => {
+      const all = parseCans(s.cans);
+      if (!s.providerSynced || !cached) {
+        return all;
+      }
+      const dayIso = day.toISODate();
+      const kinds = new Set(
+        cached.upcoming.pickups
+          .filter((p) => p.date.slice(0, 10) === dayIso)
+          .map((p) => p.kind)
+      );
+      if (kinds.size === 0) {
+        return all;
+      }
+      const filtered = all.filter((c) => kinds.has(canTypeToStreamKind(c.type)));
+      return filtered.length > 0 ? filtered : all;
+    };
+
     // Reconcile one roll action (roll-out for tomorrow's pickup, roll-in for
     // yesterday's) against the provider's actual dates when the day is synced.
     const reconcileAction = (
@@ -145,7 +194,7 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
             // Synced but no usable data for this day → fall back to the weekday
             // rule and flag it Unknown so the panel doesn't claim "on schedule".
             if (weekdayMatch(s, weekday, day)) {
-              return { due: true, schedule: s, providerStatus: "UNKNOWN", shiftedTo: null };
+              return { due: true, schedule: s, cans: dueCansFor(s, day), providerStatus: "UNKNOWN", shiftedTo: null };
             }
             continue;
           }
@@ -157,6 +206,7 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
             return {
               due: true,
               schedule: s,
+              cans: dueCansFor(s, day),
               providerStatus: shifted ? "SHIFTED" : "NORMAL",
               shiftedTo: shifted ? actual.toISODate() : null
             };
@@ -171,6 +221,7 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
               return {
                 due: false,
                 schedule: s,
+                cans: [],
                 providerStatus: s.cadence === "WEEKLY" ? "NO_COLLECTION" : "NORMAL",
                 shiftedTo: null
               };
@@ -178,6 +229,7 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
             return {
               due: false,
               schedule: s,
+              cans: [],
               providerStatus: "SHIFTED",
               shiftedTo: actual.toISODate()
             };
@@ -187,10 +239,10 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
 
         // Unsynced pickup day → provider-agnostic weekday rule.
         if (weekdayMatch(s, weekday, day)) {
-          return { due: true, schedule: s, providerStatus: "NOT_SYNCED", shiftedTo: null };
+          return { due: true, schedule: s, cans: dueCansFor(s, day), providerStatus: "NOT_SYNCED", shiftedTo: null };
         }
       }
-      return { due: false, schedule: null, providerStatus: "NOT_SYNCED", shiftedTo: null };
+      return { due: false, schedule: null, cans: [], providerStatus: "NOT_SYNCED", shiftedTo: null };
     };
 
     const rollOut = reconcileAction(rollOutWeekday, rollOutDay, false);

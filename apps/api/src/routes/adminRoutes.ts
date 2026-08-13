@@ -8,6 +8,7 @@ import {
   adminTodaysLocationsResponseSchema,
   assignedRoutesResponseSchema,
   availableOperatorsResponseSchema,
+  cansToCanCount,
   routeCancelSchema,
   routeHistoryResponseSchema,
   scheduleCanSchema,
@@ -82,14 +83,17 @@ async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promise<Serv
     if (jobTypes.length === 0) {
       continue;
     }
-    // Cans for the relevant pickup day (prefer the roll-out day's schedule).
-    const chosenSched = r.rollOut.schedule ?? r.rollIn.schedule;
+    // The cans actually collected on this day (day-accurate: weekly always,
+    // biweekly only on its on-week), from the roll-out day's schedule if that's
+    // what's due, else the roll-in day's.
+    const chosenSched = r.rollOut.due ? r.rollOut.schedule : r.rollIn.schedule;
+    const cans = r.rollOut.due ? r.rollOut.cans : r.rollIn.cans;
     work.push({
       address: r.address as unknown as ServiceWork["address"],
       subscriptionId: r.subscriptionId,
       jobTypes,
-      canCount: chosenSched?.canCount ?? 0,
-      cans: parseCans(chosenSched?.cans),
+      canCount: cansToCanCount(cans),
+      cans,
       petWasteDogs: chosenSched?.petWasteDogs ?? 0
     });
   }
