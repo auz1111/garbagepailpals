@@ -1,6 +1,10 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
+import { Prisma } from "@prisma/client";
 import {
+  cansToCadence,
+  cansToCanCount,
+  cansHaveGlass,
   createAddressRequestSchema,
   isAdminRole,
   pickupScheduleSuggestionSchema,
@@ -27,6 +31,7 @@ type ScheduleRow = {
   glassRecycling: boolean;
   petWasteDogs: number;
   providerSynced: boolean;
+  cans: unknown;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -36,6 +41,7 @@ function toScheduleResponse(row: ScheduleRow) {
     id: row.id,
     serviceAddressId: row.serviceAddressId,
     dayOfWeek: row.pickupDayOfWeek,
+    cans: row.cans ?? [],
     cadence: row.cadence,
     biweeklyAnchorDate: row.biweeklyAnchorDate?.toISOString(),
     canCount: row.canCount,
@@ -97,7 +103,11 @@ export async function createAddressHandler(
     withAuth(
       async (req, _ctx, auth) => {
         const input = await parseJson(req, createAddressRequestSchema);
-        if (input.cadence === "BIWEEKLY" && !input.biweeklyAnchorDate) {
+        const firstCans =
+          input.cans && input.cans.length > 0
+            ? input.cans
+            : [{ type: "TRASH" as const, cadence: "WEEKLY" as const, count: 1 }];
+        if (cansToCadence(firstCans) === "BIWEEKLY" && !input.biweeklyAnchorDate) {
           return jsonResponse(400, {
             message: "A first pickup date is required for a biweekly schedule"
           });
@@ -146,22 +156,23 @@ export async function createAddressHandler(
             timezone,
             accessNotes: input.accessNotes ?? "",
             gateCode: input.gateCode,
-            canCount: input.canCount,
+            canCount: cansToCanCount(firstCans),
             pickupsPerWeek: 1,
             rollIn: input.rollIn ?? true,
             isActive: input.isActive ?? true,
             schedules: {
               create: {
                 pickupDayOfWeek: input.pickupDayOfWeek ?? 5,
-                cadence: input.cadence ?? "WEEKLY",
+                cadence: cansToCadence(firstCans),
                 biweeklyAnchorDate: input.biweeklyAnchorDate
                   ? new Date(input.biweeklyAnchorDate)
                   : null,
-                canCount: input.canCount,
+                canCount: cansToCanCount(firstCans),
                 rollIn: input.rollIn ?? true,
-                glassRecycling: input.glassRecycling ?? false,
+                glassRecycling: cansHaveGlass(firstCans),
                 petWasteDogs: input.petWasteDogs ?? 0,
-                providerSynced: input.providerSynced ?? false
+                providerSynced: input.providerSynced ?? false,
+                cans: firstCans as unknown as Prisma.InputJsonValue
               }
             }
           },
@@ -348,7 +359,7 @@ export async function upsertScheduleHandler(
 
         const { days } = await parseJson(req, scheduleUpdateSchema);
         const biweeklyMissingAnchor = days.some(
-          (day) => day.cadence === "BIWEEKLY" && !day.biweeklyAnchorDate
+          (day) => cansToCadence(day.cans) === "BIWEEKLY" && !day.biweeklyAnchorDate
         );
         if (biweeklyMissingAnchor) {
           return jsonResponse(400, {
@@ -364,13 +375,14 @@ export async function upsertScheduleHandler(
             data: days.map((day) => ({
               serviceAddressId: addressId,
               pickupDayOfWeek: day.dayOfWeek,
-              cadence: day.cadence,
+              cadence: cansToCadence(day.cans),
               biweeklyAnchorDate: day.biweeklyAnchorDate ? new Date(day.biweeklyAnchorDate) : null,
-              canCount: day.canCount,
+              canCount: cansToCanCount(day.cans),
               rollIn: day.rollIn,
-              glassRecycling: day.glassRecycling ?? false,
+              glassRecycling: cansHaveGlass(day.cans),
               petWasteDogs: day.petWasteDogs ?? 0,
-              providerSynced: day.providerSynced ?? false
+              providerSynced: day.providerSynced ?? false,
+              cans: day.cans as unknown as Prisma.InputJsonValue
             }))
           }),
           prisma.serviceSchedule.findMany({ where: { serviceAddressId: addressId } })

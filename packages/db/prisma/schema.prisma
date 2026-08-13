@@ -259,6 +259,9 @@ model ServiceSchedule {
   rollIn              Boolean        @default(true)
   glassRecycling      Boolean        @default(false)
   petWasteDogs        Int            @default(0)
+  // Per-cart breakdown: [{ type: TRASH|RECYCLING|YARD|GLASS, cadence, count }].
+  // Source of truth for pricing; canCount/cadence/glassRecycling are derived.
+  cans                Json           @default("[]")
   // Whether this day is synced to the connected trash provider's collection day
   // (holiday shifts follow the provider only for synced days).
   providerSynced      Boolean        @default(false)

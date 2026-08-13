@@ -170,27 +170,52 @@ export const serviceAddressInputSchema = z.object({
   isActive: z.boolean().optional()
 });
 
-// A single pickup day carries its own weekday, cadence, cans, and roll-in — all
-// pricing/scheduling inputs live on the day, not the address.
+// The kinds of cart a pickup day can service. Glass is a can type (not a
+// separate add-on).
+export const CAN_TYPES = ["TRASH", "RECYCLING", "YARD", "GLASS"] as const;
+export const canTypeSchema = z.enum(CAN_TYPES);
+
+// One cart on a pickup day: its type, how often it's collected, and how many.
+export const scheduleCanSchema = z.object({
+  type: canTypeSchema,
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
+  count: z.number().int().min(1).max(20)
+});
+export type ScheduleCan = z.infer<typeof scheduleCanSchema>;
+export type CanType = z.infer<typeof canTypeSchema>;
+
+// A single pickup day: its weekday, the cans it services (each with its own
+// cadence), and roll-in. `cadence`/`canCount`/`glassRecycling` are DERIVED from
+// `cans` server-side and optional on input.
 export const pickupDayInputSchema = z.object({
   dayOfWeek: z.number().int().min(0).max(6),
-  cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
+  cans: z.array(scheduleCanSchema).min(1).max(6),
   biweeklyAnchorDate: z.string().datetime().optional(),
-  canCount: z.number().int().min(1).max(20),
   rollIn: z.boolean().default(true),
-  // We also roll out this day's glass recycling container (+monthly fee).
-  glassRecycling: z.boolean().default(false),
   // Pet waste removal for this day: number of dogs (0 = no service).
   petWasteDogs: z.number().int().min(0).max(20).default(0),
   // Whether this pickup day is synced to the connected trash provider's
-  // collection day (so holiday shifts follow the provider). Days that aren't
-  // synced show a "Not synced" badge.
-  providerSynced: z.boolean().default(false)
+  // collection day (so holiday shifts follow the provider).
+  providerSynced: z.boolean().default(false),
+  // Derived from `cans` (kept for the scheduler/routing/legacy); optional input.
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]).optional(),
+  canCount: z.number().int().min(0).max(140).optional(),
+  glassRecycling: z.boolean().optional()
 });
 
-export const pickupDaySchema = pickupDayInputSchema.extend({
+export const pickupDaySchema = z.object({
   id: z.string(),
   serviceAddressId: z.string(),
+  dayOfWeek: z.number().int().min(0).max(6),
+  cans: z.array(scheduleCanSchema),
+  // Derived day-level fields (present in responses).
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
+  canCount: z.number().int().nonnegative(),
+  glassRecycling: z.boolean(),
+  rollIn: z.boolean(),
+  petWasteDogs: z.number().int().nonnegative(),
+  providerSynced: z.boolean(),
+  biweeklyAnchorDate: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string()
 });
@@ -206,19 +231,28 @@ export const scheduleUpdateSchema = z.object({
     })
 });
 
-// Creating a location also sets up its first pickup day. Cans + roll-in come
-// from the address input; add the weekday and cadence for that first day.
+// Creating a location also sets up its first pickup day: its weekday and the
+// cans it services (each with its own cadence).
 export const createAddressRequestSchema = serviceAddressInputSchema.extend({
   pickupDayOfWeek: z.number().int().min(0).max(6).default(5),
-  cadence: z.enum(["WEEKLY", "BIWEEKLY"]).default("WEEKLY"),
+  cans: z.array(scheduleCanSchema).min(1).default([{ type: "TRASH", cadence: "WEEKLY", count: 1 }]),
   biweeklyAnchorDate: z.string().datetime().optional(),
-  // Glass recycling for the first pickup day.
-  glassRecycling: z.boolean().default(false),
   // Pet waste removal (dogs) for the first pickup day.
   petWasteDogs: z.number().int().min(0).max(20).default(0),
   // Whether the first pickup day is synced to the trash provider's day.
   providerSynced: z.boolean().default(false)
 });
+
+// Derive the day-level fields from a day's cans.
+export function cansToCadence(cans: ScheduleCan[]): "WEEKLY" | "BIWEEKLY" {
+  return cans.some((c) => c.cadence === "WEEKLY") ? "WEEKLY" : "BIWEEKLY";
+}
+export function cansToCanCount(cans: ScheduleCan[]): number {
+  return cans.reduce((sum, c) => sum + c.count, 0);
+}
+export function cansHaveGlass(cans: ScheduleCan[]): boolean {
+  return cans.some((c) => c.type === "GLASS");
+}
 
 export const serviceAddressSchema = serviceAddressInputSchema.extend({
   id: z.string(),
@@ -230,19 +264,15 @@ export const serviceAddressSchema = serviceAddressInputSchema.extend({
 });
 
 // --- Subscription pricing -------------------------------------------------
-// Cost is a sum over pickup days: the earliest weekday is the location's base
-// pickup; each additional day is half the base price. Extra cans and roll-in
-// adjust a day; biweekly halves that day's monthly visits.
+// Cost is a sum over every can on every pickup day: each can is priced by its
+// own cadence (a biweekly can costs half a weekly one). Roll-in credit and pet
+// waste are per-day adjustments.
 // NOTE: placeholder rates — adjust to real pricing before launch.
 export const PRICING = {
-  includedCansPerPickup: 2,
-  baseMonthlyCentsPerAddress: 4500,
-  extraCanMonthlyCents: 400,
+  // One weekly cart's monthly price. A biweekly cart is half this.
+  perCanMonthlyCents: 2250,
   // Credit per can when the customer opts out of roll-in on a day.
   rollInCreditMonthlyCentsPerCan: 300,
-  // Flat monthly add-on when the location has a glass recycling container we
-  // also take out.
-  glassRecyclingMonthlyCents: 500,
   // Pet waste removal: base for the first dog, plus a per-extra-dog surcharge.
   petWasteBaseMonthlyCents: 6000,
   petWasteExtraDogMonthlyCents: 1500
@@ -255,42 +285,32 @@ export function petWasteMonthlyCents(dogs: number): number {
     : 0;
 }
 
-// Each additional pickup day (beyond the first) costs half the base price.
-export const additionalPickupDayMonthlyCents = (): number =>
-  Math.round(PRICING.baseMonthlyCentsPerAddress / 2);
+// Monthly price of a single can, by its cadence and count.
+export function scheduleCanMonthlyCents(can: ScheduleCan): number {
+  const perCan = can.cadence === "BIWEEKLY"
+    ? Math.round(PRICING.perCanMonthlyCents / 2)
+    : PRICING.perCanMonthlyCents;
+  return perCan * can.count;
+}
 
 export type PricingDay = {
-  dayOfWeek: number;
-  canCount: number;
-  cadence: "WEEKLY" | "BIWEEKLY";
+  cans: ScheduleCan[];
   rollIn?: boolean;
-  glassRecycling?: boolean;
   petWasteDogs?: number;
 };
 
-export function pickupDayMonthlyCents(day: PricingDay, isPrimary: boolean): number {
-  const slot = isPrimary
-    ? PRICING.baseMonthlyCentsPerAddress
-    : additionalPickupDayMonthlyCents();
-  const extraCans =
-    Math.max(0, day.canCount - PRICING.includedCansPerPickup) * PRICING.extraCanMonthlyCents;
-  const credit = day.rollIn === false ? day.canCount * PRICING.rollInCreditMonthlyCentsPerCan : 0;
-  let cents = slot + extraCans - credit;
-  if (day.cadence === "BIWEEKLY") {
-    cents = Math.round(cents / 2);
+export function pickupDayMonthlyCents(day: PricingDay): number {
+  let cents = day.cans.reduce((sum, can) => sum + scheduleCanMonthlyCents(can), 0);
+  const totalCans = day.cans.reduce((sum, can) => sum + can.count, 0);
+  if (day.rollIn === false) {
+    cents -= totalCans * PRICING.rollInCreditMonthlyCentsPerCan;
   }
-  // The glass recycling add-on is a flat per-day fee (not halved for biweekly).
-  if (day.glassRecycling) {
-    cents += PRICING.glassRecyclingMonthlyCents;
-  }
-  // Pet waste removal is likewise a flat per-day add-on.
   cents += petWasteMonthlyCents(day.petWasteDogs ?? 0);
   return Math.max(0, cents);
 }
 
 export function addressMonthlyCents(days: PricingDay[]): number {
-  const sorted = [...days].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-  return sorted.reduce((sum, day, index) => sum + pickupDayMonthlyCents(day, index === 0), 0);
+  return days.reduce((sum, day) => sum + pickupDayMonthlyCents(day), 0);
 }
 
 export function monthlyTotalCents(addresses: PricingDay[][]): number {
@@ -542,6 +562,7 @@ export const adminUserLocationSchema = z.object({
   pickups: z.array(
     z.object({
       dayOfWeek: z.number().int().min(0).max(6),
+      cans: z.array(scheduleCanSchema),
       cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
       canCount: z.number().int().nonnegative(),
       rollIn: z.boolean(),

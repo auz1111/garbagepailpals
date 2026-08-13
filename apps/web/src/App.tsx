@@ -15,7 +15,8 @@ import {
   type CurrentUser,
   type LoginInput,
   type Role,
-  type RegisterInput
+  type RegisterInput,
+  type ScheduleCan
 } from "@gpp/shared";
 import {
   getAdminLocations,
@@ -52,16 +53,15 @@ const NAV_SECTION_LABELS: Record<string, string> = {
 //   Starter      — one weekly pickup, 2 cans (the base price)
 //   Neighborhood — two weekly pickups, 3 cans each
 //   Pro Ops      — two locations, one weekly pickup each ("from" pricing)
+const twoCans: ScheduleCan[] = [{ type: "TRASH", cadence: "WEEKLY", count: 2 }];
+const threeCans: ScheduleCan[] = [{ type: "TRASH", cadence: "WEEKLY", count: 3 }];
 const PLAN_PRICE_CENTS = {
-  starter: addressMonthlyCents([{ dayOfWeek: 2, canCount: 2, cadence: "WEEKLY", rollIn: true }]),
+  starter: addressMonthlyCents([{ cans: twoCans, rollIn: true }]),
   neighborhood: addressMonthlyCents([
-    { dayOfWeek: 1, canCount: 3, cadence: "WEEKLY", rollIn: true },
-    { dayOfWeek: 4, canCount: 3, cadence: "WEEKLY", rollIn: true }
+    { cans: threeCans, rollIn: true },
+    { cans: threeCans, rollIn: true }
   ]),
-  proOps: monthlyTotalCents([
-    [{ dayOfWeek: 2, canCount: 2, cadence: "WEEKLY", rollIn: true }],
-    [{ dayOfWeek: 2, canCount: 2, cadence: "WEEKLY", rollIn: true }]
-  ])
+  proOps: monthlyTotalCents([[{ cans: twoCans, rollIn: true }], [{ cans: twoCans, rollIn: true }]])
 } as const;
 const wholeDollars = (cents: number): string => `$${Math.round(cents / 100)}`;
 

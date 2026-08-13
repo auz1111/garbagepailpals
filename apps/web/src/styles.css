@@ -2579,6 +2579,66 @@ a {
   align-self: center;
   white-space: nowrap;
 }
+.manual-day-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.manual-day-head .link-button {
+  white-space: nowrap;
+}
+
+/* Per-can editor: each pickup day services one row per can type, with its own
+   cadence and quantity. */
+.can-rows-field {
+  display: grid;
+  gap: 0.4rem;
+}
+.can-rows {
+  display: grid;
+  gap: 0.55rem;
+}
+.can-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.can-row > label {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.can-row > label:nth-child(1) {
+  flex: 1 1 8rem;
+  min-width: 7rem;
+}
+.can-row > label:nth-child(2) {
+  flex: 1 1 8rem;
+  min-width: 7rem;
+}
+.can-row > label:nth-child(3) {
+  flex: 0 0 4.5rem;
+}
+.can-row select,
+.can-row input {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.can-row-remove {
+  align-self: center;
+  white-space: nowrap;
+  color: var(--danger, #b42318);
+}
 
 .pickup-day-top {
   display: flex;

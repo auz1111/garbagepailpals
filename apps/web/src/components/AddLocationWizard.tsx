@@ -2,11 +2,15 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
+  CanType,
   CreateAddressRequest,
   PickupDayInput,
   PickupScheduleSuggestion,
+  PickupStream,
+  ScheduleCan,
   ServiceAddress
 } from "@gpp/shared";
+import { cansToCadence, cansToCanCount } from "@gpp/shared";
 import {
   checkServiceArea,
   createAddress,
@@ -15,9 +19,36 @@ import {
   updateAddressSchedule
 } from "../lib/api";
 import { ProviderSyncReview } from "./ProviderSyncReview";
+import { CanRowsEditor } from "./CanRowsEditor";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const FRIDAY = 5;
+const DEFAULT_CANS: ScheduleCan[] = [{ type: "TRASH", cadence: "WEEKLY", count: 1 }];
+
+const STREAM_TO_CAN: Record<PickupStream["kind"], CanType> = {
+  GARBAGE: "TRASH",
+  RECYCLING: "RECYCLING",
+  YARD: "YARD",
+  OTHER: "TRASH"
+};
+
+// Build the cans a given weekday services from the provider's collection streams
+// (one can per stream, count 1, each keeping its own cadence).
+function cansFromStreams(streams: PickupStream[], dayOfWeek: number): ScheduleCan[] {
+  const byType = new Map<CanType, ScheduleCan>();
+  for (const s of streams.filter((x) => x.dayOfWeek === dayOfWeek)) {
+    const type = STREAM_TO_CAN[s.kind];
+    const existing = byType.get(type);
+    if (existing) {
+      existing.count += 1;
+      if (s.cadence === "WEEKLY") existing.cadence = "WEEKLY";
+    } else {
+      byType.set(type, { type, cadence: s.cadence, count: 1 });
+    }
+  }
+  const cans = [...byType.values()];
+  return cans.length > 0 ? cans : DEFAULT_CANS;
+}
 
 type AddressFields = {
   line1: string;
@@ -26,7 +57,7 @@ type AddressFields = {
   postalCode: string;
 };
 
-type ManualDay = { dayOfWeek: number; cadence: "WEEKLY" | "BIWEEKLY"; canCount: number };
+type ManualDay = { dayOfWeek: number; cans: ScheduleCan[] };
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
@@ -66,7 +97,7 @@ export function AddLocationWizard({
   const [detecting, setDetecting] = useState(false);
   const [created, setCreated] = useState<ServiceAddress | null>(null);
   const [manualDays, setManualDays] = useState<ManualDay[]>([
-    { dayOfWeek: FRIDAY, cadence: "WEEKLY", canCount: 2 }
+    { dayOfWeek: FRIDAY, cans: DEFAULT_CANS }
   ]);
   const [accessNotes, setAccessNotes] = useState("");
 
@@ -117,9 +148,7 @@ export function AddLocationWizard({
   const createMutation = useMutation({
     mutationFn: async (args: { fields: AddressFields; sug: PickupScheduleSuggestion | null }) => {
       const g = args.sug?.matched ? args.sug.garbage : undefined;
-      const cans = g
-        ? Math.max(1, (args.sug?.streams ?? []).filter((s) => s.dayOfWeek === g.dayOfWeek).length)
-        : 2;
+      const cans = g ? cansFromStreams(args.sug?.streams ?? [], g.dayOfWeek) : DEFAULT_CANS;
       const payload: CreateAddressRequest = {
         line1: args.fields.line1,
         city: args.fields.city,
@@ -130,14 +159,13 @@ export function AddLocationWizard({
         // Placeholder — the API derives the real timezone from the geocoded address.
         timezone: "America/Los_Angeles",
         accessNotes: "", // collected in step 3
-        canCount: cans,
+        canCount: cansToCanCount(cans),
         pickupsPerWeek: 1,
         rollIn: true,
-        glassRecycling: false,
         petWasteDogs: 0,
         isActive: true,
         pickupDayOfWeek: g ? g.dayOfWeek : FRIDAY,
-        cadence: g ? g.cadence : "WEEKLY",
+        cans,
         providerSynced: Boolean(g),
         biweeklyAnchorDate: g && g.cadence === "BIWEEKLY" && g.nextDate ? g.nextDate : undefined
       };
@@ -148,8 +176,7 @@ export function AddLocationWizard({
       setManualDays(
         res.address.schedules.map((s) => ({
           dayOfWeek: s.dayOfWeek,
-          cadence: s.cadence,
-          canCount: s.canCount
+          cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS
         }))
       );
       await invalidate();
@@ -171,11 +198,10 @@ export function AddLocationWizard({
     mutationFn: () => {
       const days: PickupDayInput[] = manualDays.map((d) => ({
         dayOfWeek: d.dayOfWeek,
-        cadence: d.cadence,
-        biweeklyAnchorDate: d.cadence === "BIWEEKLY" ? nextDateOfWeekday(d.dayOfWeek) : undefined,
-        canCount: d.canCount,
+        cans: d.cans,
+        biweeklyAnchorDate:
+          cansToCadence(d.cans) === "BIWEEKLY" ? nextDateOfWeekday(d.dayOfWeek) : undefined,
         rollIn: true,
-        glassRecycling: false,
         petWasteDogs: 0,
         providerSynced: false
       }));
@@ -206,7 +232,7 @@ export function AddLocationWizard({
   const firstFreeDay = [FRIDAY, 1, 2, 3, 4, 6, 0].find((d) => !usedDays.has(d));
   const addManualDay = (): void => {
     if (firstFreeDay === undefined) return;
-    setManualDays((prev) => [...prev, { dayOfWeek: firstFreeDay, cadence: "WEEKLY", canCount: 2 }]);
+    setManualDays((prev) => [...prev, { dayOfWeek: firstFreeDay, cans: DEFAULT_CANS }]);
   };
   const updateManualDay = (idx: number, patch: Partial<ManualDay>): void =>
     setManualDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
@@ -260,10 +286,8 @@ export function AddLocationWizard({
             streams={suggestion.streams}
             pickups={created.schedules.map((s) => ({
               dayOfWeek: s.dayOfWeek,
-              cadence: s.cadence,
-              canCount: s.canCount,
+              cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
               rollIn: s.rollIn,
-              glassRecycling: s.glassRecycling,
               petWasteDogs: s.petWasteDogs,
               biweeklyAnchorDate: s.biweeklyAnchorDate
             }))}
@@ -280,9 +304,9 @@ export function AddLocationWizard({
             <ul className="pickup-day-list">
               {manualDays.map((d, idx) => (
                 <li className="manual-day-card" key={idx}>
-                  <div className="field-row">
-                    <label>
-                      Pickup day
+                  <div className="manual-day-head">
+                    <label className="pickup-day-weekday-field">
+                      <span className="pickup-day-eyebrow">Pickup day</span>
                       <select
                         value={d.dayOfWeek}
                         onChange={(e) => updateManualDay(idx, { dayOfWeek: Number(e.target.value) })}
@@ -298,32 +322,6 @@ export function AddLocationWizard({
                         ))}
                       </select>
                     </label>
-                    <label>
-                      Cadence
-                      <select
-                        value={d.cadence}
-                        onChange={(e) =>
-                          updateManualDay(idx, { cadence: e.target.value as "WEEKLY" | "BIWEEKLY" })
-                        }
-                      >
-                        <option value="WEEKLY">Every week</option>
-                        <option value="BIWEEKLY">Every 2 weeks</option>
-                      </select>
-                    </label>
-                    <label>
-                      Cans
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={d.canCount}
-                        onChange={(e) =>
-                          updateManualDay(idx, {
-                            canCount: Math.max(1, Math.min(20, Number(e.target.value) || 1))
-                          })
-                        }
-                      />
-                    </label>
                     {manualDays.length > 1 ? (
                       <button
                         type="button"
@@ -333,6 +331,13 @@ export function AddLocationWizard({
                         Remove
                       </button>
                     ) : null}
+                  </div>
+                  <div className="can-rows-field">
+                    <span className="pickup-day-eyebrow">Cans collected this day</span>
+                    <CanRowsEditor
+                      cans={d.cans}
+                      onChange={(cans) => updateManualDay(idx, { cans })}
+                    />
                   </div>
                 </li>
               ))}

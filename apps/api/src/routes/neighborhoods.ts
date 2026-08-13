@@ -1,5 +1,6 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
+import { z } from "zod";
 import {
   addressMonthlyCents,
   adminLocationNeighborhoodUpdateSchema,
@@ -10,6 +11,8 @@ import {
   neighborhoodUpdateSchema,
   neighborhoodsResponseSchema,
   pickupScheduleSuggestionSchema,
+  scheduleCanSchema,
+  type ScheduleCan,
   zoneCreateSchema,
   zoneUpdateSchema,
   zonesResponseSchema
@@ -23,6 +26,12 @@ import {
   haulerAddressHash,
   lookupPickupSchedule
 } from "../services/haulerSchedule";
+
+const cansArraySchema = z.array(scheduleCanSchema);
+function parseCans(cans: unknown): ScheduleCan[] {
+  const parsed = cansArraySchema.safeParse(cans);
+  return parsed.success ? parsed.data : [];
+}
 
 async function zonesList(userId: string, role: string) {
   const allowed = isSuperAdminRole(role)
@@ -325,11 +334,8 @@ export async function adminLocationsHandler(
                 providerSynced: a.schedules.some((s) => s.providerSynced),
                 monthlyCents: addressMonthlyCents(
                   a.schedules.map((s) => ({
-                    dayOfWeek: s.pickupDayOfWeek,
-                    canCount: s.canCount,
-                    cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+                    cans: parseCans(s.cans),
                     rollIn: s.rollIn,
-                    glassRecycling: s.glassRecycling,
                     petWasteDogs: s.petWasteDogs
                   }))
                 )

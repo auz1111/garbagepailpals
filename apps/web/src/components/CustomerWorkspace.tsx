@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
 import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import type {
   CurrentUser,
   ServiceAddress,
-  CreateAddressRequest,
   PickupDay,
   PickupDayInput,
   PickupScheduleSuggestion,
-  PricingDay
+  PricingDay,
+  ScheduleCan
 } from "@gpp/shared";
 import {
-  additionalPickupDayMonthlyCents,
   addressMonthlyCents,
+  cansToCadence,
+  cansToCanCount,
   formatUsd,
   petWasteMonthlyCents,
   pickupDayMonthlyCents,
@@ -23,13 +23,11 @@ import {
   ApiError,
   checkServiceArea,
   connectProvider,
-  createAddress,
   confirmPayPalSubscription,
   createPayPalSubscription,
   createStripeCheckout,
   createStripePortal,
   getBillingSummary,
-  getPickupScheduleSuggestion,
   updateSubscription,
   listAddresses,
   listHistoryJobs,
@@ -40,15 +38,13 @@ import {
 } from "../lib/api";
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { AddLocationWizard } from "./AddLocationWizard";
+import { CanRowsEditor } from "./CanRowsEditor";
 
 // A schedule row from the API mapped to the shared pricing input.
 function toPricingDay(day: PickupDay): PricingDay {
   return {
-    dayOfWeek: day.dayOfWeek,
-    canCount: day.canCount,
-    cadence: day.cadence,
+    cans: day.cans,
     rollIn: day.rollIn,
-    glassRecycling: day.glassRecycling,
     petWasteDogs: day.petWasteDogs
   };
 }
@@ -63,26 +59,6 @@ type CustomerWorkspaceProps = {
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
-
-const defaultAddressValues: CreateAddressRequest = {
-  line1: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  lat: 45.52,
-  lng: -122.67,
-  timezone: "America/Los_Angeles",
-  accessNotes: "Leave can near driveway gate.",
-  canCount: 2,
-  pickupsPerWeek: 1,
-  rollIn: true,
-  glassRecycling: false,
-  petWasteDogs: 0,
-  providerSynced: false,
-  isActive: true,
-  pickupDayOfWeek: 2,
-  cadence: "WEEKLY"
-};
 
 const DEFAULT_PICKUP_DAYS = [5];
 
@@ -109,100 +85,12 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   const location = useLocation();
   const navigate = useNavigate();
   const [finalizingCheckout, setFinalizingCheckout] = useState(false);
-  // Inline service-area check for the Add Address form.
-  const [areaCheck, setAreaCheck] = useState<{ postalCode: string; eligible: boolean } | null>(null);
-  const [areaChecking, setAreaChecking] = useState(false);
-  // Best-effort pre-fill of the first pickup day from the customer's trash hauler.
-  const [pickupSuggestion, setPickupSuggestion] = useState<PickupScheduleSuggestion | null>(null);
-  const [suggestionLoading, setSuggestionLoading] = useState(false);
-  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
   // The add-address form is hidden once the user has addresses (opened via a button).
   const [showAddressForm, setShowAddressForm] = useState(false);
-
-  const addressForm = useForm<CreateAddressRequest>({
-    defaultValues: defaultAddressValues
-  });
-  const addressCadence = addressForm.watch("cadence");
-  const addressGlass = addressForm.watch("glassRecycling");
-  const addressDogs = addressForm.watch("petWasteDogs") ?? 0;
-  // Live monthly for the first pickup day, including any add-ons.
-  const firstDayMonthly = addressMonthlyCents([
-    {
-      dayOfWeek: addressForm.watch("pickupDayOfWeek") ?? 2,
-      canCount: addressForm.watch("canCount") ?? 2,
-      cadence: addressCadence ?? "WEEKLY",
-      rollIn: addressForm.watch("rollIn") ?? true,
-      glassRecycling: addressGlass ?? false,
-      petWasteDogs: addressDogs
-    }
-  ]);
 
   function closeAddressForm(): void {
     // The add-location wizard owns its own form state; just hide it.
     setShowAddressForm(false);
-  }
-
-  async function checkAddressArea(postalCode: string): Promise<void> {
-    const trimmed = postalCode.trim();
-    if (!trimmed) {
-      setAreaCheck(null);
-      return;
-    }
-    setAreaChecking(true);
-    try {
-      const result = await checkServiceArea(trimmed);
-      setAreaCheck(result);
-    } catch {
-      setAreaCheck(null);
-    } finally {
-      setAreaChecking(false);
-    }
-    // Once we have a full address, try to pre-fill the first pickup day from the
-    // customer's trash hauler (Cascade Disposal, etc.).
-    void lookupPickupSchedule();
-  }
-
-  // datetime-local expects "YYYY-MM-DDTHH:mm"; seed a biweekly anchor from the
-  // hauler's next pickup date (time is irrelevant to week parity).
-  function toAnchorInput(isoDate: string): string {
-    return `${isoDate.slice(0, 10)}T08:00`;
-  }
-
-  function applyPickupSuggestion(suggestion: PickupScheduleSuggestion): void {
-    const garbage = suggestion.garbage;
-    if (!garbage) {
-      return;
-    }
-    addressForm.setValue("pickupDayOfWeek", garbage.dayOfWeek);
-    addressForm.setValue("cadence", garbage.cadence);
-    // The first day now follows the trash provider.
-    addressForm.setValue("providerSynced", true);
-    if (garbage.cadence === "BIWEEKLY" && garbage.nextDate) {
-      addressForm.setValue("biweeklyAnchorDate", toAnchorInput(garbage.nextDate));
-    }
-  }
-
-  async function lookupPickupSchedule(): Promise<void> {
-    const { line1, city, state, postalCode } = addressForm.getValues();
-    if (!line1?.trim() || !city?.trim() || !state?.trim() || !postalCode?.trim()) {
-      return;
-    }
-    setSuggestionLoading(true);
-    setSuggestionDismissed(false);
-    try {
-      const result = await getPickupScheduleSuggestion(
-        { line1: line1.trim(), city: city.trim(), state: state.trim(), postalCode: postalCode.trim() },
-        accessToken
-      );
-      setPickupSuggestion(result);
-      if (result.matched) {
-        applyPickupSuggestion(result);
-      }
-    } catch {
-      setPickupSuggestion(null);
-    } finally {
-      setSuggestionLoading(false);
-    }
   }
 
   const addressesQuery = useQuery({
@@ -229,28 +117,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     queryKey: ["customer-jobs-history"],
     queryFn: async () => listHistoryJobs(accessToken),
     enabled: hasActivePlan
-  });
-
-  const createAddressMutation = useMutation({
-    mutationFn: (input: CreateAddressRequest) => {
-      // datetime-local → full ISO for the first pickup day (biweekly only).
-      let anchor: string | undefined;
-      const raw = input.biweeklyAnchorDate?.trim();
-      if (input.cadence === "BIWEEKLY" && raw) {
-        const parsed = new Date(raw);
-        anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-      }
-      return createAddress({ ...input, biweeklyAnchorDate: anchor }, accessToken);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
-      addressForm.reset(defaultAddressValues);
-      setAreaCheck(null);
-      setPickupSuggestion(null);
-      setSuggestionDismissed(false);
-      setShowAddressForm(false);
-    }
   });
 
   const deleteAddressMutation = useMutation({
@@ -287,7 +153,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       const normalized: PickupDayInput[] = days.map((day) => {
         let anchor: string | undefined;
         const raw = day.biweeklyAnchorDate?.trim();
-        if (day.cadence === "BIWEEKLY" && raw) {
+        if (cansToCadence(day.cans) === "BIWEEKLY" && raw) {
           const parsed = new Date(raw);
           anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
         }
@@ -702,11 +568,10 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             </>
           )}
           <p className="subtext">
-            Your first weekly pickup ({PRICING.includedCansPerPickup} cans) is{" "}
-            {formatUsd(PRICING.baseMonthlyCentsPerAddress)}/mo. Each additional pickup day is half
-            that ({formatUsd(additionalPickupDayMonthlyCents())}/mo); extra cans on a day add{" "}
-            {formatUsd(PRICING.extraCanMonthlyCents)}/mo each; skipping roll-in on a day credits{" "}
-            {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo per can; biweekly days are half.
+            Each can we service is {formatUsd(PRICING.perCanMonthlyCents)}/mo (a biweekly can is
+            half that). Skipping roll-in on a day credits{" "}
+            {formatUsd(PRICING.rollInCreditMonthlyCentsPerCan)}/mo per can; pet waste removal adds{" "}
+            {formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo for the first dog.
           </p>
         </article>
       </div>
@@ -1053,14 +918,14 @@ function AddressRow({
 
 type EditDay = {
   dayOfWeek: number;
-  cadence: "WEEKLY" | "BIWEEKLY";
-  canCount: number;
+  cans: ScheduleCan[];
   rollIn: boolean;
-  glassRecycling: boolean;
   petWasteDogs: number;
   providerSynced: boolean;
   biweeklyAnchorDate: string;
 };
+
+const DEFAULT_CANS: ScheduleCan[] = [{ type: "TRASH", cadence: "WEEKLY", count: 1 }];
 
 function LocationDetail({
   address,
@@ -1090,10 +955,8 @@ function LocationDetail({
           .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
           .map((s) => ({
             dayOfWeek: s.dayOfWeek,
-            cadence: s.cadence,
-            canCount: s.canCount,
+            cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
             rollIn: s.rollIn,
-            glassRecycling: s.glassRecycling,
             petWasteDogs: s.petWasteDogs,
             providerSynced: s.providerSynced,
             biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
@@ -1101,10 +964,8 @@ function LocationDetail({
       : [
           {
             dayOfWeek: DEFAULT_PICKUP_DAYS[0]!,
-            cadence: "WEEKLY",
-            canCount: 2,
+            cans: DEFAULT_CANS,
             rollIn: true,
-            glassRecycling: false,
             petWasteDogs: 0,
             providerSynced: false,
             biweeklyAnchorDate: ""
@@ -1152,10 +1013,8 @@ function LocationDetail({
       setDays(
         payload.map((d) => ({
           dayOfWeek: d.dayOfWeek,
-          cadence: d.cadence,
-          canCount: d.canCount,
-          rollIn: d.rollIn,
-          glassRecycling: d.glassRecycling ?? false,
+          cans: d.cans.length > 0 ? d.cans : DEFAULT_CANS,
+          rollIn: d.rollIn ?? true,
           petWasteDogs: d.petWasteDogs ?? 0,
           providerSynced: d.providerSynced ?? false,
           biweeklyAnchorDate: d.biweeklyAnchorDate?.slice(0, 16) ?? ""
@@ -1234,25 +1093,17 @@ function LocationDetail({
 
   const usedDays = new Set(days.map((d) => d.dayOfWeek));
   const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
-  const primaryDayOfWeek = days.length ? Math.min(...days.map((d) => d.dayOfWeek)) : -1;
 
   const valid =
     days.length >= 1 &&
     days.every(
       (d) =>
-        d.canCount >= 1 &&
-        d.canCount <= 20 &&
-        (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
+        d.cans.length >= 1 &&
+        d.cans.every((c) => c.count >= 1 && c.count <= 20) &&
+        (cansToCadence(d.cans) !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
     );
   const monthly = addressMonthlyCents(
-    days.map((d) => ({
-      dayOfWeek: d.dayOfWeek,
-      canCount: d.canCount,
-      cadence: d.cadence,
-      rollIn: d.rollIn,
-      glassRecycling: d.glassRecycling,
-      petWasteDogs: d.petWasteDogs
-    }))
+    days.map((d) => ({ cans: d.cans, rollIn: d.rollIn, petWasteDogs: d.petWasteDogs }))
   );
 
   // Enable Save only when the current config differs from what's saved.
@@ -1261,16 +1112,17 @@ function LocationDetail({
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
       .map(
         (d) =>
-          `${d.dayOfWeek}|${d.cadence}|${d.canCount}|${d.rollIn}|${d.glassRecycling}|${d.petWasteDogs}|${d.providerSynced}|${
-            d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate : ""
+          `${d.dayOfWeek}|${JSON.stringify(d.cans)}|${d.rollIn}|${d.petWasteDogs}|${d.providerSynced}|${
+            cansToCadence(d.cans) === "BIWEEKLY" ? d.biweeklyAnchorDate : ""
           }`
       )
       .join(";");
   const dirty = canonical(days) !== canonical(initialDays);
 
   function updateDay(idx: number, patch: Partial<EditDay>): void {
-    // Manually changing the weekday opts the day out of provider sync.
-    const effective = patch.dayOfWeek !== undefined ? { ...patch, providerSynced: false } : patch;
+    // Manually changing the weekday or cans opts the day out of provider sync.
+    const optsOut = patch.dayOfWeek !== undefined || patch.cans !== undefined;
+    const effective = optsOut ? { ...patch, providerSynced: false } : patch;
     setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...effective } : d)));
   }
   function removeDay(idx: number): void {
@@ -1284,10 +1136,8 @@ function LocationDetail({
       ...prev,
       {
         dayOfWeek: firstAvailableDay,
-        cadence: "WEEKLY",
-        canCount: 2,
+        cans: DEFAULT_CANS,
         rollIn: true,
-        glassRecycling: false,
         petWasteDogs: 0,
         providerSynced: false,
         biweeklyAnchorDate: ""
@@ -1305,11 +1155,10 @@ function LocationDetail({
       address.id,
       days.map((d) => ({
         dayOfWeek: d.dayOfWeek,
-        cadence: d.cadence,
-        biweeklyAnchorDate: d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate || undefined : undefined,
-        canCount: d.canCount,
+        biweeklyAnchorDate:
+          cansToCadence(d.cans) === "BIWEEKLY" ? d.biweeklyAnchorDate || undefined : undefined,
+        cans: d.cans,
         rollIn: d.rollIn,
-        glassRecycling: d.glassRecycling,
         petWasteDogs: d.petWasteDogs,
         providerSynced: d.providerSynced
       }))
@@ -1426,10 +1275,8 @@ function LocationDetail({
               streams={providerResult.streams}
               pickups={address.schedules.map((s) => ({
                 dayOfWeek: s.dayOfWeek,
-                cadence: s.cadence,
-                canCount: s.canCount,
+                cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
                 rollIn: s.rollIn,
-                glassRecycling: s.glassRecycling,
                 petWasteDogs: s.petWasteDogs,
                 biweeklyAnchorDate: s.biweeklyAnchorDate
               }))}
@@ -1463,10 +1310,12 @@ function LocationDetail({
 
           <ul className="pickup-day-list">
             {days.map((day, idx) => {
-              const dayCost = pickupDayMonthlyCents(
-                { dayOfWeek: day.dayOfWeek, canCount: day.canCount, cadence: day.cadence, rollIn: day.rollIn },
-                day.dayOfWeek === primaryDayOfWeek
-              );
+              const dayCost = pickupDayMonthlyCents({
+                cans: day.cans,
+                rollIn: day.rollIn,
+                petWasteDogs: day.petWasteDogs
+              });
+              const dayIsBiweekly = cansToCadence(day.cans) === "BIWEEKLY";
               return (
                 <li className="pickup-day-card" key={idx}>
                   <div className="pickup-day-top">
@@ -1507,32 +1356,15 @@ function LocationDetail({
                   </div>
 
                   <div className="pickup-day-body">
-                    <div className="field-row">
-                      <label>
-                        Cadence
-                        <select
-                          value={day.cadence}
-                          onChange={(event) =>
-                            updateDay(idx, { cadence: event.target.value as "WEEKLY" | "BIWEEKLY" })
-                          }
-                        >
-                          <option value="WEEKLY">Every week</option>
-                          <option value="BIWEEKLY">Every 2 weeks</option>
-                        </select>
-                      </label>
-                      <label>
-                        Cans
-                        <input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={day.canCount}
-                          onChange={(event) => updateDay(idx, { canCount: Number(event.target.value) })}
-                        />
-                      </label>
+                    <div className="can-rows-field">
+                      <span className="pickup-day-eyebrow">Cans collected this day</span>
+                      <CanRowsEditor
+                        cans={day.cans}
+                        onChange={(cans) => updateDay(idx, { cans })}
+                      />
                     </div>
 
-                    {day.cadence === "BIWEEKLY" ? (
+                    {dayIsBiweekly ? (
                       <label className="field-single">
                         First pickup date
                         <input
@@ -1555,25 +1387,8 @@ function LocationDetail({
                           {day.rollIn
                             ? "Included — we return the cans the day after pickup."
                             : `We'll only roll out — saves ${formatUsd(
-                                day.canCount * PRICING.rollInCreditMonthlyCentsPerCan
+                                cansToCanCount(day.cans) * PRICING.rollInCreditMonthlyCentsPerCan
                               )}/mo on this day.`}
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={day.glassRecycling}
-                        onChange={(event) => updateDay(idx, { glassRecycling: event.target.checked })}
-                      />
-                      <span>
-                        <strong>
-                          Glass recycling container (+
-                          {formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
-                        </strong>
-                        <span className="subtext">
-                          We will also take out the glass recycling container.
                         </span>
                       </span>
                     </label>

@@ -1,24 +1,33 @@
 import { prisma } from "@gpp/db";
-import { addressMonthlyCents, type BillingSummary, type PricingDay } from "@gpp/shared";
+import {
+  addressMonthlyCents,
+  scheduleCanSchema,
+  type BillingSummary,
+  type PricingDay,
+  type ScheduleCan
+} from "@gpp/shared";
+import { z } from "zod";
 
 const ACTIVE_STATUSES = ["ACTIVE", "TRIALING"] as const;
 
+const cansArraySchema = z.array(scheduleCanSchema);
+
+// Parse the stored cans JSON; fall back to empty so pricing never throws.
+function parseCans(cans: unknown): ScheduleCan[] {
+  const parsed = cansArraySchema.safeParse(cans);
+  return parsed.success ? parsed.data : [];
+}
+
 type ScheduleRow = {
-  pickupDayOfWeek: number;
-  canCount: number;
-  cadence: string;
   rollIn: boolean;
-  glassRecycling: boolean;
   petWasteDogs: number;
+  cans: unknown;
 };
 
 function toPricingDay(row: ScheduleRow): PricingDay {
   return {
-    dayOfWeek: row.pickupDayOfWeek,
-    canCount: row.canCount,
-    cadence: row.cadence as "WEEKLY" | "BIWEEKLY",
+    cans: parseCans(row.cans),
     rollIn: row.rollIn,
-    glassRecycling: row.glassRecycling,
     petWasteDogs: row.petWasteDogs
   };
 }

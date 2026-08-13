@@ -8,10 +8,13 @@ import type {
   CurrentUser,
   PickupDayInput,
   PickupScheduleSuggestion,
-  Role
+  Role,
+  ScheduleCan
 } from "@gpp/shared";
 import {
   addressMonthlyCents,
+  cansToCadence,
+  cansToCanCount,
   formatUsd,
   isSuperAdminRole,
   petWasteMonthlyCents,
@@ -46,6 +49,7 @@ import { ZonesAdmin } from "./ZonesAdmin";
 import { AdminLocations } from "./AdminLocations";
 import { AdminHaulerCoverage } from "./AdminHaulerCoverage";
 import { ProviderSyncReview } from "./ProviderSyncReview";
+import { CanRowsEditor } from "./CanRowsEditor";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
@@ -82,14 +86,14 @@ const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 type AdminLocation = AdminUserWithLocations["locations"][number];
 type EditDay = {
   dayOfWeek: number;
-  cadence: "WEEKLY" | "BIWEEKLY";
-  canCount: number;
+  cans: ScheduleCan[];
   rollIn: boolean;
-  glassRecycling: boolean;
   petWasteDogs: number;
   providerSynced: boolean;
   biweeklyAnchorDate: string;
 };
+
+const DEFAULT_CANS: ScheduleCan[] = [{ type: "TRASH", cadence: "WEEKLY", count: 1 }];
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
@@ -1337,10 +1341,8 @@ function AdminScheduleEditorForm({
           .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
           .map((s) => ({
             dayOfWeek: s.dayOfWeek,
-            cadence: s.cadence,
-            canCount: s.canCount,
+            cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
             rollIn: s.rollIn,
-            glassRecycling: s.glassRecycling,
             petWasteDogs: s.petWasteDogs,
             providerSynced: s.providerSynced,
             biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
@@ -1348,10 +1350,8 @@ function AdminScheduleEditorForm({
       : [
           {
             dayOfWeek: 5,
-            cadence: "WEEKLY",
-            canCount: 2,
+            cans: DEFAULT_CANS,
             rollIn: true,
-            glassRecycling: false,
             petWasteDogs: 0,
             providerSynced: false,
             biweeklyAnchorDate: ""
@@ -1361,30 +1361,23 @@ function AdminScheduleEditorForm({
 
   const usedDays = new Set(days.map((d) => d.dayOfWeek));
   const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
-  const primaryDayOfWeek = days.length ? Math.min(...days.map((d) => d.dayOfWeek)) : -1;
 
   const valid =
     days.length >= 1 &&
     days.every(
       (d) =>
-        d.canCount >= 1 &&
-        d.canCount <= 20 &&
-        (d.cadence !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
+        d.cans.length >= 1 &&
+        d.cans.every((c) => c.count >= 1 && c.count <= 20) &&
+        (cansToCadence(d.cans) !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
     );
   const monthly = addressMonthlyCents(
-    days.map((d) => ({
-      dayOfWeek: d.dayOfWeek,
-      canCount: d.canCount,
-      cadence: d.cadence,
-      rollIn: d.rollIn,
-      glassRecycling: d.glassRecycling,
-      petWasteDogs: d.petWasteDogs
-    }))
+    days.map((d) => ({ cans: d.cans, rollIn: d.rollIn, petWasteDogs: d.petWasteDogs }))
   );
 
   function updateDay(idx: number, patch: Partial<EditDay>): void {
-    // Manually changing the weekday opts the day out of provider sync.
-    const effective = patch.dayOfWeek !== undefined ? { ...patch, providerSynced: false } : patch;
+    // Manually changing the weekday or cans opts the day out of provider sync.
+    const optsOut = patch.dayOfWeek !== undefined || patch.cans !== undefined;
+    const effective = optsOut ? { ...patch, providerSynced: false } : patch;
     setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...effective } : d)));
   }
   function removeDay(idx: number): void {
@@ -1396,10 +1389,8 @@ function AdminScheduleEditorForm({
       ...prev,
       {
         dayOfWeek: firstAvailableDay,
-        cadence: "WEEKLY",
-        canCount: 2,
+        cans: DEFAULT_CANS,
         rollIn: true,
-        glassRecycling: false,
         petWasteDogs: 0,
         providerSynced: false,
         biweeklyAnchorDate: ""
@@ -1413,16 +1404,14 @@ function AdminScheduleEditorForm({
     onSave(
       days.map((d) => ({
         dayOfWeek: d.dayOfWeek,
-        cadence: d.cadence,
+        cans: d.cans,
         // The API expects a full ISO-8601 datetime; the datetime-local input
         // gives "YYYY-MM-DDTHH:mm", so normalize it before sending.
         biweeklyAnchorDate:
-          d.cadence === "BIWEEKLY" && d.biweeklyAnchorDate
+          cansToCadence(d.cans) === "BIWEEKLY" && d.biweeklyAnchorDate
             ? new Date(d.biweeklyAnchorDate).toISOString()
             : undefined,
-        canCount: d.canCount,
         rollIn: d.rollIn,
-        glassRecycling: d.glassRecycling,
         petWasteDogs: d.petWasteDogs,
         providerSynced: d.providerSynced
       }))
@@ -1445,10 +1434,12 @@ function AdminScheduleEditorForm({
 
       <ul className="pickup-day-list">
         {days.map((day, idx) => {
-          const dayCost = pickupDayMonthlyCents(
-            { dayOfWeek: day.dayOfWeek, canCount: day.canCount, cadence: day.cadence, rollIn: day.rollIn },
-            day.dayOfWeek === primaryDayOfWeek
-          );
+          const dayCost = pickupDayMonthlyCents({
+            cans: day.cans,
+            rollIn: day.rollIn,
+            petWasteDogs: day.petWasteDogs
+          });
+          const dayIsBiweekly = cansToCadence(day.cans) === "BIWEEKLY";
           return (
             <li className="pickup-day-card" key={idx}>
               <div className="pickup-day-top">
@@ -1486,32 +1477,12 @@ function AdminScheduleEditorForm({
               </div>
 
               <div className="pickup-day-body">
-                <div className="field-row">
-                  <label>
-                    Cadence
-                    <select
-                      value={day.cadence}
-                      onChange={(event) =>
-                        updateDay(idx, { cadence: event.target.value as "WEEKLY" | "BIWEEKLY" })
-                      }
-                    >
-                      <option value="WEEKLY">Every week</option>
-                      <option value="BIWEEKLY">Every 2 weeks</option>
-                    </select>
-                  </label>
-                  <label>
-                    Cans
-                    <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={day.canCount}
-                      onChange={(event) => updateDay(idx, { canCount: Number(event.target.value) })}
-                    />
-                  </label>
+                <div className="can-rows-field">
+                  <span className="pickup-day-eyebrow">Cans collected this day</span>
+                  <CanRowsEditor cans={day.cans} onChange={(cans) => updateDay(idx, { cans })} />
                 </div>
 
-                {day.cadence === "BIWEEKLY" ? (
+                {dayIsBiweekly ? (
                   <label className="field-single">
                     First pickup date
                     <input
@@ -1534,24 +1505,8 @@ function AdminScheduleEditorForm({
                       {day.rollIn
                         ? "Included — we return the cans the day after pickup."
                         : `Roll-out only — saves ${formatUsd(
-                            day.canCount * PRICING.rollInCreditMonthlyCentsPerCan
+                            cansToCanCount(day.cans) * PRICING.rollInCreditMonthlyCentsPerCan
                           )}/mo on this day.`}
-                    </span>
-                  </span>
-                </label>
-
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={day.glassRecycling}
-                    onChange={(event) => updateDay(idx, { glassRecycling: event.target.checked })}
-                  />
-                  <span>
-                    <strong>
-                      Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
-                    </strong>
-                    <span className="subtext">
-                      We will also take out the glass recycling container.
                     </span>
                   </span>
                 </label>

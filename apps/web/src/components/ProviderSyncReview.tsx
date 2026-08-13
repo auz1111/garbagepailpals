@@ -1,16 +1,22 @@
 import { useState } from "react";
-import type { PickupDayInput, PickupStream } from "@gpp/shared";
+import type { CanType, PickupDayInput, PickupStream, ScheduleCan } from "@gpp/shared";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// Map a provider collection stream to the can type we bill/service.
+const STREAM_TO_CAN: Record<PickupStream["kind"], CanType> = {
+  GARBAGE: "TRASH",
+  RECYCLING: "RECYCLING",
+  YARD: "YARD",
+  OTHER: "TRASH"
+};
 
 // The pickup-day shape both workspaces already have on hand (admin location +
 // customer schedule), enough to rebuild a schedule payload.
 export type SyncPickup = {
   dayOfWeek: number;
-  cadence: "WEEKLY" | "BIWEEKLY";
-  canCount: number;
+  cans: ScheduleCan[];
   rollIn: boolean;
-  glassRecycling: boolean;
   petWasteDogs: number;
   biweeklyAnchorDate?: string;
 };
@@ -37,14 +43,31 @@ export function ProviderSyncReview({
   onApply,
   onSkip
 }: ProviderSyncReviewProps): JSX.Element {
-  // Distill streams into distinct collection days.
-  const dayMap = new Map<number, { collections: string[]; weekly: boolean; nextDate?: string }>();
+  // Distill streams into distinct collection days, with one can per stream (a
+  // day that collects garbage + recycling + yard becomes 3 cans).
+  const dayMap = new Map<
+    number,
+    { collections: string[]; weekly: boolean; nextDate?: string; cans: Map<CanType, ScheduleCan> }
+  >();
   for (const stream of streams) {
-    const entry = dayMap.get(stream.dayOfWeek) ?? { collections: [], weekly: false };
+    const entry: {
+      collections: string[];
+      weekly: boolean;
+      nextDate?: string;
+      cans: Map<CanType, ScheduleCan>;
+    } = dayMap.get(stream.dayOfWeek) ?? { collections: [], weekly: false, cans: new Map() };
     entry.collections.push(stream.label);
     if (stream.cadence === "WEEKLY") entry.weekly = true;
     if (stream.nextDate && (!entry.nextDate || stream.nextDate < entry.nextDate)) {
       entry.nextDate = stream.nextDate;
+    }
+    const type = STREAM_TO_CAN[stream.kind];
+    const existing = entry.cans.get(type);
+    if (existing) {
+      existing.count += 1;
+      if (stream.cadence === "WEEKLY") existing.cadence = "WEEKLY";
+    } else {
+      entry.cans.set(type, { type, cadence: stream.cadence, count: 1 });
     }
     dayMap.set(stream.dayOfWeek, entry);
   }
@@ -54,7 +77,7 @@ export function ProviderSyncReview({
       collections: e.collections,
       cadence: (e.weekly ? "WEEKLY" : "BIWEEKLY") as "WEEKLY" | "BIWEEKLY",
       nextDate: e.nextDate,
-      cans: Math.max(1, e.collections.length)
+      cans: [...e.cans.values()]
     }))
     .sort((a, b) => a.weekday - b.weekday);
   const providerWeekdays = new Set(providerDays.map((d) => d.weekday));
@@ -80,11 +103,9 @@ export function ProviderSyncReview({
   const apply = (): void => {
     const mapExisting = (p: SyncPickup) => ({
       dayOfWeek: p.dayOfWeek,
-      cadence: p.cadence,
       biweeklyAnchorDate: p.biweeklyAnchorDate,
-      canCount: p.canCount,
+      cans: p.cans,
       rollIn: p.rollIn,
-      glassRecycling: p.glassRecycling,
       petWasteDogs: p.petWasteDogs
     });
     const existingByWeekday = new Map(pickups.map((p) => [p.dayOfWeek, p]));
@@ -98,18 +119,18 @@ export function ProviderSyncReview({
         days.push({
           ...mapExisting(existing),
           // Syncing normalizes cans to the provider's collections that day.
-          canCount: selected ? pd.cans : existing.canCount,
+          cans: selected ? pd.cans : existing.cans,
+          biweeklyAnchorDate:
+            selected && pd.cadence === "BIWEEKLY" ? pd.nextDate : existing.biweeklyAnchorDate,
           providerSynced: selected
         });
         handled.add(pd.weekday);
       } else if (selected) {
         days.push({
           dayOfWeek: pd.weekday,
-          cadence: pd.cadence,
           biweeklyAnchorDate: pd.cadence === "BIWEEKLY" ? pd.nextDate : undefined,
-          canCount: pd.cans,
+          cans: pd.cans,
           rollIn: true,
-          glassRecycling: false,
           petWasteDogs: 0,
           providerSynced: true
         });
@@ -134,7 +155,8 @@ export function ProviderSyncReview({
       {providerDays.map((pd) => {
         const existing = pickups.find((p) => p.dayOfWeek === pd.weekday);
         const key = `p${pd.weekday}`;
-        const cansLabel = `${pd.cans} can${pd.cans === 1 ? "" : "s"}`;
+        const totalCans = pd.cans.reduce((sum, c) => sum + c.count, 0);
+        const cansLabel = `${totalCans} can${totalCans === 1 ? "" : "s"}`;
         return (
           <label key={key} className="checkbox-field">
             <input type="checkbox" checked={sel.has(key)} onChange={() => toggle(key)} />

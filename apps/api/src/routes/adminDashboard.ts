@@ -1,5 +1,6 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { prisma } from "@gpp/db";
 import {
   addressMonthlyCents,
@@ -12,7 +13,9 @@ import {
   isSuperAdminRole,
   operatorAvailabilityResponseSchema,
   operatorAvailabilityUpdateSchema,
-  operatorZonesUpdateSchema
+  operatorZonesUpdateSchema,
+  scheduleCanSchema,
+  type ScheduleCan
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
@@ -37,7 +40,14 @@ type ScheduleRow = {
   petWasteDogs: number;
   providerSynced: boolean;
   biweeklyAnchorDate: Date | null;
+  cans: unknown;
 };
+
+const cansArraySchema = z.array(scheduleCanSchema);
+function parseCans(cans: unknown): ScheduleCan[] {
+  const parsed = cansArraySchema.safeParse(cans);
+  return parsed.success ? parsed.data : [];
+}
 
 type AddressRow = {
   id: string;
@@ -66,11 +76,8 @@ type UserAggregateRow = {
 
 function pricingDays(schedules: ScheduleRow[]) {
   return schedules.map((s) => ({
-    dayOfWeek: s.pickupDayOfWeek,
-    canCount: s.canCount,
-    cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+    cans: parseCans(s.cans),
     rollIn: s.rollIn,
-    glassRecycling: s.glassRecycling,
     petWasteDogs: s.petWasteDogs
   }));
 }
@@ -137,6 +144,7 @@ async function toAdminUserDetail(row: UserAggregateRow) {
         .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
         .map((s) => ({
           dayOfWeek: s.pickupDayOfWeek,
+          cans: parseCans(s.cans),
           cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
           canCount: s.canCount,
           rollIn: s.rollIn,
