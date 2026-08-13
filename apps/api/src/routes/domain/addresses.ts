@@ -3,6 +3,7 @@ import { prisma } from "@gpp/db";
 import {
   createAddressRequestSchema,
   isAdminRole,
+  pickupScheduleSuggestionSchema,
   scheduleUpdateSchema,
   serviceAddressInputSchema,
   serviceAddressSchema,
@@ -12,6 +13,7 @@ import {
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
 import { geocodeAddressParts } from "../../services/geocoding";
+import { lookupPickupSchedule } from "../../services/haulerSchedule";
 import { timezoneForCoords } from "../../lib/timezone";
 import { isPostalServiceable } from "../../lib/serviceArea";
 
@@ -389,6 +391,48 @@ export async function upsertScheduleHandler(
             .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
             .map(toScheduleResponse)
         });
+      },
+      { roles: ["CUSTOMER", "ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Customer/admin: run the trash-provider lookup for their own location and
+// return the suggestion (streams) so the UI can offer the verify-pickups sync.
+// Always re-fetches (bypasses the cache) so "sync" reflects current provider data.
+export async function connectProviderHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const addressId = req.params.addressId;
+        if (!addressId) {
+          return jsonResponse(400, { message: "addressId is required" });
+        }
+        const address = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
+        if (!address) {
+          return jsonResponse(404, { message: "Address not found" });
+        }
+        if (!isAdminRole(auth.role) && address.userId !== auth.sub) {
+          return jsonResponse(403, { message: "Forbidden" });
+        }
+        const suggestion = await lookupPickupSchedule(
+          {
+            line1: address.line1,
+            city: address.city,
+            state: address.state,
+            postalCode: address.postalCode
+          },
+          { force: true }
+        );
+        return jsonResponse(200, pickupScheduleSuggestionSchema.parse(suggestion));
       },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)

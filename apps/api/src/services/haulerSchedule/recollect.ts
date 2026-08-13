@@ -60,7 +60,15 @@ type RecollectEvent = {
   // `repeat_data.frequency` ("weekly"/"every two weeks"). Read both.
   options?: ({ freq?: string } & RepeatData) | null;
   opts?: RepeatData | null;
+  // Holiday markers ride along in the feed; they aren't collections.
+  is_holiday?: number | boolean;
+  type?: string;
 };
+
+// A holiday notice in the feed (e.g. "Labor Day") is not a pickup — exclude it.
+function isHolidayEvent(event: RecollectEvent): boolean {
+  return Boolean(event.is_holiday) || event.type === "holiday";
+}
 
 function extractFreq(event: RecollectEvent): string | undefined {
   return (
@@ -101,9 +109,11 @@ async function fetchEvents(
     `${API_ROOT}/api/places/${placeId}/services/${serviceId}/events` +
     `?nomerge=1&hide=reminder_only&after=${after}&before=${before}&locale=en-US`;
   const payload = await fetchJson(url);
-  return Array.isArray(payload)
+  const events = Array.isArray(payload)
     ? (payload as RecollectEvent[])
     : ((payload as { events?: RecollectEvent[] } | null)?.events ?? []);
+  // Drop holiday notices — they aren't collections.
+  return events.filter((event) => !isHolidayEvent(event));
 }
 
 function classify(name: string): PickupStream["kind"] {

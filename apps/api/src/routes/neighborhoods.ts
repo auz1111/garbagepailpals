@@ -366,12 +366,16 @@ export async function adminConnectHaulerHandler(
         if (!address) {
           throw new HttpError(404, "Address not found");
         }
-        const suggestion = await lookupPickupSchedule({
-          line1: address.line1,
-          city: address.city,
-          state: address.state,
-          postalCode: address.postalCode
-        });
+        const suggestion = await lookupPickupSchedule(
+          {
+            line1: address.line1,
+            city: address.city,
+            state: address.state,
+            postalCode: address.postalCode
+          },
+          // Connect / "Re-check provider" always re-fetches, bypassing the cache.
+          { force: true }
+        );
         return jsonResponse(200, pickupScheduleSuggestionSchema.parse(suggestion));
       },
       { roles: ["ADMIN"] }

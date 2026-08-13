@@ -715,6 +715,20 @@ export function updateAddressSchedule(
   );
 }
 
+// Run the trash-provider lookup for the customer's own location (verify-pickups
+// sync). Always re-fetches, bypassing the cache.
+export function connectProvider(
+  addressId: string,
+  accessToken: string
+): Promise<PickupScheduleSuggestion> {
+  return request<undefined, PickupScheduleSuggestion>(
+    `/addresses/${addressId}/connect-provider`,
+    "POST",
+    undefined,
+    accessToken
+  );
+}
+
 export function listUpcomingJobs(accessToken: string): Promise<ServiceJobsResponse> {
   return request<undefined, ServiceJobsResponse>("/jobs/upcoming", "GET", undefined, accessToken);
 }

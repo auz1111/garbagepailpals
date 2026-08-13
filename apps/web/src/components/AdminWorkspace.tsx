@@ -45,6 +45,7 @@ import { RouteHistory } from "./RouteHistory";
 import { ZonesAdmin } from "./ZonesAdmin";
 import { AdminLocations } from "./AdminLocations";
 import { AdminHaulerCoverage } from "./AdminHaulerCoverage";
+import { ProviderSyncReview } from "./ProviderSyncReview";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
@@ -1022,9 +1023,8 @@ function AdminLocationCard({
   const [editing, setEditing] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
   const [connectResult, setConnectResult] = useState<PickupScheduleSuggestion | null>(null);
-  // Sync review: which pickup day (index) should follow the provider's day.
+  // Whether the connect sync-review is open.
   const [reviewing, setReviewing] = useState(false);
-  const [syncChoice, setSyncChoice] = useState<number | null>(null);
 
   // When arrived at via a map-popup link (…#address-<id>), scroll this card into
   // view and briefly highlight it.
@@ -1096,39 +1096,16 @@ function AdminLocationCard({
     mutationFn: () => connectHauler(loc.id, accessToken),
     onSuccess: async (result) => {
       setConnectResult(result);
-      // On a match, open the per-day sync review; default to the day already on
-      // the provider's weekday, else the earliest day.
-      if (result.matched && result.garbage) {
-        const providerDay = result.garbage.dayOfWeek;
-        const already = loc.pickups.findIndex((p) => p.dayOfWeek === providerDay);
-        setSyncChoice(already >= 0 ? already : loc.pickups.length ? 0 : null);
+      if (result.matched) {
         setReviewing(true);
       }
-      // Refresh so the connected-provider chip/state updates.
       await refreshLists();
     }
   });
 
-  // Apply the sync choice: the chosen day moves to the provider's weekday and is
-  // marked synced; every other day is left as-is and marked not-synced.
+  // The review component builds the schedule payload; we just persist it.
   const syncMutation = useMutation({
-    mutationFn: (chosenIndex: number | null) => {
-      const providerDay = connectResult?.garbage?.dayOfWeek;
-      const days: PickupDayInput[] = loc.pickups.map((p, i) => {
-        const synced = chosenIndex === i && providerDay !== undefined;
-        return {
-          dayOfWeek: synced ? providerDay! : p.dayOfWeek,
-          cadence: p.cadence,
-          biweeklyAnchorDate: p.biweeklyAnchorDate,
-          canCount: p.canCount,
-          rollIn: p.rollIn,
-          glassRecycling: p.glassRecycling,
-          petWasteDogs: p.petWasteDogs,
-          providerSynced: synced
-        };
-      });
-      return updateAddressSchedule(loc.id, { days }, accessToken);
-    },
+    mutationFn: (days: PickupDayInput[]) => updateAddressSchedule(loc.id, { days }, accessToken),
     onSuccess: async () => {
       await refreshLists();
       setReviewing(false);
@@ -1223,76 +1200,19 @@ function AdminLocationCard({
       )}
       {connectMutation.isError ? (
         <p className="error">{getErrorMessage(connectMutation.error)}</p>
-      ) : reviewing && connectResult?.matched && connectResult.garbage ? (
-        <div className="pickup-suggestion" style={{ marginTop: "0.85rem" }}>
-          <p>
-            <strong>Connected to {connectResult.providerLabel}.</strong> They collect trash on{" "}
-            <strong>{WEEKDAYS_SHORT[connectResult.garbage.dayOfWeek]}</strong>. Which pickup day should
-            follow the provider? The synced day tracks the provider's collection date (holiday shifts
-            included); others stay as set.
-          </p>
-          {loc.pickups.map((p, i) => {
-            const providerDay = connectResult.garbage!.dayOfWeek;
-            const alreadyOnProvider = p.dayOfWeek === providerDay;
-            const takenByOther = loc.pickups.some((q, j) => j !== i && q.dayOfWeek === providerDay);
-            const selectable = alreadyOnProvider || !takenByOther;
-            return (
-              <label key={i} className="checkbox-field">
-                <input
-                  type="radio"
-                  name={`sync-${loc.id}`}
-                  checked={syncChoice === i}
-                  disabled={!selectable}
-                  onChange={() => setSyncChoice(i)}
-                />
-                <span>
-                  <strong>
-                    {WEEKDAYS_SHORT[p.dayOfWeek]}
-                    {alreadyOnProvider
-                      ? " — already on the provider's day"
-                      : ` → change to ${WEEKDAYS_SHORT[providerDay]}`}
-                  </strong>
-                  {!selectable ? (
-                    <span className="subtext">The provider's day is used by another pickup.</span>
-                  ) : null}
-                </span>
-              </label>
-            );
-          })}
-          <label className="checkbox-field">
-            <input
-              type="radio"
-              name={`sync-${loc.id}`}
-              checked={syncChoice === null}
-              onChange={() => setSyncChoice(null)}
-            />
-            <span>
-              <strong>Don't sync any day</strong>
-              <span className="subtext">All pickups stay as set and show "Not synced".</span>
-            </span>
-          </label>
-          <div className="button-row">
-            <button
-              type="button"
-              className="cta-primary"
-              disabled={syncMutation.isPending}
-              onClick={() => syncMutation.mutate(syncChoice)}
-            >
-              {syncMutation.isPending ? "Saving…" : "Apply"}
-            </button>
-            <button
-              type="button"
-              className="ghost-btn"
-              onClick={() => {
-                setReviewing(false);
-                setConnectResult(null);
-              }}
-            >
-              Skip
-            </button>
-          </div>
-          {syncMutation.isError ? <p className="error">{getErrorMessage(syncMutation.error)}</p> : null}
-        </div>
+      ) : reviewing && connectResult?.matched ? (
+        <ProviderSyncReview
+          providerLabel={connectResult.providerLabel}
+          streams={connectResult.streams}
+          pickups={loc.pickups}
+          saving={syncMutation.isPending}
+          error={syncMutation.isError ? getErrorMessage(syncMutation.error) : null}
+          onApply={(days) => syncMutation.mutate(days)}
+          onSkip={() => {
+            setReviewing(false);
+            setConnectResult(null);
+          }}
+        />
       ) : connectResult && !connectResult.matched ? (
         <p className="subtext">
           No trash provider lookup available for this address — leave the schedule as set manually.

@@ -22,6 +22,7 @@ import {
 import {
   ApiError,
   checkServiceArea,
+  connectProvider,
   createAddress,
   confirmPayPalSubscription,
   createPayPalSubscription,
@@ -36,6 +37,7 @@ import {
   deleteAddress,
   updateAddressSchedule
 } from "../lib/api";
+import { ProviderSyncReview } from "./ProviderSyncReview";
 
 // A schedule row from the API mapped to the shared pricing input.
 function toPricingDay(day: PickupDay): PricingDay {
@@ -1034,6 +1036,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       <LocationDetail
         key={address.id}
         address={address}
+        accessToken={accessToken}
         covered={covered}
         onRemove={(id) => {
           if (window.confirm("Remove this location? This also cancels its scheduled pickups.")) {
@@ -1285,6 +1288,7 @@ type EditDay = {
 
 function LocationDetail({
   address,
+  accessToken,
   covered,
   onRemove,
   removing,
@@ -1294,6 +1298,7 @@ function LocationDetail({
   scheduleSaved
 }: {
   address: ServiceAddress;
+  accessToken: string;
   covered: boolean | undefined;
   onRemove: (id: string) => void;
   removing: boolean;
@@ -1302,6 +1307,7 @@ function LocationDetail({
   scheduleError: string | null;
   scheduleSaved: boolean;
 }): JSX.Element {
+  const queryClient = useQueryClient();
   const initialDays: EditDay[] =
     address.schedules.length > 0
       ? [...address.schedules]
@@ -1330,6 +1336,60 @@ function LocationDetail({
         ];
   const [days, setDays] = useState<EditDay[]>(initialDays);
   const [submitted, setSubmitted] = useState(false);
+
+  // Trash-provider sync: on open, attempt to match the address to a provider and,
+  // if the schedule isn't already aligned, prompt the customer to verify pickups.
+  const [providerResult, setProviderResult] = useState<PickupScheduleSuggestion | null>(null);
+  const [reviewingProvider, setReviewingProvider] = useState(false);
+
+  const providerConnect = useMutation({
+    mutationFn: () => connectProvider(address.id, accessToken),
+    onSuccess: (result) => {
+      setProviderResult(result);
+      if (result.matched) {
+        // Only prompt when there's something to do: a provider day missing from
+        // the schedule, or an existing pickup on a provider day that isn't synced.
+        const providerWeekdays = new Set(result.streams.map((s) => s.dayOfWeek));
+        const scheduleWeekdays = new Set(address.schedules.map((s) => s.dayOfWeek));
+        const missingDay = [...providerWeekdays].some((w) => !scheduleWeekdays.has(w));
+        const unsynced = address.schedules.some(
+          (s) => providerWeekdays.has(s.dayOfWeek) && !s.providerSynced
+        );
+        if (missingDay || unsynced) {
+          setReviewingProvider(true);
+        }
+      }
+    }
+  });
+
+  const providerApply = useMutation({
+    mutationFn: (payload: PickupDayInput[]) => updateAddressSchedule(address.id, { days: payload }, accessToken),
+    onSuccess: async (_data, payload) => {
+      // Reflect the synced schedule in the editor immediately.
+      setDays(
+        payload.map((d) => ({
+          dayOfWeek: d.dayOfWeek,
+          cadence: d.cadence,
+          canCount: d.canCount,
+          rollIn: d.rollIn,
+          glassRecycling: d.glassRecycling ?? false,
+          petWasteDogs: d.petWasteDogs ?? 0,
+          providerSynced: d.providerSynced ?? false,
+          biweeklyAnchorDate: d.biweeklyAnchorDate?.slice(0, 16) ?? ""
+        }))
+      );
+      await queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      await queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
+      setReviewingProvider(false);
+      setProviderResult(null);
+    }
+  });
+
+  // Attempt the provider sync once when the location opens.
+  useEffect(() => {
+    providerConnect.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address.id]);
 
   const usedDays = new Set(days.map((d) => d.dayOfWeek));
   const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
@@ -1452,6 +1512,37 @@ function LocationDetail({
             Each pickup day has its own cans, cadence, and roll-in. {days.length} pickup
             {days.length === 1 ? "" : "s"}/week.
           </p>
+
+          {reviewingProvider && providerResult?.matched ? (
+            <ProviderSyncReview
+              providerLabel={providerResult.providerLabel}
+              streams={providerResult.streams}
+              pickups={address.schedules.map((s) => ({
+                dayOfWeek: s.dayOfWeek,
+                cadence: s.cadence,
+                canCount: s.canCount,
+                rollIn: s.rollIn,
+                glassRecycling: s.glassRecycling,
+                petWasteDogs: s.petWasteDogs,
+                biweeklyAnchorDate: s.biweeklyAnchorDate
+              }))}
+              saving={providerApply.isPending}
+              error={providerApply.isError ? getErrorMessage(providerApply.error) : null}
+              onApply={(payload) => providerApply.mutate(payload)}
+              onSkip={() => setReviewingProvider(false)}
+            />
+          ) : providerResult?.matched ? (
+            <p className="subtext">
+              ♻️ Trash provider: <strong>{providerResult.providerLabel}</strong>.{" "}
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setReviewingProvider(true)}
+              >
+                Review &amp; sync pickups
+              </button>
+            </p>
+          ) : null}
 
           <ul className="pickup-day-list">
             {days.map((day, idx) => {

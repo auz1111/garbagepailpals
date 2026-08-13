@@ -253,12 +253,15 @@ async function fetchAndStoreUpcoming(
 // first pickup day. Never throws — returns { matched:false } when nothing is
 // found or a provider is unavailable. On a fresh match it also seeds the concrete
 // upcoming-pickup cache the scheduler uses for holiday shifts.
-export async function lookupPickupSchedule(input: HaulerLookupInput): Promise<PickupScheduleSuggestion> {
+export async function lookupPickupSchedule(
+  input: HaulerLookupInput,
+  opts: { force?: boolean } = {}
+): Promise<PickupScheduleSuggestion> {
   const addressHash = haulerAddressHash(input);
 
-  const cached = await prisma.haulerScheduleLookup
-    .findUnique({ where: { addressHash } })
-    .catch(() => null);
+  const cached = opts.force
+    ? null
+    : await prisma.haulerScheduleLookup.findUnique({ where: { addressHash } }).catch(() => null);
   if (cached?.matched && Date.now() - cached.fetchedAt.getTime() < CACHE_TTL_MS) {
     const parsed = pickupScheduleSuggestionSchema.safeParse(cached.suggestion);
     if (parsed.success) {
