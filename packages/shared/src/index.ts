@@ -369,12 +369,23 @@ export function dayCanHandlingsPerMonth(cans: ScheduleCan[]): number {
   );
 }
 
+// The monthly cost a single can contributes: how many times a month it's handled
+// (weekly ~4.33x, biweekly ~2.17x) times the per-can fee. Shown as a line item.
+export function scheduleCanMonthlyCents(can: ScheduleCan): number {
+  const handlings =
+    can.count * (can.cadence === "WEEKLY" ? VISITS_PER_MONTH_WEEKLY : VISITS_PER_MONTH_BIWEEKLY);
+  return Math.round(handlings * PRICING.perCanVisitCents);
+}
+
 export type PricingDay = {
   cans: ScheduleCan[];
   rollIn?: boolean;
   petWasteDogs?: number;
 };
 
+// The authoritative monthly total for a day: the visit (stop) fee + each can's
+// handling cost, then the roll-in credit and pet-waste add-on. Rounded once so
+// the amount is stable (billing keys off this).
 export function pickupDayMonthlyCents(day: PricingDay): number {
   const cans = day.cans;
   let cents = 0;
@@ -389,6 +400,20 @@ export function pickupDayMonthlyCents(day: PricingDay): number {
   }
   cents += petWasteMonthlyCents(day.petWasteDogs ?? 0);
   return Math.max(0, cents);
+}
+
+// The "service visit (stop) fee" line for a breakdown, derived as the remainder
+// after the per-can line items, roll-in credit and pet waste — so an itemized
+// display always reconciles exactly to pickupDayMonthlyCents.
+export function dayVisitFeeDisplayCents(day: PricingDay): number {
+  if (day.cans.length === 0) return 0;
+  const cansCost = day.cans.reduce((sum, can) => sum + scheduleCanMonthlyCents(can), 0);
+  const petWaste = petWasteMonthlyCents(day.petWasteDogs ?? 0);
+  const credit =
+    day.rollIn === false
+      ? day.cans.reduce((sum, can) => sum + can.count, 0) * PRICING.rollInCreditMonthlyCentsPerCan
+      : 0;
+  return Math.max(0, pickupDayMonthlyCents(day) - cansCost - petWaste + credit);
 }
 
 export function addressMonthlyCents(days: PricingDay[]): number {

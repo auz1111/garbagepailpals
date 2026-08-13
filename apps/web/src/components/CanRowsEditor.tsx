@@ -1,4 +1,5 @@
 import type { CanType, ScheduleCan } from "@gpp/shared";
+import { formatUsd, scheduleCanMonthlyCents } from "@gpp/shared";
 
 export const CAN_TYPES_ORDER: CanType[] = ["TRASH", "RECYCLING", "YARD", "GLASS"];
 export const CAN_LABELS: Record<CanType, string> = {
@@ -73,6 +74,9 @@ export function CanRowsEditor({
               }
             />
           </label>
+          <span className="can-row-price">
+            {formatUsd(scheduleCanMonthlyCents(can))}/mo
+          </span>
           {cans.length > 1 ? (
             <button type="button" className="link-button can-row-remove" onClick={() => remove(i)}>
               Remove

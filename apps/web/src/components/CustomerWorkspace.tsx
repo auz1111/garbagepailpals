@@ -14,6 +14,7 @@ import {
   addressMonthlyCents,
   cansToCadence,
   cansToCanCount,
+  dayVisitFeeDisplayCents,
   formatUsd,
   petWasteMonthlyCents,
   pickupDayMonthlyCents,
@@ -1374,6 +1375,23 @@ function LocationDetail({
                         cans={day.cans}
                         onChange={(cans) => updateDay(idx, { cans })}
                       />
+                      <div className="price-line">
+                        <span>Service visit fee</span>
+                        <span>
+                          {formatUsd(
+                            dayVisitFeeDisplayCents({
+                              cans: day.cans,
+                              rollIn: day.rollIn,
+                              petWasteDogs: day.petWasteDogs
+                            })
+                          )}
+                          /mo
+                        </span>
+                      </div>
+                      <div className="price-line is-total">
+                        <span>This day</span>
+                        <span>{formatUsd(dayCost)}/mo</span>
+                      </div>
                     </div>
 
                     {dayIsBiweekly ? (

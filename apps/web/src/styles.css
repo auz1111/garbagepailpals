@@ -2801,6 +2801,31 @@ a {
   white-space: nowrap;
   color: var(--danger, #b42318);
 }
+/* Per-can monthly price shown on each line item. */
+.can-row-price {
+  align-self: center;
+  white-space: nowrap;
+  font-weight: 800;
+  font-size: 0.82rem;
+  color: var(--ink);
+}
+
+/* Price breakdown lines under the cans (stop fee + day total). */
+.price-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.85rem;
+  color: var(--muted, #667);
+  padding: 0.2rem 0.1rem;
+}
+.price-line + .price-line {
+  border-top: 1px dashed var(--line, #e4e9eb);
+}
+.price-line.is-total {
+  font-weight: 800;
+  color: var(--ink);
+}
 
 .pickup-day-top {
   display: flex;
