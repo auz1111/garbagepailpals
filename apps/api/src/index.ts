@@ -56,6 +56,7 @@ import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
 import { operatorZoneRequestHandler, operatorZonesHandler } from "./routes/operatorZones";
 import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adminOperators";
 import {
+  adminConnectHaulerHandler,
   adminHaulerCoverageHandler,
   adminLocationByIdHandler,
   adminLocationsHandler,
@@ -324,6 +325,13 @@ app.http("admin-location-by-id", {
   methods: ["PATCH", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminLocationByIdHandler
+});
+
+app.http("admin-location-connect-hauler", {
+  route: "ops-admin/locations/{addressId}/connect-hauler",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminConnectHaulerHandler
 });
 
 app.http("operator-availability", {

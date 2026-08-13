@@ -144,7 +144,7 @@ describe("calculateJobsForAddress", () => {
       "sub_1",
       "addr_1",
       "America/Los_Angeles",
-      [weekly(THURSDAY)],
+      [{ ...weekly(THURSDAY), providerSynced: true }],
       [],
       [],
       21,
@@ -176,7 +176,7 @@ describe("calculateJobsForAddress", () => {
       "sub_1",
       "addr_1",
       "America/Los_Angeles",
-      [weekly(THURSDAY)],
+      [{ ...weekly(THURSDAY), providerSynced: true }],
       [],
       [],
       21,
@@ -203,7 +203,7 @@ describe("calculateJobsForAddress", () => {
       "sub_1",
       "addr_1",
       "America/Los_Angeles",
-      [weekly(THURSDAY)],
+      [{ ...weekly(THURSDAY), providerSynced: true }],
       [],
       [],
       21,
@@ -214,6 +214,30 @@ describe("calculateJobsForAddress", () => {
     expect(jobs.filter((j) => j.status === "SKIPPED").length).toBe(0);
     expect(jobs.filter((j) => j.type === "CURB_OUT").length).toBe(3); // 9/3, 9/10, 9/17 all normal
     expect(jobs.filter((j) => j.shiftReason).length).toBe(0);
+  });
+
+  it("does not shift or skip a day that isn't synced to the provider", () => {
+    // Provider data present, but the day isn't synced → normal behavior.
+    const upcoming: HaulerUpcoming = {
+      from: "2026-08-31",
+      to: "2026-10-15",
+      pickups: garbage(["2026-09-03", "2026-09-11", "2026-09-17"])
+    };
+    const jobs = calculateJobsForAddress(
+      "sub_1",
+      "addr_1",
+      "America/Los_Angeles",
+      [weekly(THURSDAY)], // no providerSynced
+      [],
+      [],
+      21,
+      REF,
+      upcoming
+    );
+
+    expect(jobs.filter((j) => j.shiftReason).length).toBe(0);
+    expect(jobs.filter((j) => j.status === "SKIPPED").length).toBe(0);
+    expect(jobs.filter((j) => j.type === "CURB_OUT").length).toBe(3);
   });
 
   it("runs only when local timezone hour is 02:00", () => {

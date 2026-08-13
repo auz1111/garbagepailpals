@@ -2,6 +2,7 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import { prisma } from "@gpp/db";
 import {
   createAddressRequestSchema,
+  isAdminRole,
   scheduleUpdateSchema,
   serviceAddressInputSchema,
   serviceAddressSchema,
@@ -24,6 +25,7 @@ type ScheduleRow = {
   rollIn: boolean;
   glassRecycling: boolean;
   petWasteDogs: number;
+  providerSynced: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -39,6 +41,7 @@ function toScheduleResponse(row: ScheduleRow) {
     rollIn: row.rollIn,
     glassRecycling: row.glassRecycling,
     petWasteDogs: row.petWasteDogs,
+    providerSynced: row.providerSynced,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString()
   };
@@ -157,7 +160,8 @@ export async function createAddressHandler(
                 canCount: input.canCount,
                 rollIn: input.rollIn ?? true,
                 glassRecycling: input.glassRecycling ?? false,
-                petWasteDogs: input.petWasteDogs ?? 0
+                petWasteDogs: input.petWasteDogs ?? 0,
+                providerSynced: input.providerSynced ?? false
               }
             }
           },
@@ -184,7 +188,7 @@ export async function listAddressesHandler(
     withAuth(
       async (_req, _ctx, auth) => {
         const rows = await prisma.serviceAddress.findMany({
-          where: auth.role === "ADMIN" ? undefined : { userId: auth.sub },
+          where: isAdminRole(auth.role) ? undefined : { userId: auth.sub },
           orderBy: { createdAt: "desc" },
           include: { schedules: true }
         });
@@ -222,7 +226,7 @@ export async function updateAddressHandler(
           return jsonResponse(404, { message: "Address not found" });
         }
 
-        if (auth.role !== "ADMIN" && existing.userId !== auth.sub) {
+        if (!isAdminRole(auth.role) && existing.userId !== auth.sub) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 
@@ -292,7 +296,7 @@ export async function deleteAddressHandler(
         if (!existing) {
           return jsonResponse(404, { message: "Address not found" });
         }
-        if (auth.role !== "ADMIN" && existing.userId !== auth.sub) {
+        if (!isAdminRole(auth.role) && existing.userId !== auth.sub) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 
@@ -340,7 +344,7 @@ export async function upsertScheduleHandler(
           return jsonResponse(404, { message: "Address not found" });
         }
 
-        if (auth.role !== "ADMIN" && address.userId !== auth.sub) {
+        if (!isAdminRole(auth.role) && address.userId !== auth.sub) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 
@@ -367,7 +371,8 @@ export async function upsertScheduleHandler(
               canCount: day.canCount,
               rollIn: day.rollIn,
               glassRecycling: day.glassRecycling ?? false,
-              petWasteDogs: day.petWasteDogs ?? 0
+              petWasteDogs: day.petWasteDogs ?? 0,
+              providerSynced: day.providerSynced ?? false
             }))
           }),
           prisma.serviceSchedule.findMany({ where: { serviceAddressId: addressId } })
@@ -412,7 +417,7 @@ export async function createHoldHandler(
           return jsonResponse(404, { message: "Address not found" });
         }
 
-        if (auth.role !== "ADMIN" && address.userId !== auth.sub) {
+        if (!isAdminRole(auth.role) && address.userId !== auth.sub) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 
@@ -491,7 +496,7 @@ export async function listHoldsHandler(
           return jsonResponse(404, { message: "Address not found" });
         }
 
-        if (auth.role !== "ADMIN" && address.userId !== auth.sub) {
+        if (!isAdminRole(auth.role) && address.userId !== auth.sub) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 

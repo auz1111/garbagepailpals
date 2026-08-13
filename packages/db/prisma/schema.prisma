@@ -259,6 +259,9 @@ model ServiceSchedule {
   rollIn              Boolean        @default(true)
   glassRecycling      Boolean        @default(false)
   petWasteDogs        Int            @default(0)
+  // Whether this day is synced to the connected trash provider's collection day
+  // (holiday shifts follow the provider only for synced days).
+  providerSynced      Boolean        @default(false)
   curbOutOffsetHours  Int            @default(-12)
   curbInOffsetHours   Int            @default(8)
   createdAt           DateTime       @default(now())

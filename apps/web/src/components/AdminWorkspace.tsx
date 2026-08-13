@@ -7,6 +7,7 @@ import type {
   AdminUserWithLocations,
   CurrentUser,
   PickupDayInput,
+  PickupScheduleSuggestion,
   Role
 } from "@gpp/shared";
 import {
@@ -20,6 +21,7 @@ import {
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
+  connectHauler,
   createAdminUser,
   getAdminLocations,
   getAdminUser,
@@ -58,7 +60,7 @@ export const ADMIN_NAV = [
   { to: "/admin/routes", label: "Today's Routes", icon: "🗺️" },
   { to: "/admin/history", label: "Route History", icon: "🕓" },
   { to: "/admin/zones", label: "Service Areas", icon: "🗺", superOnly: true },
-  { to: "/admin/hauler-coverage", label: "Hauler Coverage", icon: "♻️", superOnly: true },
+  { to: "/admin/hauler-coverage", label: "Trash Providers", icon: "♻️", superOnly: true },
   { to: "/admin/neighborhoods", label: "Neighborhoods", icon: "🏘️" },
   { to: "/admin/locations", label: "Locations", icon: "📍" },
   { to: "/admin/users", label: "Users", icon: "👥" },
@@ -84,6 +86,7 @@ type EditDay = {
   rollIn: boolean;
   glassRecycling: boolean;
   petWasteDogs: number;
+  providerSynced: boolean;
   biweeklyAnchorDate: string;
 };
 
@@ -1018,6 +1021,10 @@ function AdminLocationCard({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
+  const [connectResult, setConnectResult] = useState<PickupScheduleSuggestion | null>(null);
+  // Sync review: which pickup day (index) should follow the provider's day.
+  const [reviewing, setReviewing] = useState(false);
+  const [syncChoice, setSyncChoice] = useState<number | null>(null);
 
   // When arrived at via a map-popup link (…#address-<id>), scroll this card into
   // view and briefly highlight it.
@@ -1085,6 +1092,50 @@ function AdminLocationCard({
     }
   });
 
+  const connectMutation = useMutation({
+    mutationFn: () => connectHauler(loc.id, accessToken),
+    onSuccess: async (result) => {
+      setConnectResult(result);
+      // On a match, open the per-day sync review; default to the day already on
+      // the provider's weekday, else the earliest day.
+      if (result.matched && result.garbage) {
+        const providerDay = result.garbage.dayOfWeek;
+        const already = loc.pickups.findIndex((p) => p.dayOfWeek === providerDay);
+        setSyncChoice(already >= 0 ? already : loc.pickups.length ? 0 : null);
+        setReviewing(true);
+      }
+      // Refresh so the connected-provider chip/state updates.
+      await refreshLists();
+    }
+  });
+
+  // Apply the sync choice: the chosen day moves to the provider's weekday and is
+  // marked synced; every other day is left as-is and marked not-synced.
+  const syncMutation = useMutation({
+    mutationFn: (chosenIndex: number | null) => {
+      const providerDay = connectResult?.garbage?.dayOfWeek;
+      const days: PickupDayInput[] = loc.pickups.map((p, i) => {
+        const synced = chosenIndex === i && providerDay !== undefined;
+        return {
+          dayOfWeek: synced ? providerDay! : p.dayOfWeek,
+          cadence: p.cadence,
+          biweeklyAnchorDate: p.biweeklyAnchorDate,
+          canCount: p.canCount,
+          rollIn: p.rollIn,
+          glassRecycling: p.glassRecycling,
+          petWasteDogs: p.petWasteDogs,
+          providerSynced: synced
+        };
+      });
+      return updateAddressSchedule(loc.id, { days }, accessToken);
+    },
+    onSuccess: async () => {
+      await refreshLists();
+      setReviewing(false);
+      setConnectResult(null);
+    }
+  });
+
   return (
     <li className="admin-loc-card" id={`address-${loc.id}`}>
       <div className="admin-loc-head">
@@ -1095,6 +1146,11 @@ function AdminLocationCard({
               <span className="admin-loc-hood">🏘️ {neighborhoodName ?? "Neighborhood"}</span>
             ) : (
               <span className="admin-loc-hood admin-loc-hood-empty">No neighborhood</span>
+            )}
+            {loc.haulerProvider ? (
+              <span className="loc-chip is-glass">♻️ {loc.haulerProviderLabel ?? "Provider linked"}</span>
+            ) : (
+              <span className="loc-chip is-none">No trash provider</span>
             )}
           </div>
           <span className="admin-table-sub">
@@ -1127,6 +1183,9 @@ function AdminLocationCard({
                 {pickup.cadence === "BIWEEKLY" ? "every 2 weeks" : "weekly"} ·{" "}
                 {pickup.rollIn ? "roll-in" : "roll-out only"}
               </span>
+              {!pickup.providerSynced ? (
+                <span className="loc-chip is-none">Not synced</span>
+              ) : null}
             </li>
           ))}
         </ul>
@@ -1148,8 +1207,97 @@ function AdminLocationCard({
           <button type="button" className="ghost-btn" onClick={() => setEditingAddress(true)}>
             Edit address
           </button>
+          <button
+            type="button"
+            className="ghost-btn"
+            disabled={connectMutation.isPending}
+            onClick={() => connectMutation.mutate()}
+          >
+            {connectMutation.isPending
+              ? "Checking…"
+              : loc.haulerProvider
+                ? "Re-check provider"
+                : "Connect a trash provider"}
+          </button>
         </div>
       )}
+      {connectMutation.isError ? (
+        <p className="error">{getErrorMessage(connectMutation.error)}</p>
+      ) : reviewing && connectResult?.matched && connectResult.garbage ? (
+        <div className="pickup-suggestion" style={{ marginTop: "0.85rem" }}>
+          <p>
+            <strong>Connected to {connectResult.providerLabel}.</strong> They collect trash on{" "}
+            <strong>{WEEKDAYS_SHORT[connectResult.garbage.dayOfWeek]}</strong>. Which pickup day should
+            follow the provider? The synced day tracks the provider's collection date (holiday shifts
+            included); others stay as set.
+          </p>
+          {loc.pickups.map((p, i) => {
+            const providerDay = connectResult.garbage!.dayOfWeek;
+            const alreadyOnProvider = p.dayOfWeek === providerDay;
+            const takenByOther = loc.pickups.some((q, j) => j !== i && q.dayOfWeek === providerDay);
+            const selectable = alreadyOnProvider || !takenByOther;
+            return (
+              <label key={i} className="checkbox-field">
+                <input
+                  type="radio"
+                  name={`sync-${loc.id}`}
+                  checked={syncChoice === i}
+                  disabled={!selectable}
+                  onChange={() => setSyncChoice(i)}
+                />
+                <span>
+                  <strong>
+                    {WEEKDAYS_SHORT[p.dayOfWeek]}
+                    {alreadyOnProvider
+                      ? " — already on the provider's day"
+                      : ` → change to ${WEEKDAYS_SHORT[providerDay]}`}
+                  </strong>
+                  {!selectable ? (
+                    <span className="subtext">The provider's day is used by another pickup.</span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
+          <label className="checkbox-field">
+            <input
+              type="radio"
+              name={`sync-${loc.id}`}
+              checked={syncChoice === null}
+              onChange={() => setSyncChoice(null)}
+            />
+            <span>
+              <strong>Don't sync any day</strong>
+              <span className="subtext">All pickups stay as set and show "Not synced".</span>
+            </span>
+          </label>
+          <div className="button-row">
+            <button
+              type="button"
+              className="cta-primary"
+              disabled={syncMutation.isPending}
+              onClick={() => syncMutation.mutate(syncChoice)}
+            >
+              {syncMutation.isPending ? "Saving…" : "Apply"}
+            </button>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                setReviewing(false);
+                setConnectResult(null);
+              }}
+            >
+              Skip
+            </button>
+          </div>
+          {syncMutation.isError ? <p className="error">{getErrorMessage(syncMutation.error)}</p> : null}
+        </div>
+      ) : connectResult && !connectResult.matched ? (
+        <p className="subtext">
+          No trash provider lookup available for this address — leave the schedule as set manually.
+        </p>
+      ) : null}
     </li>
   );
 }
@@ -1274,6 +1422,7 @@ function AdminScheduleEditorForm({
             rollIn: s.rollIn,
             glassRecycling: s.glassRecycling,
             petWasteDogs: s.petWasteDogs,
+            providerSynced: s.providerSynced,
             biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
           }))
       : [
@@ -1284,6 +1433,7 @@ function AdminScheduleEditorForm({
             rollIn: true,
             glassRecycling: false,
             petWasteDogs: 0,
+            providerSynced: false,
             biweeklyAnchorDate: ""
           }
         ];
@@ -1313,7 +1463,9 @@ function AdminScheduleEditorForm({
   );
 
   function updateDay(idx: number, patch: Partial<EditDay>): void {
-    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+    // Manually changing the weekday opts the day out of provider sync.
+    const effective = patch.dayOfWeek !== undefined ? { ...patch, providerSynced: false } : patch;
+    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...effective } : d)));
   }
   function removeDay(idx: number): void {
     setDays((prev) => prev.filter((_, i) => i !== idx));
@@ -1329,6 +1481,7 @@ function AdminScheduleEditorForm({
         rollIn: true,
         glassRecycling: false,
         petWasteDogs: 0,
+        providerSynced: false,
         biweeklyAnchorDate: ""
       }
     ]);
@@ -1350,7 +1503,8 @@ function AdminScheduleEditorForm({
         canCount: d.canCount,
         rollIn: d.rollIn,
         glassRecycling: d.glassRecycling,
-        petWasteDogs: d.petWasteDogs
+        petWasteDogs: d.petWasteDogs,
+        providerSynced: d.providerSynced
       }))
     );
   }

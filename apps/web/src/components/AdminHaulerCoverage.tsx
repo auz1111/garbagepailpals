@@ -38,9 +38,9 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
   return (
     <div className="dash-page">
       <div className="dash-page-head">
-        <h2>Hauler Coverage</h2>
+        <h2>Trash Provider Coverage</h2>
         <p className="subtext">
-          Which trash-hauler lookups are wired up, and where they're actually resolving.
+          Which trash-provider lookups are wired up, and where they're actually resolving.
         </p>
       </div>
 
@@ -50,12 +50,12 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
         {coverageQuery.isLoading ? (
           <p className="subtext">Loading…</p>
         ) : providers.length === 0 ? (
-          <p className="subtext">No hauler providers are configured.</p>
+          <p className="subtext">No trash providers are configured.</p>
         ) : (
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Hauler</th>
+                <th>Trash provider</th>
                 <th>Platform</th>
                 <th>Coverage</th>
               </tr>
@@ -80,8 +80,8 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
       <article className="panel">
         <h3>Check an address</h3>
         <p className="subtext">
-          Test any address against the live provider lookups — the fastest way to confirm a hauler is
-          available somewhere.
+          Test any address against the live provider lookups — the fastest way to confirm a trash
+          provider is available somewhere.
         </p>
         <div className="field-row">
           <label>
@@ -129,8 +129,8 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
             </div>
           ) : (
             <p className="subtext" style={{ marginTop: "0.85rem" }}>
-              No hauler lookup available for this address — the customer would set their schedule
-              manually.
+              No trash provider lookup available for this address — the customer would set their
+              schedule manually.
             </p>
           )
         ) : null}

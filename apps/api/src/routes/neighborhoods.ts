@@ -9,6 +9,7 @@ import {
   neighborhoodCreateSchema,
   neighborhoodUpdateSchema,
   neighborhoodsResponseSchema,
+  pickupScheduleSuggestionSchema,
   zoneCreateSchema,
   zoneUpdateSchema,
   zonesResponseSchema
@@ -16,7 +17,12 @@ import {
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { allowedZoneIds } from "../lib/zoneScope";
-import { getHaulerCoverage } from "../services/haulerSchedule";
+import {
+  describeProviders,
+  getHaulerCoverage,
+  haulerAddressHash,
+  lookupPickupSchedule
+} from "../services/haulerSchedule";
 
 async function zonesList(userId: string, role: string) {
   const allowed = isSuperAdminRole(role)
@@ -276,37 +282,96 @@ export async function adminLocationsHandler(
             schedules: true
           }
         });
+
+        // Batch-resolve the connected trash provider for each location from the
+        // lookup cache (keyed by normalized address hash).
+        const hashOf = (a: { line1: string; city: string; state: string; postalCode: string }) =>
+          haulerAddressHash({ line1: a.line1, city: a.city, state: a.state, postalCode: a.postalCode });
+        const linkRows = rows.length
+          ? await prisma.haulerScheduleLookup
+              .findMany({
+                where: { matched: true, addressHash: { in: rows.map(hashOf) } },
+                select: { addressHash: true, provider: true }
+              })
+              .catch(() => [])
+          : [];
+        const providerByHash = new Map(linkRows.map((r) => [r.addressHash, r.provider]));
+        const providers = describeProviders();
+        const labelFor = (id: string) => providers.find((p) => p.id === id)?.label ?? id;
+
         return jsonResponse(
           200,
           adminLocationsResponseSchema.parse({
-            locations: rows.map((a) => ({
-              id: a.id,
-              line1: a.line1,
-              city: a.city,
-              state: a.state,
-              postalCode: a.postalCode,
-              customerName: a.user.name,
-              userId: a.userId,
-              neighborhoodId: a.neighborhoodId,
-              neighborhoodName: a.neighborhood?.name ?? null,
-              zoneId: a.neighborhood?.zoneId ?? null,
-              zoneName: a.neighborhood?.zone?.name ?? null,
-              canCount: a.canCount,
-              glassRecycling: a.schedules.some((s) => s.glassRecycling),
-              petWaste: a.schedules.some((s) => s.petWasteDogs > 0),
-              monthlyCents: addressMonthlyCents(
-                a.schedules.map((s) => ({
-                  dayOfWeek: s.pickupDayOfWeek,
-                  canCount: s.canCount,
-                  cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
-                  rollIn: s.rollIn,
-                  glassRecycling: s.glassRecycling,
-                  petWasteDogs: s.petWasteDogs
-                }))
-              )
-            }))
+            locations: rows.map((a) => {
+              const provider = providerByHash.get(hashOf(a)) ?? null;
+              return {
+                id: a.id,
+                line1: a.line1,
+                city: a.city,
+                state: a.state,
+                postalCode: a.postalCode,
+                customerName: a.user.name,
+                userId: a.userId,
+                neighborhoodId: a.neighborhoodId,
+                neighborhoodName: a.neighborhood?.name ?? null,
+                zoneId: a.neighborhood?.zoneId ?? null,
+                zoneName: a.neighborhood?.zone?.name ?? null,
+                canCount: a.canCount,
+                glassRecycling: a.schedules.some((s) => s.glassRecycling),
+                petWaste: a.schedules.some((s) => s.petWasteDogs > 0),
+                haulerProvider: provider,
+                haulerProviderLabel: provider ? labelFor(provider) : null,
+                providerSynced: a.schedules.some((s) => s.providerSynced),
+                monthlyCents: addressMonthlyCents(
+                  a.schedules.map((s) => ({
+                    dayOfWeek: s.pickupDayOfWeek,
+                    canCount: s.canCount,
+                    cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
+                    rollIn: s.rollIn,
+                    glassRecycling: s.glassRecycling,
+                    petWasteDogs: s.petWasteDogs
+                  }))
+                )
+              };
+            })
           })
         );
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Run (or re-run) the hauler lookup for an existing location and seed the cache
+// so the scheduler can apply holiday shifts. Useful for locations added before a
+// hauler provider covered their area. Returns the resulting suggestion.
+export async function adminConnectHaulerHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req) => {
+        const addressId = req.params.addressId;
+        if (!addressId) {
+          throw new HttpError(400, "addressId is required");
+        }
+        const address = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
+        if (!address) {
+          throw new HttpError(404, "Address not found");
+        }
+        const suggestion = await lookupPickupSchedule({
+          line1: address.line1,
+          city: address.city,
+          state: address.state,
+          postalCode: address.postalCode
+        });
+        return jsonResponse(200, pickupScheduleSuggestionSchema.parse(suggestion));
       },
       { roles: ["ADMIN"] }
     )(request, context)

@@ -74,6 +74,7 @@ const defaultAddressValues: CreateAddressRequest = {
   rollIn: true,
   glassRecycling: false,
   petWasteDogs: 0,
+  providerSynced: false,
   isActive: true,
   pickupDayOfWeek: 2,
   cadence: "WEEKLY"
@@ -174,6 +175,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
     }
     addressForm.setValue("pickupDayOfWeek", garbage.dayOfWeek);
     addressForm.setValue("cadence", garbage.cadence);
+    // The first day now follows the trash provider.
+    addressForm.setValue("providerSynced", true);
     if (garbage.cadence === "BIWEEKLY" && garbage.nextDate) {
       addressForm.setValue("biweeklyAnchorDate", toAnchorInput(garbage.nextDate));
     }
@@ -804,7 +807,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
               </label>
               <h4 className="form-section-title">First pickup day</h4>
               {suggestionLoading ? (
-                <p className="subtext">Checking your hauler's pickup schedule…</p>
+                <p className="subtext">Checking your trash provider's pickup schedule…</p>
               ) : pickupSuggestion?.matched && pickupSuggestion.garbage && !suggestionDismissed ? (
                 <div className="pickup-suggestion">
                   <p>
@@ -835,14 +838,20 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                 </div>
               ) : pickupSuggestion && !pickupSuggestion.matched ? (
                 <p className="subtext">
-                  We couldn't look up your hauler's schedule automatically — set your first pickup day
-                  below.
+                  We couldn't look up your trash provider's schedule automatically — set your first
+                  pickup day below.
                 </p>
               ) : null}
               <div className="field-row">
                 <label>
                   Pickup day
-                  <select {...addressForm.register("pickupDayOfWeek", { valueAsNumber: true })}>
+                  <select
+                    {...addressForm.register("pickupDayOfWeek", {
+                      valueAsNumber: true,
+                      // Choosing a day manually opts out of provider sync.
+                      onChange: () => addressForm.setValue("providerSynced", false)
+                    })}
+                  >
                     {WEEKDAYS.map((label, value) => (
                       <option key={label} value={value}>
                         {label}
@@ -1129,7 +1138,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
                     <span className="jobs-job-date">{fmt(job.scheduledDate)}</span>
                     <span className="admin-table-sub">
                       {skipped
-                        ? "Hauler holiday — no collection this week"
+                        ? "Trash provider holiday — no collection this week"
                         : shifted
                           ? `Holiday-adjusted${
                               job.shiftedFromDate ? ` — normally ${fmt(job.shiftedFromDate)}` : ""
@@ -1270,6 +1279,7 @@ type EditDay = {
   rollIn: boolean;
   glassRecycling: boolean;
   petWasteDogs: number;
+  providerSynced: boolean;
   biweeklyAnchorDate: string;
 };
 
@@ -1303,6 +1313,7 @@ function LocationDetail({
             rollIn: s.rollIn,
             glassRecycling: s.glassRecycling,
             petWasteDogs: s.petWasteDogs,
+            providerSynced: s.providerSynced,
             biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
           }))
       : [
@@ -1313,6 +1324,7 @@ function LocationDetail({
             rollIn: true,
             glassRecycling: false,
             petWasteDogs: 0,
+            providerSynced: false,
             biweeklyAnchorDate: ""
           }
         ];
@@ -1348,7 +1360,7 @@ function LocationDetail({
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
       .map(
         (d) =>
-          `${d.dayOfWeek}|${d.cadence}|${d.canCount}|${d.rollIn}|${d.glassRecycling}|${d.petWasteDogs}|${
+          `${d.dayOfWeek}|${d.cadence}|${d.canCount}|${d.rollIn}|${d.glassRecycling}|${d.petWasteDogs}|${d.providerSynced}|${
             d.cadence === "BIWEEKLY" ? d.biweeklyAnchorDate : ""
           }`
       )
@@ -1356,7 +1368,9 @@ function LocationDetail({
   const dirty = canonical(days) !== canonical(initialDays);
 
   function updateDay(idx: number, patch: Partial<EditDay>): void {
-    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...patch } : d)));
+    // Manually changing the weekday opts the day out of provider sync.
+    const effective = patch.dayOfWeek !== undefined ? { ...patch, providerSynced: false } : patch;
+    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...effective } : d)));
   }
   function removeDay(idx: number): void {
     setDays((prev) => prev.filter((_, i) => i !== idx));
@@ -1374,6 +1388,7 @@ function LocationDetail({
         rollIn: true,
         glassRecycling: false,
         petWasteDogs: 0,
+        providerSynced: false,
         biweeklyAnchorDate: ""
       }
     ]);
@@ -1394,7 +1409,8 @@ function LocationDetail({
         canCount: d.canCount,
         rollIn: d.rollIn,
         glassRecycling: d.glassRecycling,
-        petWasteDogs: d.petWasteDogs
+        petWasteDogs: d.petWasteDogs,
+        providerSynced: d.providerSynced
       }))
     );
   }
@@ -1468,6 +1484,9 @@ function LocationDetail({
                       </select>
                     </label>
                     <span className="pickup-day-cost">{formatUsd(dayCost)}/mo</span>
+                    {!day.providerSynced ? (
+                      <span className="loc-chip is-none">Not synced</span>
+                    ) : null}
                     <button
                       type="button"
                       className="pickup-day-remove"

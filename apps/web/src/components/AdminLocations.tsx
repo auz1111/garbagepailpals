@@ -141,6 +141,16 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                   </span>
                   {l.glassRecycling ? <span className="loc-chip is-glass">Glass ♻️</span> : null}
                   {l.petWaste ? <span className="loc-chip is-petwaste">Pet waste 🐕</span> : null}
+                  {l.haulerProvider ? (
+                    <span className="loc-chip is-glass" title={l.haulerProviderLabel ?? undefined}>
+                      ♻️ {l.haulerProviderLabel ?? "Provider"}
+                    </span>
+                  ) : null}
+                  {l.providerSynced ? (
+                    <span className="loc-chip is-glass">✓ Synced</span>
+                  ) : (
+                    <span className="loc-chip is-none">Not synced</span>
+                  )}
                 </div>
                 <div className="loc-row-price">{formatUsd(l.monthlyCents)}/mo</div>
               </li>

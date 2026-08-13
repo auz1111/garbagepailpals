@@ -180,7 +180,11 @@ export const pickupDayInputSchema = z.object({
   // We also roll out this day's glass recycling container (+monthly fee).
   glassRecycling: z.boolean().default(false),
   // Pet waste removal for this day: number of dogs (0 = no service).
-  petWasteDogs: z.number().int().min(0).max(20).default(0)
+  petWasteDogs: z.number().int().min(0).max(20).default(0),
+  // Whether this pickup day is synced to the connected trash provider's
+  // collection day (so holiday shifts follow the provider). Days that aren't
+  // synced show a "Not synced" badge.
+  providerSynced: z.boolean().default(false)
 });
 
 export const pickupDaySchema = pickupDayInputSchema.extend({
@@ -210,7 +214,9 @@ export const createAddressRequestSchema = serviceAddressInputSchema.extend({
   // Glass recycling for the first pickup day.
   glassRecycling: z.boolean().default(false),
   // Pet waste removal (dogs) for the first pickup day.
-  petWasteDogs: z.number().int().min(0).max(20).default(0)
+  petWasteDogs: z.number().int().min(0).max(20).default(0),
+  // Whether the first pickup day is synced to the trash provider's day.
+  providerSynced: z.boolean().default(false)
 });
 
 export const serviceAddressSchema = serviceAddressInputSchema.extend({
@@ -528,6 +534,10 @@ export const adminUserLocationSchema = z.object({
   neighborhoodId: z.string().nullable(),
   glassRecycling: z.boolean(),
   monthlyCents: z.number().int().nonnegative(),
+  // The trash hauler this location is connected to for schedule lookups /
+  // holiday shifts, if any (null = not connected).
+  haulerProvider: z.string().nullable(),
+  haulerProviderLabel: z.string().nullable(),
   pickups: z.array(
     z.object({
       dayOfWeek: z.number().int().min(0).max(6),
@@ -536,6 +546,7 @@ export const adminUserLocationSchema = z.object({
       rollIn: z.boolean(),
       glassRecycling: z.boolean(),
       petWasteDogs: z.number().int().nonnegative(),
+      providerSynced: z.boolean(),
       biweeklyAnchorDate: z.string().optional()
     })
   )
@@ -731,7 +742,12 @@ export const adminLocationSchema = z.object({
   canCount: z.number().int().nonnegative(),
   glassRecycling: z.boolean(),
   petWaste: z.boolean(),
-  monthlyCents: z.number().int().nonnegative()
+  monthlyCents: z.number().int().nonnegative(),
+  // Connected trash provider (null = not connected) and whether any pickup day
+  // is synced to it.
+  haulerProvider: z.string().nullable(),
+  haulerProviderLabel: z.string().nullable(),
+  providerSynced: z.boolean()
 });
 
 export const adminLocationsResponseSchema = z.object({

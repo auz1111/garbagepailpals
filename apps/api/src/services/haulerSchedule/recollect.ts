@@ -34,7 +34,22 @@ type SuggestItem = {
   place_id?: string;
   type?: string;
   name?: string;
+  // Some ReCollect areas assign different service ids to different parcels
+  // (collection zones/programs), so the suggest result is authoritative.
+  service_id?: number;
 };
+
+// We store `${place_id}::${serviceId}` as the externalId so a later refresh uses
+// the parcel's own service id. Legacy rows are a bare place_id.
+function encodeExternalId(placeId: string, serviceId: number): string {
+  return `${placeId}::${serviceId}`;
+}
+
+function decodeExternalId(externalId: string, fallbackServiceId: number): { placeId: string; serviceId: number } {
+  const [placeId, sid] = externalId.split("::");
+  const parsed = sid ? Number(sid) : NaN;
+  return { placeId: placeId ?? externalId, serviceId: Number.isFinite(parsed) ? parsed : fallbackServiceId };
+}
 
 type RepeatData = { repeat_data?: { frequency?: string } };
 type RecollectEvent = {
@@ -217,10 +232,12 @@ export function createRecollectProvider(config: RecollectConfig): HaulerProvider
       }
 
       // 2. Pull the calendar events for that place and normalize to streams.
+      // Use the parcel's own service id (from the suggest result) when present.
+      const serviceId = match.service_id ?? config.serviceId;
       const now = new Date();
       const after = now.toISOString().slice(0, 10);
       const before = new Date(now.getTime() + WINDOW_DAYS * 86_400_000).toISOString().slice(0, 10);
-      const events = await fetchEvents(match.place_id, config.serviceId, after, before);
+      const events = await fetchEvents(match.place_id, serviceId, after, before);
 
       const streams = toStreams(events);
       const garbage = streams.find((s) => s.kind === "GARBAGE");
@@ -239,11 +256,12 @@ export function createRecollectProvider(config: RecollectConfig): HaulerProvider
       if (!suggestion.matched) {
         return null;
       }
-      return { externalId: match.place_id, suggestion };
+      return { externalId: encodeExternalId(match.place_id, serviceId), suggestion };
     },
 
     async getUpcomingPickups(req: UpcomingPickupsRequest): Promise<HaulerUpcomingPickup[] | null> {
-      const events = await fetchEvents(req.externalId, config.serviceId, req.from, req.to);
+      const { placeId, serviceId } = decodeExternalId(req.externalId, config.serviceId);
+      const events = await fetchEvents(placeId, serviceId, req.from, req.to);
       if (events.length === 0) {
         return null;
       }

@@ -14,6 +14,8 @@ type PickupDay = {
   biweeklyAnchorDate: Date | null;
   curbOutOffsetHours: number;
   rollIn: boolean;
+  // Only days synced to the trash provider follow its holiday shifts/skips.
+  providerSynced?: boolean;
 };
 
 type SchedulerAddress = {
@@ -205,9 +207,10 @@ export function calculateJobsForAddress(
 
   // Each pickup day carries its own weekday, cadence, and roll-in choice.
   for (const pickup of schedules) {
-    // Reconcile against the hauler only for the pickup day that matches the
-    // hauler's normal garbage weekday; other days keep the standard behavior.
-    const reconcile = hauler !== null && hauler.baseWeekday === pickup.pickupDayOfWeek;
+    // Reconcile against the trash provider only for days the customer/admin
+    // synced to it (their weekday tracks the provider's collection day); other
+    // days keep the standard behavior.
+    const reconcile = hauler !== null && pickup.providerSynced === true;
 
     for (let i = 0; i < lookaheadDays; i += 1) {
       const day = start.plus({ days: i });
@@ -238,7 +241,7 @@ export function calculateJobsForAddress(
                 type: "CURB_OUT",
                 status: "SKIPPED",
                 shiftedFromDate: null,
-                shiftReason: "No collection this week (hauler holiday)"
+                shiftReason: "No collection this week (provider holiday)"
               });
             }
             continue;

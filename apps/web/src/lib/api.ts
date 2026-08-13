@@ -253,6 +253,20 @@ export function getHaulerCoverage(accessToken: string): Promise<HaulerCoverageRe
   );
 }
 
+// Run the hauler lookup for an existing location and seed the cache so the
+// scheduler can apply holiday shifts. Returns the resulting suggestion.
+export function connectHauler(
+  addressId: string,
+  accessToken: string
+): Promise<PickupScheduleSuggestion> {
+  return request<undefined, PickupScheduleSuggestion>(
+    `/ops-admin/locations/${addressId}/connect-hauler`,
+    "POST",
+    undefined,
+    accessToken
+  );
+}
+
 export function setLocationNeighborhood(
   addressId: string,
   neighborhoodId: string | null,

@@ -17,6 +17,7 @@ import {
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { allowedZoneIds } from "../lib/zoneScope";
+import { describeProviders, haulerAddressHash } from "../services/haulerSchedule";
 
 const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
 
@@ -34,6 +35,7 @@ type ScheduleRow = {
   rollIn: boolean;
   glassRecycling: boolean;
   petWasteDogs: number;
+  providerSynced: boolean;
   biweeklyAnchorDate: Date | null;
 };
 
@@ -96,7 +98,24 @@ function toAdminUser(row: UserAggregateRow) {
   };
 }
 
-function toAdminUserDetail(row: UserAggregateRow) {
+async function toAdminUserDetail(row: UserAggregateRow) {
+  // Batch-resolve which hauler (if any) each location is connected to, from the
+  // lookup cache keyed by normalized address hash.
+  const hashOf = (a: { line1: string; city: string; state: string; postalCode: string }) =>
+    haulerAddressHash({ line1: a.line1, city: a.city, state: a.state, postalCode: a.postalCode });
+  const hashes = row.serviceAddresses.map(hashOf);
+  const linkRows = hashes.length
+    ? await prisma.haulerScheduleLookup
+        .findMany({
+          where: { matched: true, addressHash: { in: hashes } },
+          select: { addressHash: true, provider: true }
+        })
+        .catch(() => [])
+    : [];
+  const providerByHash = new Map(linkRows.map((r) => [r.addressHash, r.provider]));
+  const providers = describeProviders();
+  const labelFor = (id: string) => providers.find((p) => p.id === id)?.label ?? id;
+
   return {
     ...toAdminUser(row),
     grantedZoneIds: row.zones.map((z) => z.zoneId),
@@ -110,6 +129,10 @@ function toAdminUserDetail(row: UserAggregateRow) {
       neighborhoodId: address.neighborhoodId,
       glassRecycling: address.schedules.some((s) => s.glassRecycling),
       monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
+      haulerProvider: providerByHash.get(hashOf(address)) ?? null,
+      haulerProviderLabel: providerByHash.has(hashOf(address))
+        ? labelFor(providerByHash.get(hashOf(address))!)
+        : null,
       pickups: [...address.schedules]
         .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
         .map((s) => ({
@@ -119,6 +142,7 @@ function toAdminUserDetail(row: UserAggregateRow) {
           rollIn: s.rollIn,
           glassRecycling: s.glassRecycling,
           petWasteDogs: s.petWasteDogs,
+          providerSynced: s.providerSynced,
           biweeklyAnchorDate: s.biweeklyAnchorDate?.toISOString()
         }))
     }))
@@ -165,7 +189,7 @@ export async function adminUsersHandler(
           });
           return jsonResponse(
             201,
-            adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
+            adminUserResponseSchema.parse({ user: await toAdminUserDetail(row as unknown as UserAggregateRow) })
           );
         }
 
@@ -240,7 +264,7 @@ export async function adminUserByIdHandler(
 
         return jsonResponse(
           200,
-          adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
+          adminUserResponseSchema.parse({ user: await toAdminUserDetail(row as unknown as UserAggregateRow) })
         );
       },
       { roles: ["ADMIN"] }
@@ -467,7 +491,7 @@ export async function adminUserZonesHandler(
         }
         return jsonResponse(
           200,
-          adminUserResponseSchema.parse({ user: toAdminUserDetail(row as unknown as UserAggregateRow) })
+          adminUserResponseSchema.parse({ user: await toAdminUserDetail(row as unknown as UserAggregateRow) })
         );
       },
       { roles: ["ADMIN"] }

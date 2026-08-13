@@ -316,6 +316,24 @@ export async function lookupPickupSchedule(input: HaulerLookupInput): Promise<Pi
   return suggestion;
 }
 
+// The hauler an address is currently connected to (a matched cache row exists),
+// with a display label. Null when the address has no hauler lookup yet.
+export async function getHaulerLink(
+  input: HaulerLookupInput
+): Promise<{ provider: string; providerLabel: string } | null> {
+  const row = await prisma.haulerScheduleLookup
+    .findUnique({
+      where: { addressHash: haulerAddressHash(input) },
+      select: { matched: true, provider: true }
+    })
+    .catch(() => null);
+  if (!row?.matched) {
+    return null;
+  }
+  const label = describeProviders().find((p) => p.id === row.provider)?.label ?? row.provider;
+  return { provider: row.provider, providerLabel: label };
+}
+
 // Read the cached concrete upcoming pickups for an address, if present/valid.
 export async function getCachedUpcoming(addressHash: string): Promise<HaulerUpcoming | null> {
   const row = await prisma.haulerScheduleLookup.findUnique({ where: { addressHash } }).catch(() => null);
