@@ -279,7 +279,7 @@ export function AddLocationWizard({
             </p>
             <ul className="pickup-day-list">
               {manualDays.map((d, idx) => (
-                <li className="pickup-day-card" key={idx}>
+                <li className="manual-day-card" key={idx}>
                   <div className="field-row">
                     <label>
                       Pickup day

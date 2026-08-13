@@ -2562,6 +2562,24 @@ a {
   overflow: hidden;
 }
 
+/* Manually-added pickup day (add-location wizard) — padded so fields don't hug
+   the card border. */
+.manual-day-card {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--teal-bright);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  padding: 1rem 1.15rem 1.15rem;
+}
+.manual-day-card .field-row {
+  align-items: end;
+  gap: 1rem;
+}
+.manual-day-card .link-button {
+  align-self: center;
+  white-space: nowrap;
+}
+
 .pickup-day-top {
   display: flex;
   align-items: center;
