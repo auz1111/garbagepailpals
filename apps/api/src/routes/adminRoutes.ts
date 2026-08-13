@@ -66,7 +66,8 @@ type ServiceWork = {
 
 // The cart-handling work due on the operating day `now`:
 //  - Roll OUT the cart the evening before pickup  → pickups scheduled TOMORROW.
-//  - Roll IN the cart the day after pickup (opted-in) → pickups that were YESTERDAY.
+//  - Roll IN the cart the same day as pickup, after collection (opted-in)
+//    → pickups scheduled TODAY.
 // A location can need both on the same day (e.g. two pickups a week).
 //
 // Provider-synced pickup days are reconciled against the trash provider's actual

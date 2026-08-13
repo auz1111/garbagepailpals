@@ -142,10 +142,12 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
     if (!subscriptionId) continue;
 
     const zone = resolveZone(a.timezone);
+    // Roll OUT the evening before pickup → pickups scheduled TOMORROW.
+    // Roll IN the same day as pickup, after collection → pickups scheduled TODAY.
     const rollOutWeekday = weekdayInZone(now, zone, 1);
-    const rollInWeekday = weekdayInZone(now, zone, -1);
+    const rollInWeekday = weekdayInZone(now, zone, 0);
     const rollOutDay = zonedDay(now, zone, 1);
-    const rollInDay = zonedDay(now, zone, -1);
+    const rollInDay = zonedDay(now, zone, 0);
 
     const hash = haulerAddressHash({
       line1: a.line1,
@@ -179,7 +181,8 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
     };
 
     // Reconcile one roll action (roll-out for tomorrow's pickup, roll-in for
-    // yesterday's) against the provider's actual dates when the day is synced.
+    // today's — after collection) against the provider's actual dates when the
+    // day is synced.
     const reconcileAction = (
       weekday: number,
       day: ReturnType<typeof zonedDay>,

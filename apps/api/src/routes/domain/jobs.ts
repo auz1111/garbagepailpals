@@ -74,7 +74,7 @@ export async function generateJobsHandler(
           userId: auth.role === "ADMIN" ? undefined : auth.sub
         });
 
-        return jsonResponse(200, { created: result.created });
+        return jsonResponse(200, { created: result.created, pruned: result.pruned });
       },
       { roles: ["CUSTOMER", "ADMIN"] }
     )(request, context)

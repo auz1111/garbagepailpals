@@ -718,8 +718,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
             <strong>We handle it all automatically.</strong>
             <p className="subtext">
               For every pickup day, we roll your carts <b>out</b> the evening before and roll them{" "}
-              <b>in</b> the day after — no reminders needed. New dates appear here on their own; there's
-              nothing for you to run.
+              <b>in</b> the same day, after the hauler collects — no reminders needed. New dates appear
+              here on their own; there's nothing for you to run.
             </p>
           </div>
         </article>
@@ -1412,10 +1412,10 @@ function LocationDetail({
                         onChange={(event) => updateDay(idx, { rollIn: event.target.checked })}
                       />
                       <span>
-                        <strong>Bring cans back the next day (roll-in)</strong>
+                        <strong>Bring cans back the same day (roll-in)</strong>
                         <span className="subtext">
                           {day.rollIn
-                            ? "Included — we return the cans the day after pickup."
+                            ? "Included — we return the cans the same day, after the hauler collects."
                             : `We'll only roll out — saves ${formatUsd(
                                 cansToCanCount(day.cans) * PRICING.rollInCreditMonthlyCentsPerCan
                               )}/mo on this day.`}

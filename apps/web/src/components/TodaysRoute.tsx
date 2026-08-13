@@ -486,7 +486,7 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
         <h2>Today's Routes</h2>
         <p className="subtext">
           Pick a service area, then assign operators an optimized route of that area's cart
-          roll-outs (for tomorrow's pickups) and roll-ins (from yesterday's).
+          roll-outs (for tomorrow's pickups) and roll-ins (for today's pickups, after collection).
         </p>
       </div>
 

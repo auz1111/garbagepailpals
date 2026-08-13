@@ -30,6 +30,13 @@ describe("calculateJobsForAddress", () => {
     expect(jobs.length).toBe(2);
     expect(jobs[0]?.type).toBe("CURB_OUT");
     expect(jobs[1]?.type).toBe("CURB_IN");
+
+    // Roll-in is the SAME day as pickup (afternoon, after collection) — the
+    // curb-out is the evening before, so the two are < ~31h apart, not ~44h.
+    const outMs = jobs[0]!.scheduledDate.getTime();
+    const inMs = jobs[1]!.scheduledDate.getTime();
+    expect(inMs).toBeGreaterThan(outMs);
+    expect(inMs - outMs).toBeLessThan(31 * 3600 * 1000);
   });
 
   it("omits the roll-in job when the day opts out of roll-in", () => {

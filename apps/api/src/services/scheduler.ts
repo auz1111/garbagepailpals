@@ -9,6 +9,10 @@ type Cadence = "WEEKLY" | "BIWEEKLY";
 type ServiceJobType = "CURB_OUT" | "CURB_IN";
 type ServiceJobStatus = "SCHEDULED" | "SKIPPED";
 
+// Roll-in happens the SAME day as pickup, after the hauler has collected. We
+// schedule it late afternoon (local) so it lands after typical collection times.
+const CURB_IN_HOUR_LOCAL = 18;
+
 type PickupDay = {
   pickupDayOfWeek: number;
   cadence: Cadence;
@@ -123,8 +127,9 @@ export function calculateJobsForAddress(
   const jobs: PendingJob[] = [];
   const streams = haulerUpcoming ? parseHaulerStreams(haulerUpcoming, timezone) : null;
 
-  // Emit the curb-out (and, if kept, next-day curb-in) for a pickup landing on
-  // `effective`. `shiftedFrom` carries the would-be normal date when shifted.
+  // Emit the curb-out (the evening before) and, if kept, the SAME-day curb-in
+  // (after the hauler collects) for a pickup landing on `effective`.
+  // `shiftedFrom` carries the would-be normal date when shifted.
   const emit = (
     effective: DateTime,
     pickup: PickupDay,
@@ -144,14 +149,17 @@ export function calculateJobsForAddress(
       shiftReason: reason
     });
     if (pickup.rollIn) {
-      const curbIn = effective.plus({ days: 1, hours: 8 });
+      // Same day as pickup, late afternoon — after collection.
+      const curbIn = effective.set({ hour: CURB_IN_HOUR_LOCAL, minute: 0, second: 0, millisecond: 0 });
       jobs.push({
         serviceAddressId,
         subscriptionId,
         scheduledDate: curbIn.toUTC().toJSDate(),
         type: "CURB_IN",
         status: "SCHEDULED",
-        shiftedFromDate: shiftedFrom ? shiftedFrom.plus({ days: 1, hours: 8 }).toUTC().toJSDate() : null,
+        shiftedFromDate: shiftedFrom
+          ? shiftedFrom.set({ hour: CURB_IN_HOUR_LOCAL, minute: 0, second: 0, millisecond: 0 }).toUTC().toJSDate()
+          : null,
         shiftReason: reason
       });
     }
@@ -238,7 +246,7 @@ export function calculateJobsForAddress(
 export async function runNightlyJobGeneration(
   now = new Date(),
   options: { force?: boolean; userId?: string } = {}
-): Promise<{ created: number }> {
+): Promise<{ created: number; pruned: number }> {
   const lookahead = env.SCHEDULER_LOOKAHEAD_DAYS;
 
   const subscriptions = (await prisma.subscription.findMany({
@@ -269,6 +277,7 @@ export async function runNightlyJobGeneration(
   });
 
   let created = 0;
+  let pruned = 0;
 
   for (const subscription of subscriptions) {
     if (!options.force && !shouldRunForAddressNow(subscription.serviceAddress.timezone, now)) {
@@ -312,6 +321,35 @@ export async function runNightlyJobGeneration(
       haulerUpcoming
     );
 
+    // Self-heal: remove stale future jobs that this recompute no longer produces
+    // (e.g. a roll-in that moved off its old day when the schedule changed). We
+    // only touch pristine auto-generated rows — SCHEDULED, not yet completed, and
+    // not yet handed to an operator — so nothing an operator has acted on is lost.
+    const computedKeys = new Set(jobs.map((j) => `${j.type}@${j.scheduledDate.getTime()}`));
+    const maxComputedMs = jobs.reduce((m, j) => Math.max(m, j.scheduledDate.getTime()), 0);
+    // Cover the full lookahead (plus a 2-day buffer) rather than only the last
+    // computed job. A stale day-AFTER roll-in sits one day past its pickup — just
+    // beyond the last same-day roll-in — so a window capped at maxComputed would
+    // always let the final week's orphan escape.
+    const pruneThrough = new Date(Math.max(requiredThrough.getTime(), maxComputedMs) + 2 * 864e5);
+    const futureJobs = await prisma.serviceJob.findMany({
+      where: {
+        serviceAddressId: address.id,
+        status: "SCHEDULED",
+        completedAt: null,
+        assignedOperatorId: null,
+        scheduledDate: { gte: now, lte: pruneThrough }
+      },
+      select: { id: true, scheduledDate: true, type: true }
+    });
+    const staleIds = futureJobs
+      .filter((j) => !computedKeys.has(`${j.type}@${j.scheduledDate.getTime()}`))
+      .map((j) => j.id);
+    if (staleIds.length > 0) {
+      await prisma.serviceJob.deleteMany({ where: { id: { in: staleIds } } });
+      pruned += staleIds.length;
+    }
+
     for (const job of jobs) {
       await prisma.serviceJob.upsert({
         where: {
@@ -336,5 +374,5 @@ export async function runNightlyJobGeneration(
     }
   }
 
-  return { created };
+  return { created, pruned };
 }

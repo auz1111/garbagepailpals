@@ -1619,10 +1619,10 @@ function AdminScheduleEditorForm({
                     onChange={(event) => updateDay(idx, { rollIn: event.target.checked })}
                   />
                   <span>
-                    <strong>Bring cans back the next day (roll-in)</strong>
+                    <strong>Bring cans back the same day (roll-in)</strong>
                     <span className="subtext">
                       {day.rollIn
-                        ? "Included — we return the cans the day after pickup."
+                        ? "Included — we return the cans the same day, after the hauler collects."
                         : `Roll-out only — saves ${formatUsd(
                             cansToCanCount(day.cans) * PRICING.rollInCreditMonthlyCentsPerCan
                           )}/mo on this day.`}
