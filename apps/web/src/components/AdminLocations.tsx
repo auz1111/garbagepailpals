@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { formatUsd } from "@gpp/shared";
-import { getAdminLocations, getNeighborhoods, getZones } from "../lib/api";
+import { getAdminLocations, getNeighborhoods, getZones, setLocationApproval } from "../lib/api";
 
 type AdminLocationsProps = { accessToken: string };
 
@@ -15,10 +15,12 @@ function getErrorMessage(error: unknown): string {
 export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
+  const queryClient = useQueryClient();
   const zoneFilter = searchParams.get("zone") ?? "";
   const neighborhoodFilter = searchParams.get("neighborhood") ?? "";
+  const statusFilter = searchParams.get("filter") ?? ""; // "", "pending", "approved"
 
-  const setFilter = (key: "zone" | "neighborhood", value: string) => {
+  const setFilter = (key: "zone" | "neighborhood" | "filter", value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
@@ -30,6 +32,13 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
   const locationsQuery = useQuery({
     queryKey: ["admin-locations"],
     queryFn: async () => getAdminLocations(accessToken)
+  });
+  const approvalMutation = useMutation({
+    mutationFn: (id: string) => setLocationApproval(id, true, accessToken),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-metrics"] });
+    }
   });
   const zonesQuery = useQuery({ queryKey: ["zones"], queryFn: async () => getZones(accessToken) });
   const neighborhoodsQuery = useQuery({
@@ -49,13 +58,15 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
     return locations.filter((l) => {
       if (zoneFilter && l.zoneId !== zoneFilter) return false;
       if (neighborhoodFilter && l.neighborhoodId !== neighborhoodFilter) return false;
+      if (statusFilter === "pending" && l.serviceApproved) return false;
+      if (statusFilter === "approved" && !l.serviceApproved) return false;
       if (q) {
         const hay = `${l.line1} ${l.city} ${l.state} ${l.postalCode} ${l.customerName}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-  }, [locations, zoneFilter, neighborhoodFilter, search]);
+  }, [locations, zoneFilter, neighborhoodFilter, statusFilter, search]);
 
   const totalMonthly = filtered.reduce((sum, l) => sum + l.monthlyCents, 0);
 
@@ -96,6 +107,14 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
               ))}
             </select>
           </label>
+          <label className="loc-filter">
+            <span>Status</span>
+            <select value={statusFilter} onChange={(e) => setFilter("filter", e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="pending">Pending approval</option>
+              <option value="approved">Approved</option>
+            </select>
+          </label>
           <label className="loc-filter loc-filter-search">
             <span>Search</span>
             <input
@@ -134,6 +153,23 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                 </Link>
                 <div className="loc-row-price">{formatUsd(l.monthlyCents)}/mo</div>
                 <div className="loc-row-tags">
+                  {l.serviceApproved ? (
+                    <span className="loc-chip is-approved">✓ Approved</span>
+                  ) : (
+                    <>
+                      <span className="loc-chip is-pending">
+                        ⏳ Pending approval{l.billed ? " · billed" : ""}
+                      </span>
+                      <button
+                        type="button"
+                        className="loc-approve-btn"
+                        disabled={approvalMutation.isPending}
+                        onClick={() => approvalMutation.mutate(l.id)}
+                      >
+                        Approve
+                      </button>
+                    </>
+                  )}
                   {l.zoneName ? <span className="loc-chip is-zone">{l.zoneName}</span> : null}
                   {l.neighborhoodName ? (
                     <span className="loc-chip">{l.neighborhoodName}</span>

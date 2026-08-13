@@ -58,6 +58,7 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
       pickupsPerWeek: address.schedules.length,
       monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay)),
       covered,
+      serviceApproved: address.serviceApprovedAt != null,
       status: sub?.status ?? null
     };
   });

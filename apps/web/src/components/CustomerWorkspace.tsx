@@ -844,6 +844,18 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   );
 }
 
+// The service-status badge for a location: covered but not yet admin-approved
+// shows "Pending approval" so the customer knows why a paid location isn't live.
+function coverageBadge(
+  covered: boolean | undefined,
+  approved: boolean
+): { cls: string; text: string } | null {
+  if (covered === undefined) return null;
+  if (!covered) return { cls: "uncovered", text: "Not serviced" };
+  if (!approved) return { cls: "pending", text: "⏳ Pending approval" };
+  return { cls: "covered", text: "✓ Serviced" };
+}
+
 function scheduleSummary(address: ServiceAddress): string {
   const days = address.schedules ?? [];
   if (days.length === 0) {
@@ -891,11 +903,10 @@ function AddressRow({
           <span className="subtext">
             {address.city}, {address.state} {address.postalCode}
           </span>
-          {covered !== undefined ? (
-            <span className={`coverage-badge ${covered ? "covered" : "uncovered"}`}>
-              {covered ? "✓ Serviced" : "Not serviced"}
-            </span>
-          ) : null}
+          {(() => {
+            const b = coverageBadge(covered, address.serviceApproved);
+            return b ? <span className={`coverage-badge ${b.cls}`}>{b.text}</span> : null;
+          })()}
         </div>
       </div>
       <div className="address-row-meta">
@@ -1174,11 +1185,10 @@ function LocationDetail({
         <h2>{address.line1}</h2>
         <p className="subtext">
           {address.city}, {address.state} {address.postalCode}
-          {covered !== undefined ? (
-            <span className={`coverage-badge ${covered ? "covered" : "uncovered"}`}>
-              {covered ? "✓ Serviced" : "Not serviced"}
-            </span>
-          ) : null}
+          {(() => {
+            const b = coverageBadge(covered, address.serviceApproved);
+            return b ? <span className={`coverage-badge ${b.cls}`}>{b.text}</span> : null;
+          })()}
           {!editingAddress ? (
             <>
               {" · "}

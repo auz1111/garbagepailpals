@@ -244,7 +244,9 @@ export async function runNightlyJobGeneration(
   const subscriptions = (await prisma.subscription.findMany({
     where: {
       status: { in: ["ACTIVE", "TRIALING"] },
-      serviceAddress: { isActive: true },
+      // A location must be admin-approved before we generate any pickups for it
+      // (so unapproved locations show no upcoming dates to the customer either).
+      serviceAddress: { isActive: true, serviceApprovedAt: { not: null } },
       ...(options.userId ? { userId: options.userId } : {})
     },
     include: {

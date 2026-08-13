@@ -145,6 +145,10 @@ model ServiceAddress {
   pickupsPerWeek   Int               @default(1)
   rollIn           Boolean           @default(true)
   isActive         Boolean           @default(true)
+  // A location isn't serviceable (routable / counted / job-generating) until an
+  // admin approves it, even once billing is active. Null = pending approval.
+  serviceApprovedAt   DateTime?
+  serviceApprovedById String?
   neighborhoodId   String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt

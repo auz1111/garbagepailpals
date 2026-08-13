@@ -7,6 +7,7 @@ import {
   adminLocationsResponseSchema,
   haulerCoverageResponseSchema,
   isSuperAdminRole,
+  locationApprovalSchema,
   neighborhoodCreateSchema,
   neighborhoodUpdateSchema,
   neighborhoodsResponseSchema,
@@ -288,7 +289,12 @@ export async function adminLocationsHandler(
           include: {
             user: { select: { name: true } },
             neighborhood: { include: { zone: true } },
-            schedules: true
+            schedules: true,
+            subscriptions: {
+              where: { status: { in: ["ACTIVE", "TRIALING"] } },
+              select: { id: true },
+              take: 1
+            }
           }
         });
 
@@ -328,6 +334,8 @@ export async function adminLocationsHandler(
                 canCount: a.canCount,
                 glassRecycling: a.schedules.some((s) => s.glassRecycling),
                 petWaste: a.schedules.some((s) => s.petWasteDogs > 0),
+                serviceApproved: a.serviceApprovedAt != null,
+                billed: a.subscriptions.length > 0,
                 pickupDays: a.schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
                 haulerProvider: provider,
                 haulerProviderLabel: provider ? labelFor(provider) : null,
@@ -409,6 +417,53 @@ export async function adminLocationByIdHandler(
         const { neighborhoodId } = await parseJson(req, adminLocationNeighborhoodUpdateSchema);
         await prisma.serviceAddress.update({ where: { id: addressId }, data: { neighborhoodId } });
         return jsonResponse(200, { ok: true });
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Admin approves (or revokes) a location for service. Until approved, a location
+// is never routed, counted toward today's work, or job-generating — even when
+// billing is active.
+export async function adminLocationApprovalHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const addressId = req.params.addressId;
+        if (!addressId) {
+          throw new HttpError(400, "addressId is required");
+        }
+        const { approved } = await parseJson(req, locationApprovalSchema);
+        const existing = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
+        if (!existing) {
+          throw new HttpError(404, "Location not found");
+        }
+        await prisma.serviceAddress.update({
+          where: { id: addressId },
+          data: {
+            serviceApprovedAt: approved ? new Date() : null,
+            serviceApprovedById: approved ? auth.sub : null
+          }
+        });
+        await prisma.auditLog.create({
+          data: {
+            actorUserId: auth.sub,
+            action: approved ? "admin.location.approved" : "admin.location.unapproved",
+            entityType: "ServiceAddress",
+            entityId: addressId,
+            metadata: { approved }
+          }
+        });
+        return jsonResponse(200, { ok: true, serviceApproved: approved });
       },
       { roles: ["ADMIN"] }
     )(request, context)

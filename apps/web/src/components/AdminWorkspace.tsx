@@ -39,6 +39,7 @@ import {
   getAdminIncidents,
   getAdminRuntimeMetrics,
   getZones,
+  setLocationApproval,
   setUserZones,
   reopenAdminIncident,
   resolveAdminIncident
@@ -456,6 +457,26 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
 
       <TodaysRoutesHero accessToken={accessToken} />
 
+      {metrics && metrics.service.pendingApproval > 0 ? (
+        <div className="update-banner is-warn" role="status">
+          <span className="update-banner-icon" aria-hidden="true">⏳</span>
+          <div className="update-banner-text">
+            <strong>
+              {metrics.service.pendingApproval} location
+              {metrics.service.pendingApproval === 1 ? "" : "s"} awaiting approval
+            </strong>
+            <span>
+              {metrics.service.pendingApprovalBilled > 0
+                ? `${metrics.service.pendingApprovalBilled} already being billed — approve to start service.`
+                : "Approve them to make them serviceable and routable."}
+            </span>
+          </div>
+          <Link to="/admin/locations?filter=pending" className="update-banner-cta">
+            Review
+          </Link>
+        </div>
+      ) : null}
+
       {!metrics ? (
         <p className="subtext">{metricsQuery.isLoading ? "Loading metrics..." : "No metrics available yet."}</p>
       ) : (
@@ -474,10 +495,11 @@ export function AdminWorkspace({ user, accessToken, refreshUser }: AdminWorkspac
           <MetricCard
             icon="🗑️"
             title="Service"
+            to="/admin/locations"
             rows={[
               ["Active addresses", metrics.service.addresses],
               ["Active subscriptions", metrics.service.activeSubscriptions],
-              ["Active entitlements", metrics.service.activeEntitlements]
+              ["Pending approval", metrics.service.pendingApproval]
             ]}
           />
           <MetricCard
@@ -1156,6 +1178,17 @@ function AdminLocationCard({
     }
   });
 
+  const approvalMutation = useMutation({
+    mutationFn: (approved: boolean) => setLocationApproval(loc.id, approved, accessToken),
+    onSuccess: async () => {
+      // Approval flips serviceability, so refresh the location, dashboard, and
+      // route views that key off it.
+      await refreshLists();
+      await queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-metrics"] });
+    }
+  });
+
   return (
     <li className="admin-loc-card" id={`address-${loc.id}`}>
       <div className="admin-loc-head">
@@ -1171,6 +1204,11 @@ function AdminLocationCard({
               <span className="loc-chip is-provider">♻️ {loc.haulerProviderLabel ?? "Provider linked"}</span>
             ) : (
               <span className="loc-chip is-none">No trash provider</span>
+            )}
+            {loc.serviceApproved ? (
+              <span className="loc-chip is-approved">✓ Approved</span>
+            ) : (
+              <span className="loc-chip is-pending">⏳ Pending approval</span>
             )}
           </div>
           <span className="admin-table-sub">
@@ -1221,6 +1259,25 @@ function AdminLocationCard({
         />
       ) : editingAddress ? null : (
         <div className="admin-loc-actions">
+          {loc.serviceApproved ? (
+            <button
+              type="button"
+              className="ghost-btn"
+              disabled={approvalMutation.isPending}
+              onClick={() => approvalMutation.mutate(false)}
+            >
+              {approvalMutation.isPending ? "Saving…" : "Revoke approval"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="cta-primary"
+              disabled={approvalMutation.isPending}
+              onClick={() => approvalMutation.mutate(true)}
+            >
+              {approvalMutation.isPending ? "Approving…" : "✓ Approve for service"}
+            </button>
+          )}
           <button type="button" className="ghost-btn" onClick={() => setEditing(true)}>
             Edit schedule
           </button>

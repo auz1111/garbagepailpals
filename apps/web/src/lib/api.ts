@@ -270,6 +270,20 @@ export function connectHauler(
   );
 }
 
+// Admin approves (or revokes) a location for service.
+export function setLocationApproval(
+  addressId: string,
+  approved: boolean,
+  accessToken: string
+): Promise<{ ok: boolean; serviceApproved: boolean }> {
+  return request<{ approved: boolean }, { ok: boolean; serviceApproved: boolean }>(
+    `/ops-admin/locations/${addressId}/approval`,
+    "POST",
+    { approved },
+    accessToken
+  );
+}
+
 export function setLocationNeighborhood(
   addressId: string,
   neighborhoodId: string | null,

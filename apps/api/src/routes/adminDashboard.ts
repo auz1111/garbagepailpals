@@ -56,6 +56,7 @@ type AddressRow = {
   state: string;
   postalCode: string;
   neighborhoodId: string | null;
+  serviceApprovedAt: Date | null;
   schedules: ScheduleRow[];
 };
 
@@ -135,6 +136,7 @@ async function toAdminUserDetail(row: UserAggregateRow) {
       postalCode: address.postalCode,
       neighborhoodId: address.neighborhoodId,
       glassRecycling: address.schedules.some((s) => s.glassRecycling),
+      serviceApproved: address.serviceApprovedAt != null,
       monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
       haulerProvider: providerByHash.get(hashOf(address)) ?? null,
       haulerProviderLabel: providerByHash.has(hashOf(address))
@@ -370,6 +372,19 @@ export async function adminDashboardMetricsHandler(
         const activeSubscriptions = await prisma.subscription.count({ where: { status: "ACTIVE" } });
         const activeEntitlements = await prisma.entitlement.count({ where: { status: "ACTIVE" } });
 
+        // Locations awaiting admin approval, and how many of those are already
+        // being billed (customer paying while they wait).
+        const pendingApproval = await prisma.serviceAddress.count({
+          where: { isActive: true, serviceApprovedAt: null }
+        });
+        const pendingApprovalBilled = await prisma.serviceAddress.count({
+          where: {
+            isActive: true,
+            serviceApprovedAt: null,
+            subscriptions: { some: { status: { in: ["ACTIVE", "TRIALING"] } } }
+          }
+        });
+
         const scheduledNext7Days = await prisma.serviceJob.count({
           where: { scheduledDate: { gte: now, lte: in7Days }, status: "SCHEDULED" }
         });
@@ -408,7 +423,9 @@ export async function adminDashboardMetricsHandler(
           service: {
             addresses,
             activeSubscriptions,
-            activeEntitlements
+            activeEntitlements,
+            pendingApproval,
+            pendingApprovalBilled
           },
           jobs: {
             scheduledNext7Days,

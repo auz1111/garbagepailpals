@@ -71,6 +71,7 @@ function toAddressResponse(address: {
   pickupsPerWeek: number;
   rollIn: boolean;
   isActive: boolean;
+  serviceApprovedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   schedules?: ScheduleRow[];
@@ -81,6 +82,7 @@ function toAddressResponse(address: {
     lng: address.lng.toNumber(),
     line2: address.line2 ?? undefined,
     gateCode: address.gateCode ?? undefined,
+    serviceApproved: address.serviceApprovedAt != null,
     createdAt: address.createdAt.toISOString(),
     updatedAt: address.updatedAt.toISOString(),
     schedules: (address.schedules ?? [])

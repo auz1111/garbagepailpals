@@ -53,6 +53,8 @@ async function loadServiceableAddresses(scope: WorkScope) {
   return prisma.serviceAddress.findMany({
     where: {
       isActive: true,
+      // Only admin-approved locations are serviceable (routable / counted).
+      serviceApprovedAt: { not: null },
       ...(scope.neighborhoodId ? { neighborhoodId: scope.neighborhoodId } : {}),
       ...(scope.zoneIds ? { neighborhood: { zoneId: { in: scope.zoneIds } } } : {}),
       subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },

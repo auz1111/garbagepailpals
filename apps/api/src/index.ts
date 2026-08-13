@@ -61,6 +61,7 @@ import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adm
 import {
   adminConnectHaulerHandler,
   adminHaulerCoverageHandler,
+  adminLocationApprovalHandler,
   adminLocationByIdHandler,
   adminLocationsHandler,
   adminNeighborhoodByIdHandler,
@@ -363,6 +364,13 @@ app.http("admin-location-connect-hauler", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminConnectHaulerHandler
+});
+
+app.http("admin-location-approval", {
+  route: "ops-admin/locations/{addressId}/approval",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminLocationApprovalHandler
 });
 
 app.http("operator-availability", {

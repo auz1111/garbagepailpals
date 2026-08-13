@@ -2951,6 +2951,38 @@ a {
   color: var(--warn-ink);
 }
 
+.coverage-badge.pending {
+  background: #fff4d6;
+  color: #92600a;
+}
+
+/* Location approval chips (admin) */
+.loc-chip.is-approved {
+  background: #dcfce7;
+  color: #166534;
+}
+.loc-chip.is-pending {
+  background: #fff4d6;
+  color: #92600a;
+}
+.loc-approve-btn {
+  border: 1px solid #16a34a;
+  background: #16a34a;
+  color: #fff;
+  border-radius: var(--pill);
+  padding: 0.15rem 0.7rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.loc-approve-btn:hover {
+  background: #15803d;
+}
+.loc-approve-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 @media (max-width: 560px) {
   .field-row {
     grid-template-columns: 1fr;

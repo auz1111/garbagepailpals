@@ -305,6 +305,9 @@ export const serviceAddressSchema = serviceAddressInputSchema.extend({
   userId: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // Whether an admin has approved this location for service. Until then it's not
+  // routed, counted, or job-generating — even with active billing.
+  serviceApproved: z.boolean().default(false),
   // Every pickup day configured for this location.
   schedules: z.array(pickupDaySchema).default([])
 });
@@ -466,6 +469,9 @@ export const billingAddressSummarySchema = z.object({
   pickupsPerWeek: z.number().int(),
   monthlyCents: z.number().int().nonnegative(),
   covered: z.boolean(),
+  // Whether an admin has approved this location for service (independent of
+  // billing coverage). A covered-but-unapproved location is awaiting review.
+  serviceApproved: z.boolean().default(false),
   status: z.string().nullable()
 });
 
@@ -553,7 +559,11 @@ export const adminDashboardMetricsSchema = z.object({
   service: z.object({
     addresses: z.number().int().nonnegative(),
     activeSubscriptions: z.number().int().nonnegative(),
-    activeEntitlements: z.number().int().nonnegative()
+    activeEntitlements: z.number().int().nonnegative(),
+    // Locations awaiting admin approval before they can be serviced. Of those,
+    // how many are already being billed (customer paying while they wait).
+    pendingApproval: z.number().int().nonnegative().default(0),
+    pendingApprovalBilled: z.number().int().nonnegative().default(0)
   }),
   jobs: z.object({
     scheduledNext7Days: z.number().int().nonnegative(),
@@ -601,6 +611,8 @@ export const adminUserLocationSchema = z.object({
   neighborhoodId: z.string().nullable(),
   glassRecycling: z.boolean(),
   monthlyCents: z.number().int().nonnegative(),
+  // Whether an admin approved this location for service (independent of billing).
+  serviceApproved: z.boolean().default(false),
   // The trash hauler this location is connected to for schedule lookups /
   // holiday shifts, if any (null = not connected).
   haulerProvider: z.string().nullable(),
@@ -811,6 +823,10 @@ export const adminLocationSchema = z.object({
   glassRecycling: z.boolean(),
   petWaste: z.boolean(),
   monthlyCents: z.number().int().nonnegative(),
+  // Whether an admin approved this location for service (independent of billing).
+  serviceApproved: z.boolean().default(false),
+  // Whether this location is currently being billed (active/trialing sub).
+  billed: z.boolean().default(false),
   // Weekdays (0=Sun..6=Sat) this location is serviced, sorted.
   pickupDays: z.array(z.number().int().min(0).max(6)),
   // Connected trash provider (null = not connected) and whether any pickup day
@@ -823,6 +839,12 @@ export const adminLocationSchema = z.object({
 export const adminLocationsResponseSchema = z.object({
   locations: z.array(adminLocationSchema)
 });
+
+// Admin approve/revoke a location for service.
+export const locationApprovalSchema = z.object({
+  approved: z.boolean()
+});
+export type LocationApproval = z.infer<typeof locationApprovalSchema>;
 
 export const adminLocationNeighborhoodUpdateSchema = z.object({
   neighborhoodId: z.string().nullable()
