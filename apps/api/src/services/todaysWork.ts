@@ -165,7 +165,15 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
           // is its NORMAL day (so the panel can flag shifts/skips affecting today).
           if (s.pickupDayOfWeek === weekday) {
             if (!actual) {
-              return { due: false, schedule: s, providerStatus: "NO_COLLECTION", shiftedTo: null };
+              // A missing week is only a "no collection" (holiday) for a WEEKLY
+              // pickup. For a BIWEEKLY pickup this is just an off-week — normal,
+              // not a provider outage.
+              return {
+                due: false,
+                schedule: s,
+                providerStatus: s.cadence === "WEEKLY" ? "NO_COLLECTION" : "NORMAL",
+                shiftedTo: null
+              };
             }
             return {
               due: false,

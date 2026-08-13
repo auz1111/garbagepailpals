@@ -360,6 +360,18 @@ export function getAssignedRoutes(
   );
 }
 
+export function refreshProviderCache(
+  providerId: string,
+  accessToken: string
+): Promise<{ ok: boolean; refreshed: number }> {
+  return request<undefined, { ok: boolean; refreshed: number }>(
+    `/ops-admin/hauler-coverage/providers/${encodeURIComponent(providerId)}/refresh`,
+    "POST",
+    undefined,
+    accessToken
+  );
+}
+
 export function getDayStatus(
   accessToken: string,
   scope: { zoneId?: string; neighborhoodId?: string } = {}

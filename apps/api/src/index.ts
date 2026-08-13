@@ -61,6 +61,7 @@ import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adm
 import {
   adminConnectHaulerHandler,
   adminHaulerCoverageHandler,
+  adminRefreshProviderHandler,
   adminLocationApprovalHandler,
   adminLocationByIdHandler,
   adminLocationsHandler,
@@ -350,6 +351,13 @@ app.http("admin-hauler-coverage", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: adminHaulerCoverageHandler
+});
+
+app.http("admin-provider-refresh", {
+  route: "ops-admin/hauler-coverage/providers/{providerId}/refresh",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: adminRefreshProviderHandler
 });
 
 app.http("admin-location-by-id", {

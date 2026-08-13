@@ -182,6 +182,71 @@ export async function adminHaulerCoverageHandler(
   );
 }
 
+// Force-refresh the cached schedules for every address matched to one provider,
+// so its health status (and holiday shifts) reflect the latest hauler data.
+export async function adminRefreshProviderHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        if (!isSuperAdminRole(auth.role)) {
+          throw new HttpError(403, "Only a super admin can refresh provider caches.");
+        }
+        const providerId = req.params.providerId;
+        if (!providerId) {
+          throw new HttpError(400, "providerId is required");
+        }
+        if (!describeProviders().some((p) => p.id === providerId)) {
+          throw new HttpError(404, "Unknown provider");
+        }
+
+        // Addresses currently matched to this provider (by cache hash).
+        const matched = await prisma.haulerScheduleLookup.findMany({
+          where: { provider: providerId, matched: true },
+          select: { addressHash: true }
+        });
+        const hashes = new Set(matched.map((r) => r.addressHash));
+        if (hashes.size === 0) {
+          return jsonResponse(200, { ok: true, refreshed: 0 });
+        }
+
+        // Resolve the hashes back to concrete addresses so we can re-run the
+        // hauler lookup (which re-seeds the concrete upcoming-pickup cache).
+        const addrs = await prisma.serviceAddress.findMany({
+          where: { isActive: true },
+          select: { line1: true, city: true, state: true, postalCode: true }
+        });
+        const seen = new Set<string>();
+        const targets: Array<{ line1: string; city: string; state: string; postalCode: string }> = [];
+        for (const a of addrs) {
+          const h = haulerAddressHash(a);
+          if (hashes.has(h) && !seen.has(h)) {
+            seen.add(h);
+            targets.push(a);
+          }
+          if (targets.length >= 200) break;
+        }
+
+        await Promise.all(
+          targets.map((a) =>
+            lookupPickupSchedule(a, { force: true }).catch(() => null)
+          )
+        );
+
+        return jsonResponse(200, { ok: true, refreshed: targets.length });
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
 // GET list / POST create.
 export async function adminNeighborhoodsHandler(
   request: HttpRequest,

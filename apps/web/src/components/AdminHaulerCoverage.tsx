@@ -1,20 +1,38 @@
-import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import type { PickupScheduleSuggestion } from "@gpp/shared";
-import { getHaulerCoverage, getPickupScheduleSuggestion } from "../lib/api";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { HaulerCoverageResponse, PickupScheduleSuggestion } from "@gpp/shared";
+import { getHaulerCoverage, getPickupScheduleSuggestion, refreshProviderCache } from "../lib/api";
 
 type AdminHaulerCoverageProps = { accessToken: string };
+type ProviderStatus = HaulerCoverageResponse["providers"][number]["status"];
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+// The provider's own service status (from its cached schedule) → left-border
+// class + a short label.
+const PROVIDER_STATUS_META: Record<ProviderStatus, { cls: string; label: string }> = {
+  NORMAL: { cls: "provider-status-ok", label: "Running normally" },
+  HOLIDAY_SHIFT: { cls: "provider-status-warn", label: "Holiday shift ahead" },
+  UNKNOWN: { cls: "provider-status-none", label: "No schedule data yet" }
+};
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
 
 export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): JSX.Element {
+  const queryClient = useQueryClient();
   const coverageQuery = useQuery({
     queryKey: ["hauler-coverage"],
     queryFn: async () => getHaulerCoverage(accessToken)
+  });
+  const refreshMutation = useMutation({
+    mutationFn: (providerId: string) => refreshProviderCache(providerId, accessToken),
+    onSuccess: () => {
+      // Freshened schedules change provider health + area coverage.
+      void queryClient.invalidateQueries({ queryKey: ["hauler-coverage"] });
+      void queryClient.invalidateQueries({ queryKey: ["day-status"] });
+    }
   });
 
   const [line1, setLine1] = useState("");
@@ -32,6 +50,18 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
 
   const providers = coverageQuery.data?.providers ?? [];
   const areas = coverageQuery.data?.areas ?? [];
+
+  // When arrived at via a Day-Status pill link (…#provider-<id>), scroll that
+  // provider row into view and briefly highlight it.
+  useEffect(() => {
+    if (!providers.length || !window.location.hash.startsWith("#provider-")) return;
+    const el = document.getElementById(window.location.hash.slice(1));
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("row-flash");
+    const t = setTimeout(() => el.classList.remove("row-flash"), 2000);
+    return () => clearTimeout(t);
+  }, [providers.length]);
   const canCheck = Boolean(line1.trim() && city.trim() && state.trim() && postalCode.trim());
   const result = checkMutation.data;
 
@@ -60,14 +90,17 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
                 <th>Platform</th>
                 <th>Coverage</th>
                 <th>Schedule lookup</th>
+                <th>Cache</th>
               </tr>
             </thead>
             <tbody>
-              {providers.map((p) => (
-                <tr key={p.id}>
+              {providers.map((p) => {
+                const meta = PROVIDER_STATUS_META[p.status];
+                return (
+                <tr key={p.id} id={`provider-${p.id}`} className={meta.cls}>
                   <td data-label="Trash provider">
                     <strong>{p.label}</strong>
-                    <span className="admin-table-sub">{p.id}</span>
+                    <span className="admin-table-sub">{meta.label}</span>
                   </td>
                   <td data-label="Platform">{p.platform}</td>
                   <td data-label="Coverage">{p.coverageLabel}</td>
@@ -81,8 +114,21 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
                       Look up by address ↗
                     </a>
                   </td>
+                  <td data-label="Cache">
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      disabled={refreshMutation.isPending && refreshMutation.variables === p.id}
+                      onClick={() => refreshMutation.mutate(p.id)}
+                    >
+                      {refreshMutation.isPending && refreshMutation.variables === p.id
+                        ? "Refreshing…"
+                        : "↻ Refresh cache"}
+                    </button>
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           </div>

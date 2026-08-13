@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import type { DayStatusIssue, DayStatusProvider } from "@gpp/shared";
 import { getDayStatus, refreshDaySchedules } from "../lib/api";
 
@@ -95,13 +96,29 @@ export function DayStatusPanel({
         <div className="day-status-providers">
           {data.providers.map((p) => {
             const meta = PROVIDER_STATUS[p.status];
-            return (
-              <span key={p.id} className={`provider-pill ${meta.cls}`}>
+            // "__unconfirmed__" is a synthetic bucket with no provider page.
+            const linkable = p.id !== "__unconfirmed__";
+            const body = (
+              <>
                 <strong>{p.label}</strong>
                 <span>
                   {meta.label}
                   {p.status !== "NORMAL" && p.affected > 0 ? ` · ${p.affected}` : ""}
                 </span>
+              </>
+            );
+            return linkable ? (
+              <Link
+                key={p.id}
+                className={`provider-pill ${meta.cls}`}
+                to={`/admin/hauler-coverage#provider-${p.id}`}
+                title={`View ${p.label} on Trash Providers`}
+              >
+                {body}
+              </Link>
+            ) : (
+              <span key={p.id} className={`provider-pill ${meta.cls}`}>
+                {body}
               </span>
             );
           })}

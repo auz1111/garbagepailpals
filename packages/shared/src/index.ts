@@ -128,7 +128,12 @@ export const haulerProviderInfoSchema = z.object({
   platform: z.string(),
   coverageLabel: z.string(),
   // The hauler's public schedule-lookup page (search by address).
-  scheduleUrl: z.string().url()
+  scheduleUrl: z.string().url(),
+  // The provider's own service status, derived purely from its cached upcoming
+  // schedule (not GPP routes): NORMAL (data present, regular cadence),
+  // HOLIDAY_SHIFT (a holiday-adjusted collection in the near window), or UNKNOWN
+  // (no cached schedule data for this provider yet).
+  status: z.enum(["NORMAL", "HOLIDAY_SHIFT", "UNKNOWN"]).default("UNKNOWN")
 });
 
 export const haulerCoverageAreaSchema = z.object({

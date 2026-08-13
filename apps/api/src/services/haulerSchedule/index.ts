@@ -6,9 +6,35 @@ import {
   type HaulerUpcoming,
   type PickupScheduleSuggestion
 } from "@gpp/shared";
+import { DateTime } from "luxon";
 import type { HaulerLookupInput, HaulerProvider } from "./types";
 import { createRecollectProvider } from "./recollect";
 import { createRepublicProvider } from "./republic";
+import { parseHaulerStreams, weekdayIndexFromLuxon } from "../providerReconcile";
+
+type ProviderHealth = "NORMAL" | "HOLIDAY_SHIFT" | "UNKNOWN";
+
+// The provider's own service status, derived only from its cached upcoming
+// schedule: a holiday-adjusted collection in the near window (a concrete date
+// that lands off its normal weekday) → HOLIDAY_SHIFT; fresh data with a regular
+// cadence → NORMAL; no cached data → UNKNOWN. This never depends on GPP routes,
+// approvals, or whether today is a pickup day — it's purely about the hauler.
+function providerHealth(upcomings: HaulerUpcoming[]): ProviderHealth {
+  if (upcomings.length === 0) return "UNKNOWN";
+  const from = DateTime.utc().startOf("day");
+  const to = from.plus({ days: 14 });
+  for (const upcoming of upcomings) {
+    const streams = parseHaulerStreams(upcoming, "utc");
+    for (const [modalWeekday, stream] of streams) {
+      for (const date of stream.byWeek.values()) {
+        if (date >= from && date <= to && weekdayIndexFromLuxon(date) !== modalWeekday) {
+          return "HOLIDAY_SHIFT";
+        }
+      }
+    }
+  }
+  return "NORMAL";
+}
 
 // Cached matches are reused for a week; hauler schedules change rarely and this
 // keeps us off the third-party APIs on repeat loads of the same address.
@@ -86,7 +112,7 @@ export function providersForState(state: string | null | undefined): Array<{ id:
 // (zone), which providers are configured for it and how many active addresses
 // have actually matched a hauler lookup (empirical, from the cache).
 export async function getHaulerCoverage(): Promise<{
-  providers: ReturnType<typeof describeProviders>;
+  providers: Array<ReturnType<typeof describeProviders>[number] & { status: ProviderHealth }>;
   areas: Array<{
     zoneId: string | null;
     name: string;
@@ -106,7 +132,7 @@ export async function getHaulerCoverage(): Promise<{
   const [rows, addresses, zones] = await Promise.all([
     prisma.haulerScheduleLookup.findMany({
       where: { matched: true },
-      select: { addressHash: true, provider: true }
+      select: { addressHash: true, provider: true, upcomingPickups: true }
     }),
     prisma.serviceAddress.findMany({
       where: { isActive: true },
@@ -122,6 +148,20 @@ export async function getHaulerCoverage(): Promise<{
   ]);
 
   const providerByHash = new Map(rows.map((r) => [r.addressHash, r.provider]));
+
+  // Group each provider's cached upcoming schedules to derive its health status.
+  const upcomingByProvider = new Map<string, HaulerUpcoming[]>();
+  for (const r of rows) {
+    if (!r.provider || !r.upcomingPickups) continue;
+    const parsed = haulerUpcomingSchema.safeParse(r.upcomingPickups);
+    if (!parsed.success) continue;
+    const list = upcomingByProvider.get(r.provider) ?? [];
+    list.push(parsed.data);
+    upcomingByProvider.set(r.provider, list);
+  }
+  const healthById = new Map(
+    providers.map((p) => [p.id, providerHealth(upcomingByProvider.get(p.id) ?? [])])
+  );
 
   type Bucket = {
     zoneId: string | null;
@@ -197,7 +237,12 @@ export async function getHaulerCoverage(): Promise<{
       }))
     }));
 
-  return { providers, areas };
+  const providersWithStatus = providers.map((p) => ({
+    ...p,
+    status: healthById.get(p.id) ?? ("UNKNOWN" as ProviderHealth)
+  }));
+
+  return { providers: providersWithStatus, areas };
 }
 
 function providerById(id: string): HaulerProvider | undefined {
