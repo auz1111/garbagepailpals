@@ -35,6 +35,16 @@ const PROVIDERS: HaulerProvider[] = [
     // Cascade serves the Bend / Deschutes County area (Central Oregon).
     serves: (input) => input.state.trim().toUpperCase() === "OR"
   }),
+  createRecollectProvider({
+    id: "richland",
+    label: "Richland County Solid Waste",
+    area: "Richland",
+    service: "waste",
+    serviceId: 325,
+    coverageLabel: "South Carolina",
+    // Richland County (Columbia, SC) solid waste, on ReCollect.
+    serves: (input) => input.state.trim().toUpperCase() === "SC"
+  }),
   createRepublicProvider({
     id: "republic",
     label: "Republic Services",

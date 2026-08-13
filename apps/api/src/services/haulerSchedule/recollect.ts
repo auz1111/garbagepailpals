@@ -36,11 +36,25 @@ type SuggestItem = {
   name?: string;
 };
 
+type RepeatData = { repeat_data?: { frequency?: string } };
 type RecollectEvent = {
   day?: string;
   flags?: Array<{ name?: string; subject?: string; event_type?: string }>;
-  options?: { freq?: string };
+  // Cadence lives in different places across ReCollect areas: some expose
+  // `options.freq` ("every-week"/"A-week"/"B-week"), others put a human phrase in
+  // `repeat_data.frequency` ("weekly"/"every two weeks"). Read both.
+  options?: ({ freq?: string } & RepeatData) | null;
+  opts?: RepeatData | null;
 };
+
+function extractFreq(event: RecollectEvent): string | undefined {
+  return (
+    event.options?.freq ??
+    event.options?.repeat_data?.frequency ??
+    event.opts?.repeat_data?.frequency ??
+    undefined
+  );
+}
 
 async function fetchJson(url: string): Promise<unknown | null> {
   const controller = new AbortController();
@@ -99,8 +113,16 @@ function cadenceFromFreq(freq: string | undefined): "WEEKLY" | "BIWEEKLY" | null
   if (f.includes("every-week") || f === "week" || f.includes("weekly")) {
     return "WEEKLY";
   }
-  // ReCollect uses "A-week"/"B-week" for the two alternating biweekly cohorts.
-  if (f.includes("a-week") || f.includes("b-week") || f.includes("biweek") || f.includes("2-week")) {
+  // ReCollect uses "A-week"/"B-week" for the two alternating biweekly cohorts;
+  // other areas spell it out ("every two weeks"/"every other week").
+  if (
+    f.includes("a-week") ||
+    f.includes("b-week") ||
+    f.includes("biweek") ||
+    f.includes("2-week") ||
+    f.includes("two week") ||
+    f.includes("other week")
+  ) {
     return "BIWEEKLY";
   }
   return null;
@@ -131,7 +153,7 @@ function toStreams(events: RecollectEvent[]): PickupStream[] {
         kind: classify(rawName),
         label: flag.subject ?? flag.name ?? rawName,
         day: event.day,
-        freq: event.options?.freq
+        freq: extractFreq(event)
       });
     }
   }
