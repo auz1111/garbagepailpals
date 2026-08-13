@@ -6,13 +6,12 @@ import { withAuth } from "../lib/withAuth";
 import type { AuthTokenPayload } from "../lib/jwt";
 import { resolveZoneScope } from "../lib/zoneScope";
 import { computeDayStatus } from "../services/dayStatus";
-import { lookupPickupSchedule } from "../services/haulerSchedule";
+import { refreshUpcomingForAddresses } from "../services/haulerSchedule";
 import type { WorkScope } from "../services/todaysWork";
 
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
-// Cap the forced provider re-fetches per refresh so one click can't hammer the
-// providers (each is a live HTTP lookup).
-const MAX_REFRESH = 60;
+// Cap the addresses refreshed per click so one press can't fan out unbounded.
+const MAX_REFRESH = 200;
 
 async function scopeFromRequest(req: HttpRequest, auth: AuthTokenPayload): Promise<WorkScope> {
   const params = new URL(req.url).searchParams;
@@ -70,14 +69,16 @@ export async function refreshSchedulesHandler(
           take: MAX_REFRESH
         });
 
-        // Re-resolve + re-seed the concrete upcoming-pickup cache for each.
-        await Promise.all(
-          addresses.map((a) =>
-            lookupPickupSchedule(
-              { line1: a.line1, city: a.city, state: a.state, postalCode: a.postalCode },
-              { force: true }
-            ).catch(() => null)
-          )
+        // Targeted, throttled re-pull: each address is refreshed from ONLY its
+        // matched provider (via the stored externalId) — no re-matching, no
+        // probing other providers.
+        await refreshUpcomingForAddresses(
+          addresses.map((a) => ({
+            line1: a.line1,
+            city: a.city,
+            state: a.state,
+            postalCode: a.postalCode
+          }))
         );
 
         const status = await computeDayStatus(scope);

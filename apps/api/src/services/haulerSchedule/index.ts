@@ -369,37 +369,67 @@ export async function lookupPickupSchedule(
   return suggestion;
 }
 
-// Force-refresh the concrete upcoming-pickup cache for every address matched to
-// one provider — reusing each cache row's stored externalId/coords so we call
-// ONLY that provider's schedule endpoint (no re-matching, no probing other
-// providers). Throttled so we never burst the hauler's site.
-export async function refreshProviderUpcoming(
-  providerId: string
-): Promise<{ refreshed: number; attempted: number }> {
-  const provider = providerById(providerId);
-  if (!provider) {
-    return { refreshed: 0, attempted: 0 };
-  }
-  const rows = await prisma.haulerScheduleLookup.findMany({
-    where: { provider: providerId, matched: true, externalId: { not: null } },
-    select: { addressHash: true, externalId: true, lat: true, lng: true }
-  });
+type CacheRow = {
+  addressHash: string;
+  provider: string | null;
+  externalId: string | null;
+  lat: number | null;
+  lng: number | null;
+};
 
+// Re-pull the upcoming schedule for a set of already-matched cache rows, reusing
+// each row's stored provider + externalId/coords so we call ONLY that address's
+// matched provider (no re-matching, no probing other providers). Throttled so we
+// never burst a hauler's site.
+async function refreshCacheRows(rows: CacheRow[]): Promise<{ refreshed: number; attempted: number }> {
   const CONCURRENCY = 4;
   let refreshed = 0;
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
     const batch = rows.slice(i, i + CONCURRENCY);
     const results = await Promise.all(
-      batch.map((r) =>
-        fetchAndStoreUpcoming(r.addressHash, provider, r.externalId as string, {
+      batch.map((r) => {
+        const provider = r.provider ? providerById(r.provider) : undefined;
+        if (!provider || !r.externalId) return Promise.resolve(null);
+        return fetchAndStoreUpcoming(r.addressHash, provider, r.externalId, {
           lat: r.lat,
           lng: r.lng
-        }).catch(() => null)
-      )
+        }).catch(() => null);
+      })
     );
     refreshed += results.filter(Boolean).length;
   }
   return { refreshed, attempted: rows.length };
+}
+
+// Refresh every address matched to one provider (used by the per-provider
+// "Refresh cache" button on the Trash Providers page).
+export async function refreshProviderUpcoming(
+  providerId: string
+): Promise<{ refreshed: number; attempted: number }> {
+  if (!providerById(providerId)) {
+    return { refreshed: 0, attempted: 0 };
+  }
+  const rows = await prisma.haulerScheduleLookup.findMany({
+    where: { provider: providerId, matched: true, externalId: { not: null } },
+    select: { addressHash: true, provider: true, externalId: true, lat: true, lng: true }
+  });
+  return refreshCacheRows(rows);
+}
+
+// Refresh a specific set of addresses, each from its own matched provider (used
+// by the Today's Routes "Refresh provider schedules" button, scoped to an area).
+export async function refreshUpcomingForAddresses(
+  inputs: HaulerLookupInput[]
+): Promise<{ refreshed: number; attempted: number }> {
+  const hashes = [...new Set(inputs.map((i) => haulerAddressHash(i)))];
+  if (hashes.length === 0) {
+    return { refreshed: 0, attempted: 0 };
+  }
+  const rows = await prisma.haulerScheduleLookup.findMany({
+    where: { addressHash: { in: hashes }, matched: true, externalId: { not: null } },
+    select: { addressHash: true, provider: true, externalId: true, lat: true, lng: true }
+  });
+  return refreshCacheRows(rows);
 }
 
 // The hauler an address is currently connected to (a matched cache row exists),
