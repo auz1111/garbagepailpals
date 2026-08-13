@@ -212,8 +212,11 @@ export async function listAddressesHandler(
   return withErrorBoundary(context, async () =>
     withAuth(
       async (_req, _ctx, auth) => {
+        // This is the caller's own "My Locations" list — always scope to them,
+        // even for admins (who are also customers here). Admin cross-user views
+        // use the dedicated /ops-admin endpoints, not this one.
         const rows = await prisma.serviceAddress.findMany({
-          where: isAdminRole(auth.role) ? undefined : { userId: auth.sub },
+          where: { userId: auth.sub },
           orderBy: { createdAt: "desc" },
           include: { schedules: true }
         });
