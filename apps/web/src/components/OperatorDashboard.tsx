@@ -13,6 +13,7 @@ import {
   requestOperatorTimeOff,
   requestOperatorZone
 } from "../lib/api";
+import { formatCans } from "./CanRowsEditor";
 
 // Decode an ORS/Google encoded polyline (precision 5) to [lat, lng] pairs.
 function decodePolyline(encoded: string): Array<[number, number]> {
@@ -386,7 +387,10 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                                 {stop.jobTypes
                                   .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
                                   .join(" + ")}{" "}
-                                · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                                ·{" "}
+                                {stop.cans.length > 0
+                                  ? formatCans(stop.cans)
+                                  : `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`}
                               </span>
                             </div>
                             {canService ? (

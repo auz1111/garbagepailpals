@@ -1,5 +1,6 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
+import { Prisma } from "@prisma/client";
 import {
   adminRouteRequestSchema,
   adminRouteResponseSchema,
@@ -8,9 +9,21 @@ import {
   assignedRoutesResponseSchema,
   availableOperatorsResponseSchema,
   routeCancelSchema,
-  routeHistoryResponseSchema
+  routeHistoryResponseSchema,
+  scheduleCanSchema,
+  type ScheduleCan
 } from "@gpp/shared";
+import { z } from "zod";
 import { env } from "../lib/env";
+
+const cansArraySchema = z.array(scheduleCanSchema);
+
+// Parse a stored cans JSON blob; fall back to empty so route building/serializing
+// never throws on a malformed or legacy value.
+function parseCans(value: unknown): ScheduleCan[] {
+  const parsed = cansArraySchema.safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import {
   biweeklyMatchesZoned,
@@ -44,6 +57,7 @@ type ServiceWork = {
   subscriptionId: string;
   jobTypes: string[]; // "CURB_OUT" (roll cart out) and/or "CURB_IN" (roll cart in)
   canCount: number;
+  cans: ScheduleCan[];
 };
 
 const SERVICE_ADDRESS_INCLUDE = {
@@ -109,8 +123,16 @@ async function collectTodaysWork(
       continue;
     }
     // Cans for the relevant pickup day (prefer the roll-out day's schedule).
-    const canCount = (rollOutSched ?? rollInSched)?.canCount ?? 0;
-    work.push({ address: a as unknown as ServiceWork["address"], subscriptionId, jobTypes, canCount });
+    const chosenSched = rollOutSched ?? rollInSched;
+    const canCount = chosenSched?.canCount ?? 0;
+    const cans = parseCans(chosenSched?.cans);
+    work.push({
+      address: a as unknown as ServiceWork["address"],
+      subscriptionId,
+      jobTypes,
+      canCount,
+      cans
+    });
   }
   return work;
 }
@@ -168,6 +190,7 @@ export type DailyRouteRow = {
     serviceAddressId: string;
     jobTypes: string;
     canCount: number;
+    cans: unknown;
     servicedAt: Date | null;
     serviceAddress: {
       line1: string;
@@ -215,6 +238,7 @@ export function serializeDailyRoute(route: DailyRouteRow) {
       lng: s.serviceAddress.lng.toNumber(),
       jobTypes: s.jobTypes.split(",").filter(Boolean),
       canCount: s.canCount,
+      cans: parseCans(s.cans),
       servicedAt: s.servicedAt ? s.servicedAt.toISOString() : null
     }))
   };
@@ -658,6 +682,7 @@ type StopBuild = {
   subscriptionId: string;
   jobTypes: string[];
   canCount: number;
+  cans: ScheduleCan[];
 };
 
 export async function adminTodaysRouteHandler(
@@ -716,7 +741,8 @@ export async function adminTodaysRouteHandler(
             lng: w.address.lng.toNumber(),
             subscriptionId: w.subscriptionId,
             jobTypes: w.jobTypes,
-            canCount: w.canCount
+            canCount: w.canCount,
+            cans: w.cans
           }));
 
         // Resolve operator names for labelling assigned legs.
@@ -808,7 +834,8 @@ export async function adminTodaysRouteHandler(
                     lat: stop.lat,
                     lng: stop.lng,
                     jobTypes: [...stop.jobTypes].sort(),
-                    canCount: stop.canCount
+                    canCount: stop.canCount,
+                    cans: stop.cans
                   }
                 : null;
             })
@@ -860,7 +887,8 @@ export async function adminTodaysRouteHandler(
                     serviceAddressId: stop.addressId,
                     sequence: stop.order,
                     jobTypes: [...stop.jobTypes].sort().join(","),
-                    canCount: stop.canCount
+                    canCount: stop.canCount,
+                    cans: stop.cans as unknown as Prisma.InputJsonValue
                   }))
                 }
               }

@@ -5,6 +5,7 @@ import "leaflet/dist/leaflet.css";
 import type { DailyRoute, RouteHistoryResponse } from "@gpp/shared";
 import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import { getRouteHistory, getZones } from "../lib/api";
+import { formatCans } from "./CanRowsEditor";
 
 type RouteHistoryProps = { accessToken: string };
 
@@ -374,7 +375,10 @@ export function RouteHistory({ accessToken }: RouteHistoryProps): JSX.Element {
                                         {stop.jobTypes
                                           .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
                                           .join(" + ")}{" "}
-                                        · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                                        ·{" "}
+                                        {stop.cans.length > 0
+                                          ? formatCans(stop.cans)
+                                          : `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`}
                                         {stop.servicedAt
                                           ? ` · ✓ serviced ${formatStamp(stop.servicedAt)}`
                                           : " · not serviced"}

@@ -857,6 +857,9 @@ export const dailyRouteStopSchema = z.object({
   lng: z.number(),
   jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
   canCount: z.number().int().nonnegative(),
+  // The exact cans due at this stop (type + count), so the operator knows which
+  // carts to roll. Defaults to empty for legacy routes built before this field.
+  cans: z.array(scheduleCanSchema).default([]),
   // Timestamp when the operator marked this stop serviced; null if not yet done.
   servicedAt: z.string().nullable()
 });

@@ -470,6 +470,9 @@ model RouteStop {
   sequence         Int
   jobTypes         String
   canCount         Int            @default(2)
+  // Snapshot of the exact cans due at this stop (type + count), taken when the
+  // route is built — so the operator sees which carts to roll.
+  cans             Json           @default("[]")
   servicedAt       DateTime?
   route            DailyRoute     @relation(fields: [routeId], references: [id], onDelete: Cascade)
   serviceAddress   ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)

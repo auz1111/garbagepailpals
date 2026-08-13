@@ -8,6 +8,15 @@ export const CAN_LABELS: Record<CanType, string> = {
   GLASS: "Glass"
 };
 
+// Compact, human-readable list of the cans at a stop, e.g. "2 Trash · 1 Recycling".
+// Returns "" for an empty list so callers can fall back to a plain count.
+export function formatCans(cans: ScheduleCan[]): string {
+  return [...cans]
+    .sort((a, b) => CAN_TYPES_ORDER.indexOf(a.type) - CAN_TYPES_ORDER.indexOf(b.type))
+    .map((c) => `${c.count} ${CAN_LABELS[c.type]}`)
+    .join(" · ");
+}
+
 // Edit the cans a pickup day services: each has a type, its own cadence, and a
 // quantity. Used by the customer + admin schedule editors and the add-location
 // wizard so they all share one shape.

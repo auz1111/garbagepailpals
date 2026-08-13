@@ -15,6 +15,7 @@ import {
   getTodaysRoute,
   getZones
 } from "../lib/api";
+import { formatCans } from "./CanRowsEditor";
 
 type TodaysRouteProps = {
   accessToken: string;
@@ -787,7 +788,10 @@ export function TodaysRoute({ accessToken }: TodaysRouteProps): JSX.Element {
                                 {stop.jobTypes
                                   .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
                                   .join(" + ")}{" "}
-                                · {stop.canCount} can{stop.canCount === 1 ? "" : "s"}
+                                ·{" "}
+                                {stop.cans.length > 0
+                                  ? formatCans(stop.cans)
+                                  : `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`}
                                 {stop.servicedAt ? " · ✓ serviced" : ""}
                               </span>
                             </div>
