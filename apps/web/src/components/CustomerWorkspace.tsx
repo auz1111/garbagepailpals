@@ -1174,6 +1174,26 @@ function LocationDetail({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address.id]);
 
+  // Whether this address falls in a serviced area (re-checked when it changes).
+  const [areaEligible, setAreaEligible] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    checkServiceArea(address.postalCode, { includeTest: true })
+      .then((r) => {
+        if (active) setAreaEligible(r.eligible);
+      })
+      .catch(() => {
+        if (active) setAreaEligible(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [address.postalCode]);
+
+  // Persistent warnings: address not in a serviced area, and/or no trash provider.
+  const addressNotFound = areaEligible === false;
+  const providerNotFound = Boolean(providerResult) && !providerResult?.matched;
+
   // ---- Edit address ----
   const [editingAddress, setEditingAddress] = useState(false);
   const [addr, setAddr] = useState({
@@ -1319,6 +1339,18 @@ function LocationDetail({
             </>
           ) : null}
         </p>
+        {addressNotFound || providerNotFound ? (
+          <p className="notice">
+            ⚠️{" "}
+            {addressNotFound && providerNotFound
+              ? "We couldn't confirm this address is in an area we service, and no trash provider was found for it."
+              : addressNotFound
+                ? "We couldn't confirm this address is in an area we service yet."
+                : "No trash provider was found for this address, so pickups won't auto-follow a provider or its holiday shifts."}{" "}
+            You can keep this location and set the schedule manually — use <strong>Edit address</strong> if
+            you need to correct it, or contact us if you think this is a mistake.
+          </p>
+        ) : null}
       </div>
 
       {editingAddress ? (

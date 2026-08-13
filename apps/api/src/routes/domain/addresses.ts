@@ -15,7 +15,6 @@ import { withAuth } from "../../lib/withAuth";
 import { geocodeAddressParts } from "../../services/geocoding";
 import { lookupPickupSchedule } from "../../services/haulerSchedule";
 import { timezoneForCoords } from "../../lib/timezone";
-import { isPostalServiceable } from "../../lib/serviceArea";
 
 type ScheduleRow = {
   id: string;
@@ -104,9 +103,8 @@ export async function createAddressHandler(
           });
         }
 
-        if (!(await isPostalServiceable(input.postalCode, { includeTest: true }))) {
-          return jsonResponse(400, { message: "Address is outside the service area" });
-        }
+        // Out-of-service-area addresses are allowed through (the UI warns the
+        // customer and persists the warning on the location); we don't hard-block.
 
         const duplicate = await prisma.serviceAddress.findFirst({
           where: {
@@ -232,9 +230,7 @@ export async function updateAddressHandler(
           return jsonResponse(403, { message: "Forbidden" });
         }
 
-        if (input.postalCode && !(await isPostalServiceable(input.postalCode, { includeTest: true }))) {
-          return jsonResponse(400, { message: "Address is outside the service area" });
-        }
+        // Out-of-area addresses are allowed (UI warns + persists the warning).
 
         // If any part of the street address changed, re-geocode so routing keeps
         // accurate coordinates. Fall back to the existing lat/lng on lookup failure.

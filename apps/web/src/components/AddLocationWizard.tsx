@@ -423,11 +423,14 @@ export function AddLocationWizard({
         ) : areaChecking ? (
           <p className="subtext">Checking service area…</p>
         ) : areaCheck ? (
-          <p className={areaCheck.eligible ? "success-inline" : "error"}>
-            {areaCheck.eligible
-              ? `✓ We service ${areaCheck.postalCode}.`
-              : `✗ We don't service ${areaCheck.postalCode} yet.`}
-          </p>
+          areaCheck.eligible ? (
+            <p className="success-inline">✓ We service {areaCheck.postalCode}.</p>
+          ) : (
+            <p className="notice">
+              ⚠️ We couldn't confirm we service {areaCheck.postalCode} yet — you can still add this
+              location, but service isn't guaranteed.
+            </p>
+          )
         ) : null}
 
         {detecting ? (
