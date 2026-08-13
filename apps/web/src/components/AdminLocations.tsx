@@ -142,14 +142,14 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                   {l.glassRecycling ? <span className="loc-chip is-glass">Glass ♻️</span> : null}
                   {l.petWaste ? <span className="loc-chip is-petwaste">Pet waste 🐕</span> : null}
                   {l.haulerProvider ? (
-                    <span className="loc-chip is-glass" title={l.haulerProviderLabel ?? undefined}>
+                    <span
+                      className={`loc-chip ${l.providerSynced ? "is-provider-synced" : "is-provider-unsynced"}`}
+                      title={l.providerSynced ? "Synced to this trash provider" : "Connected but not synced"}
+                    >
                       ♻️ {l.haulerProviderLabel ?? "Provider"}
                     </span>
-                  ) : null}
-                  {l.providerSynced ? (
-                    <span className="loc-chip is-glass">✓ Synced</span>
                   ) : (
-                    <span className="loc-chip is-none">Not synced</span>
+                    <span className="loc-chip is-none">No trash provider</span>
                   )}
                 </div>
                 <div className="loc-row-price">{formatUsd(l.monthlyCents)}/mo</div>

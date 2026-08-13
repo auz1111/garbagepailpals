@@ -4941,3 +4941,13 @@ button[type="submit"]:disabled {
   background: #fef3c7;
   color: #92400e;
 }
+/* Trash-provider status conveyed by the chip's text color: green = synced,
+   amber = connected but not synced. */
+.loc-chip.is-provider-synced {
+  background: #dcfce7;
+  color: #166534;
+}
+.loc-chip.is-provider-unsynced {
+  background: #fef3c7;
+  color: #b45309;
+}
