@@ -305,6 +305,8 @@ a {
   top: 0;
   left: 0;
   bottom: 0;
+  /* Dynamic viewport height so mobile browser toolbars don't clip the bottom. */
+  max-height: 100dvh;
   width: min(280px, 82vw);
   background: var(--surface);
   border-right: 1px solid var(--line);
@@ -342,6 +344,8 @@ a {
   font-size: 0.72rem;
   color: var(--slate-2);
   padding: 0.2rem 0.4rem 0.9rem;
+  /* Header stays pinned; the nav below it scrolls. */
+  flex: none;
 }
 
 .drawer-close {
@@ -363,6 +367,16 @@ a {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  /* Take the remaining height and scroll internally so links far down the list
+     (e.g. "My operator view") are always reachable. min-height:0 is required for
+     a flex child to be allowed to overflow-scroll. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Clear the iOS home-indicator so the last link isn't hidden behind it. */
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
 
 .drawer-link {
