@@ -37,6 +37,9 @@ export interface HaulerProvider {
   // API") and a human-readable coverage scope, both for the admin registry view.
   platform: string;
   coverageLabel: string;
+  // The hauler's public schedule-lookup page (search by address), linked from
+  // the admin coverage registry so staff can cross-check a resolved schedule.
+  scheduleUrl: string;
   serves(input: HaulerLookupInput): boolean;
   lookup(input: HaulerLookupInput): Promise<ProviderResult | null>;
   // Concrete, holiday-accurate collection dates over a window. Returns null on

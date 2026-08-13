@@ -126,7 +126,9 @@ export const haulerProviderInfoSchema = z.object({
   id: z.string(),
   label: z.string(),
   platform: z.string(),
-  coverageLabel: z.string()
+  coverageLabel: z.string(),
+  // The hauler's public schedule-lookup page (search by address).
+  scheduleUrl: z.string().url()
 });
 
 export const haulerCoverageAreaSchema = z.object({

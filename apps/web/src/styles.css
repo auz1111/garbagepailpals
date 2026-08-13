@@ -5230,3 +5230,13 @@ button[type="submit"]:disabled {
   text-align: center;
   margin-top: 0.4rem;
 }
+
+.provider-schedule-link {
+  font-weight: 700;
+  color: var(--teal-bright, #0a7ea4);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.provider-schedule-link:hover {
+  text-decoration: underline;
+}

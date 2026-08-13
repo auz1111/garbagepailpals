@@ -58,6 +58,7 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
                 <th>Trash provider</th>
                 <th>Platform</th>
                 <th>Coverage</th>
+                <th>Schedule lookup</th>
               </tr>
             </thead>
             <tbody>
@@ -69,6 +70,16 @@ export function AdminHaulerCoverage({ accessToken }: AdminHaulerCoverageProps): 
                   </td>
                   <td>{p.platform}</td>
                   <td>{p.coverageLabel}</td>
+                  <td>
+                    <a
+                      className="provider-schedule-link"
+                      href={p.scheduleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Look up by address ↗
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>

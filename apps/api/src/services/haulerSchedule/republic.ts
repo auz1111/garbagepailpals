@@ -216,6 +216,8 @@ export type RepublicConfig = {
   label: string;
   // Human-readable coverage scope for the admin registry (e.g. "National (US)").
   coverageLabel: string;
+  // The hauler's public schedule-lookup page (search by address).
+  scheduleUrl: string;
   serves: (input: HaulerLookupInput) => boolean;
 };
 
@@ -225,6 +227,7 @@ export function createRepublicProvider(config: RepublicConfig): HaulerProvider {
     label: config.label,
     platform: "Republic API",
     coverageLabel: config.coverageLabel,
+    scheduleUrl: config.scheduleUrl,
     serves: config.serves,
     async lookup(input: HaulerLookupInput): Promise<ProviderResult | null> {
       // 1. Resolve the one-line address to Republic's addressHash.

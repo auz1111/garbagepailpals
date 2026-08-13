@@ -32,6 +32,7 @@ const PROVIDERS: HaulerProvider[] = [
     service: "waste",
     serviceId: 399,
     coverageLabel: "Oregon",
+    scheduleUrl: "https://www.cascadedisposal.com/pickup-schedule",
     // Cascade serves the Bend / Deschutes County area (Central Oregon).
     serves: (input) => input.state.trim().toUpperCase() === "OR"
   }),
@@ -42,6 +43,7 @@ const PROVIDERS: HaulerProvider[] = [
     service: "waste",
     serviceId: 325,
     coverageLabel: "South Carolina",
+    scheduleUrl: "https://www.richlandcountysc.gov/Utilities-Services/Trash-and-Recycling",
     // Richland County (Columbia, SC) solid waste, on ReCollect.
     serves: (input) => input.state.trim().toUpperCase() === "SC"
   }),
@@ -49,6 +51,7 @@ const PROVIDERS: HaulerProvider[] = [
     id: "republic",
     label: "Republic Services",
     coverageLabel: "National (US)",
+    scheduleUrl: "https://www.republicservices.com/schedule",
     // National hauler — probe for any US address; publicPickup returns nothing
     // for addresses Republic doesn't service.
     serves: () => true
@@ -61,12 +64,14 @@ export function describeProviders(): Array<{
   label: string;
   platform: string;
   coverageLabel: string;
+  scheduleUrl: string;
 }> {
   return PROVIDERS.map((p) => ({
     id: p.id,
     label: p.label,
     platform: p.platform,
-    coverageLabel: p.coverageLabel
+    coverageLabel: p.coverageLabel,
+    scheduleUrl: p.scheduleUrl
   }));
 }
 
