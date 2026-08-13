@@ -369,6 +369,39 @@ export async function lookupPickupSchedule(
   return suggestion;
 }
 
+// Force-refresh the concrete upcoming-pickup cache for every address matched to
+// one provider — reusing each cache row's stored externalId/coords so we call
+// ONLY that provider's schedule endpoint (no re-matching, no probing other
+// providers). Throttled so we never burst the hauler's site.
+export async function refreshProviderUpcoming(
+  providerId: string
+): Promise<{ refreshed: number; attempted: number }> {
+  const provider = providerById(providerId);
+  if (!provider) {
+    return { refreshed: 0, attempted: 0 };
+  }
+  const rows = await prisma.haulerScheduleLookup.findMany({
+    where: { provider: providerId, matched: true, externalId: { not: null } },
+    select: { addressHash: true, externalId: true, lat: true, lng: true }
+  });
+
+  const CONCURRENCY = 4;
+  let refreshed = 0;
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(
+      batch.map((r) =>
+        fetchAndStoreUpcoming(r.addressHash, provider, r.externalId as string, {
+          lat: r.lat,
+          lng: r.lng
+        }).catch(() => null)
+      )
+    );
+    refreshed += results.filter(Boolean).length;
+  }
+  return { refreshed, attempted: rows.length };
+}
+
 // The hauler an address is currently connected to (a matched cache row exists),
 // with a display label. Null when the address has no hauler lookup yet.
 export async function getHaulerLink(

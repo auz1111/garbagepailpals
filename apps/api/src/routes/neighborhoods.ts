@@ -25,7 +25,8 @@ import {
   describeProviders,
   getHaulerCoverage,
   haulerAddressHash,
-  lookupPickupSchedule
+  lookupPickupSchedule,
+  refreshProviderUpcoming
 } from "../services/haulerSchedule";
 
 const cansArraySchema = z.array(scheduleCanSchema);
@@ -207,40 +208,11 @@ export async function adminRefreshProviderHandler(
           throw new HttpError(404, "Unknown provider");
         }
 
-        // Addresses currently matched to this provider (by cache hash).
-        const matched = await prisma.haulerScheduleLookup.findMany({
-          where: { provider: providerId, matched: true },
-          select: { addressHash: true }
-        });
-        const hashes = new Set(matched.map((r) => r.addressHash));
-        if (hashes.size === 0) {
-          return jsonResponse(200, { ok: true, refreshed: 0 });
-        }
-
-        // Resolve the hashes back to concrete addresses so we can re-run the
-        // hauler lookup (which re-seeds the concrete upcoming-pickup cache).
-        const addrs = await prisma.serviceAddress.findMany({
-          where: { isActive: true },
-          select: { line1: true, city: true, state: true, postalCode: true }
-        });
-        const seen = new Set<string>();
-        const targets: Array<{ line1: string; city: string; state: string; postalCode: string }> = [];
-        for (const a of addrs) {
-          const h = haulerAddressHash(a);
-          if (hashes.has(h) && !seen.has(h)) {
-            seen.add(h);
-            targets.push(a);
-          }
-          if (targets.length >= 200) break;
-        }
-
-        await Promise.all(
-          targets.map((a) =>
-            lookupPickupSchedule(a, { force: true }).catch(() => null)
-          )
-        );
-
-        return jsonResponse(200, { ok: true, refreshed: targets.length });
+        // Targeted refresh: re-pull each matched address's schedule from ONLY
+        // this provider (via its stored externalId), throttled — no re-matching
+        // and no calls to other providers.
+        const { refreshed } = await refreshProviderUpcoming(providerId);
+        return jsonResponse(200, { ok: true, refreshed });
       },
       { roles: ["ADMIN"] }
     )(request, context)
