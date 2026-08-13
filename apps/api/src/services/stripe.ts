@@ -154,15 +154,14 @@ export async function syncStripeSubscriptionAmount(userId: string): Promise<{ am
     throw new Error("Stripe subscription has no line items to update");
   }
 
-  const price = item.price;
-  const productId = typeof price.product === "string" ? price.product : price.product.id;
-
-  // Ad-hoc price for the new amount, reusing the subscription's existing product.
+  // Create the new price with its own inline product (same name Checkout uses),
+  // rather than reusing the subscription's existing product — that product is
+  // often an auto-created, archived one Stripe won't let us reprice against.
   const newPrice = await stripe.prices.create({
     currency: "usd",
     unit_amount: amountCents,
     recurring: { interval: "month" },
-    product: productId
+    product_data: { name: "Garbage Pail Pals curbside service" }
   });
 
   const updated = await stripe.subscriptions.update(active.externalSubscriptionId, {
