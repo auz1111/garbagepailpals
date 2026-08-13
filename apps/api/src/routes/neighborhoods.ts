@@ -319,6 +319,7 @@ export async function adminLocationsHandler(
                 canCount: a.canCount,
                 glassRecycling: a.schedules.some((s) => s.glassRecycling),
                 petWaste: a.schedules.some((s) => s.petWasteDogs > 0),
+                pickupDays: a.schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
                 haulerProvider: provider,
                 haulerProviderLabel: provider ? labelFor(provider) : null,
                 providerSynced: a.schedules.some((s) => s.providerSynced),

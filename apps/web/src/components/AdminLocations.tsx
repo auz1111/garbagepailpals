@@ -6,6 +6,8 @@ import { getAdminLocations, getNeighborhoods, getZones } from "../lib/api";
 
 type AdminLocationsProps = { accessToken: string };
 
+const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Request failed";
 }
@@ -126,9 +128,11 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                 >
                   <strong>{l.line1}</strong>
                   <span className="admin-table-sub">
-                    {l.city}, {l.state} {l.postalCode} · {l.customerName}
+                    {l.customerName} ·{" "}
+                    {l.zoneName ? l.postalCode : `${l.city}, ${l.state} ${l.postalCode}`}
                   </span>
                 </Link>
+                <div className="loc-row-price">{formatUsd(l.monthlyCents)}/mo</div>
                 <div className="loc-row-tags">
                   {l.zoneName ? <span className="loc-chip is-zone">{l.zoneName}</span> : null}
                   {l.neighborhoodName ? (
@@ -136,6 +140,11 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                   ) : (
                     <span className="loc-chip is-none">No neighborhood</span>
                   )}
+                  {l.pickupDays.length > 0 ? (
+                    <span className="loc-chip is-days">
+                      📅 {l.pickupDays.map((d) => WEEKDAYS_SHORT[d]).join(", ")}
+                    </span>
+                  ) : null}
                   <span className="loc-chip is-plain">
                     {l.canCount} can{l.canCount === 1 ? "" : "s"}
                   </span>
@@ -147,12 +156,12 @@ export function AdminLocations({ accessToken }: AdminLocationsProps): JSX.Elemen
                       title={l.providerSynced ? "Synced to this trash provider" : "Connected but not synced"}
                     >
                       ♻️ {l.haulerProviderLabel ?? "Provider"}
+                      {l.providerSynced ? " ✓" : " • not synced"}
                     </span>
                   ) : (
                     <span className="loc-chip is-none">No trash provider</span>
                   )}
                 </div>
-                <div className="loc-row-price">{formatUsd(l.monthlyCents)}/mo</div>
               </li>
             ))}
           </ul>

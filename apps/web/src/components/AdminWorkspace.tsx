@@ -1148,7 +1148,7 @@ function AdminLocationCard({
               <span className="admin-loc-hood admin-loc-hood-empty">No neighborhood</span>
             )}
             {loc.haulerProvider ? (
-              <span className="loc-chip is-glass">♻️ {loc.haulerProviderLabel ?? "Provider linked"}</span>
+              <span className="loc-chip is-provider">♻️ {loc.haulerProviderLabel ?? "Provider linked"}</span>
             ) : (
               <span className="loc-chip is-none">No trash provider</span>
             )}

@@ -743,6 +743,8 @@ export const adminLocationSchema = z.object({
   glassRecycling: z.boolean(),
   petWaste: z.boolean(),
   monthlyCents: z.number().int().nonnegative(),
+  // Weekdays (0=Sun..6=Sat) this location is serviced, sorted.
+  pickupDays: z.array(z.number().int().min(0).max(6)),
   // Connected trash provider (null = not connected) and whether any pickup day
   // is synced to it.
   haulerProvider: z.string().nullable(),
