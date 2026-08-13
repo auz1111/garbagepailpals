@@ -26,6 +26,7 @@ import {
   assignAdminIncident,
   connectHauler,
   createAdminUser,
+  deleteAddress,
   getAdminLocations,
   getAdminUser,
   getAdminUsers,
@@ -50,6 +51,7 @@ import { AdminLocations } from "./AdminLocations";
 import { AdminHaulerCoverage } from "./AdminHaulerCoverage";
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { CanRowsEditor } from "./CanRowsEditor";
+import { AddLocationWizard } from "./AddLocationWizard";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
 import { NeighborhoodsAdmin } from "./NeighborhoodsAdmin";
@@ -783,6 +785,7 @@ function AdminUserDetail({
   const [area, setArea] = useState(user.requestedServiceArea ?? "");
   const [operatorAccess, setOperatorAccess] = useState(user.operatorAccess);
   const [submitted, setSubmitted] = useState(false);
+  const [addingLocation, setAddingLocation] = useState(false);
 
   // Admins grant zones to operators (serviceable areas) and pro-operators (admin
   // scope). Approving a requested zone = checking it.
@@ -955,11 +958,37 @@ function AdminUserDetail({
       <article className="panel">
         <div className="panel-head-row">
           <h3>Locations</h3>
-          <span className="detail-total">{formatUsd(user.monthlyCents)}/mo</span>
+          <div className="panel-head-actions">
+            <span className="detail-total">{formatUsd(user.monthlyCents)}/mo</span>
+            {user.role === "CUSTOMER" && !addingLocation ? (
+              <button
+                type="button"
+                className="add-address-btn"
+                onClick={() => setAddingLocation(true)}
+              >
+                + Add Location
+              </button>
+            ) : null}
+          </div>
         </div>
-        {user.locations.length === 0 ? (
+
+        {addingLocation ? (
+          <AddLocationWizard
+            accessToken={accessToken}
+            targetUserId={user.id}
+            onInvalidate={async () => {
+              await detailQueryClient.invalidateQueries({ queryKey: ["admin-user", user.id] });
+              await detailQueryClient.invalidateQueries({ queryKey: ["admin-users"] });
+              await detailQueryClient.invalidateQueries({ queryKey: ["admin-locations"] });
+            }}
+            onCancel={() => setAddingLocation(false)}
+            onDone={() => setAddingLocation(false)}
+          />
+        ) : null}
+
+        {user.locations.length === 0 && !addingLocation ? (
           <p className="subtext">This user has no service locations.</p>
-        ) : (
+        ) : user.locations.length > 0 ? (
           <ul className="admin-loc-list">
             {user.locations.map((loc) => (
               <AdminLocationCard
@@ -970,7 +999,7 @@ function AdminUserDetail({
               />
             ))}
           </ul>
-        )}
+        ) : null}
       </article>
 
       {showZoneGrants ? (
@@ -1117,6 +1146,16 @@ function AdminLocationCard({
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteAddress(loc.id, accessToken),
+    onSuccess: async () => {
+      // Removing a location changes counts + monthly totals across admin views.
+      await refreshLists();
+      await queryClient.invalidateQueries({ queryKey: ["neighborhoods"] });
+      await queryClient.invalidateQueries({ queryKey: ["admin-locations"] });
+    }
+  });
+
   return (
     <li className="admin-loc-card" id={`address-${loc.id}`}>
       <div className="admin-loc-head">
@@ -1200,8 +1239,27 @@ function AdminLocationCard({
                 ? "Re-check provider"
                 : "Connect a trash provider"}
           </button>
+          <button
+            type="button"
+            className="ghost-btn is-danger"
+            disabled={deleteMutation.isPending}
+            onClick={() => {
+              if (
+                window.confirm(
+                  `Remove ${loc.line1}? This cancels its scheduled pickups and can't be undone.`
+                )
+              ) {
+                deleteMutation.mutate();
+              }
+            }}
+          >
+            {deleteMutation.isPending ? "Removing…" : "Remove location"}
+          </button>
         </div>
       )}
+      {deleteMutation.isError ? (
+        <p className="error">{getErrorMessage(deleteMutation.error)}</p>
+      ) : null}
       {connectMutation.isError ? (
         <p className="error">{getErrorMessage(connectMutation.error)}</p>
       ) : reviewing && connectResult?.matched ? (

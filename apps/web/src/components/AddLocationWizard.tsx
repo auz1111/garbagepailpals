@@ -79,11 +79,19 @@ function nextDateOfWeekday(weekday: number): string {
 export function AddLocationWizard({
   accessToken,
   onDone,
-  onCancel
+  onCancel,
+  targetUserId,
+  onInvalidate
 }: {
   accessToken: string;
   onDone: (createdId: string) => void;
   onCancel?: () => void;
+  // Admin flow: create the location on behalf of this customer (defaults to the
+  // signed-in user when omitted).
+  targetUserId?: string;
+  // Admin flow: refresh admin queries after each step instead of the customer
+  // dashboard queries.
+  onInvalidate?: () => Promise<void>;
 }): JSX.Element {
   const queryClient = useQueryClient();
   const form = useForm<AddressFields>({
@@ -102,6 +110,10 @@ export function AddLocationWizard({
   const [accessNotes, setAccessNotes] = useState("");
 
   async function invalidate(): Promise<void> {
+    if (onInvalidate) {
+      await onInvalidate();
+      return;
+    }
     await queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
     await queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
   }
@@ -167,7 +179,9 @@ export function AddLocationWizard({
         pickupDayOfWeek: g ? g.dayOfWeek : FRIDAY,
         cans,
         providerSynced: Boolean(g),
-        biweeklyAnchorDate: g && g.cadence === "BIWEEKLY" && g.nextDate ? g.nextDate : undefined
+        biweeklyAnchorDate: g && g.cadence === "BIWEEKLY" && g.nextDate ? g.nextDate : undefined,
+        // Admin flow: create for the target customer (undefined = self).
+        userId: targetUserId
       };
       return createAddress(payload, accessToken);
     },

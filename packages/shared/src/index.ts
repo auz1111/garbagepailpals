@@ -240,7 +240,10 @@ export const createAddressRequestSchema = serviceAddressInputSchema.extend({
   // Pet waste removal (dogs) for the first pickup day.
   petWasteDogs: z.number().int().min(0).max(20).default(0),
   // Whether the first pickup day is synced to the trash provider's day.
-  providerSynced: z.boolean().default(false)
+  providerSynced: z.boolean().default(false),
+  // Admin-only: create this location on behalf of the given customer. Ignored
+  // for non-admin callers (the location is always created for themselves).
+  userId: z.string().optional()
 });
 
 // Derive the day-level fields from a day's cans.

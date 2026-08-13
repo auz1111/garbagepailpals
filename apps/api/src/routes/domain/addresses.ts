@@ -113,12 +113,26 @@ export async function createAddressHandler(
           });
         }
 
+        // Admins may create a location on behalf of a customer by passing userId;
+        // everyone else always creates for themselves. Verify the target exists.
+        let ownerId = auth.sub;
+        if (input.userId && input.userId !== auth.sub) {
+          if (!isAdminRole(auth.role)) {
+            return jsonResponse(403, { message: "Only admins can add a location for another user" });
+          }
+          const target = await prisma.user.findUnique({ where: { id: input.userId } });
+          if (!target) {
+            return jsonResponse(404, { message: "Customer not found" });
+          }
+          ownerId = target.id;
+        }
+
         // Out-of-service-area addresses are allowed through (the UI warns the
         // customer and persists the warning on the location); we don't hard-block.
 
         const duplicate = await prisma.serviceAddress.findFirst({
           where: {
-            userId: auth.sub,
+            userId: ownerId,
             postalCode: input.postalCode,
             line1: { equals: input.line1.trim(), mode: "insensitive" }
           }
@@ -145,7 +159,7 @@ export async function createAddressHandler(
         // cans/roll-in, so a new location has a schedule and a price immediately.
         const created = await prisma.serviceAddress.create({
           data: {
-            userId: auth.sub,
+            userId: ownerId,
             line1: input.line1,
             line2: input.line2,
             city: input.city,
