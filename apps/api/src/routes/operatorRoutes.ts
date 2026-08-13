@@ -1,5 +1,6 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
+import { Prisma } from "@prisma/client";
 import { operatorRoutesResponseSchema, operatorStopServiceSchema } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
@@ -98,7 +99,7 @@ export async function operatorServiceStopHandler(
         if (!routeId) {
           throw new HttpError(400, "routeId is required");
         }
-        const { addressId, serviced } = await parseJson(req, operatorStopServiceSchema);
+        const { addressId, serviced, verification } = await parseJson(req, operatorStopServiceSchema);
         const route = await prisma.dailyRoute.findUnique({ where: { id: routeId } });
         if (!route || route.operatorId !== auth.sub) {
           throw new HttpError(404, "Route not found");
@@ -112,7 +113,14 @@ export async function operatorServiceStopHandler(
 
         await prisma.routeStop.updateMany({
           where: { routeId, serviceAddressId: addressId },
-          data: { servicedAt: serviced ? new Date() : null }
+          data: {
+            servicedAt: serviced ? new Date() : null,
+            // Store the completed checklist when marking serviced; clear it when
+            // un-marking so a re-verify starts fresh.
+            serviceVerification: serviced
+              ? ((verification ?? []) as unknown as Prisma.InputJsonValue)
+              : ([] as unknown as Prisma.InputJsonValue)
+          }
         });
 
         // A route is COMPLETED once every stop is serviced; otherwise it's ACCEPTED.

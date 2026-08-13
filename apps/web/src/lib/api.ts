@@ -41,6 +41,8 @@ import type {
   OperatorQueueResponse,
   OperatorRoutesResponse,
   OperatorStopService,
+  ServicePhotoUploadResponse,
+  StopServiceVerificationItem,
   OperatorTimeOffResponse,
   OperatorTimeOffRequest,
   AdminOperatorsResponse,
@@ -444,14 +446,51 @@ export function markStopServiced(
   routeId: string,
   addressId: string,
   serviced: boolean,
-  accessToken: string
+  accessToken: string,
+  verification?: StopServiceVerificationItem[]
 ): Promise<OperatorRoutesResponse> {
   return request<OperatorStopService, OperatorRoutesResponse>(
     `/operator/routes/${routeId}/stops`,
     "PATCH",
-    { addressId, serviced },
+    { addressId, serviced, verification },
     accessToken
   );
+}
+
+// Upload one verification photo (raw image bytes). Returns the stored blob path.
+export async function uploadServicePhoto(
+  file: Blob,
+  accessToken: string
+): Promise<ServicePhotoUploadResponse> {
+  const response = await fetch(`${API_BASE_URL}/uploads/service-photo`, {
+    method: "POST",
+    headers: {
+      "Content-Type": file.type || "image/jpeg",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {})
+    },
+    body: file
+  });
+  if (!response.ok) {
+    let message = "Photo upload failed";
+    try {
+      message = (await response.json())?.message ?? message;
+    } catch {
+      // keep default
+    }
+    throw new ApiError(response.status, message);
+  }
+  return (await response.json()) as ServicePhotoUploadResponse;
+}
+
+// Fetch a stored verification photo (auth-gated) as an object URL for display.
+export async function fetchServicePhotoUrl(path: string, accessToken: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/uploads/service-photo/${encodeURIComponent(path)}`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, "Could not load photo");
+  }
+  return URL.createObjectURL(await response.blob());
 }
 
 export function cancelRoute(

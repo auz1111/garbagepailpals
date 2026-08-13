@@ -845,6 +845,18 @@ export const adminRouteResponseSchema = z.object({
 // hold several per day; each is accepted independently, and accepting locks it.
 export const routeStatusSchema = z.enum(["ASSIGNED", "ACCEPTED", "COMPLETED", "CANCELLED"]);
 
+// One verified item in a stop's service checklist: a can or an add-on service,
+// with up to 3 photos the operator captured for it.
+export const stopServiceVerificationItemSchema = z.object({
+  // Stable identifier, e.g. "can:TRASH" or "service:PET_WASTE".
+  key: z.string().min(1).max(60),
+  // Human label shown to the operator, e.g. "2 Trash" or "Pet waste (1 dog)".
+  label: z.string().min(1).max(120),
+  // Blob paths of the photos captured for this item (max 3).
+  photoBlobPaths: z.array(z.string().min(1).max(500)).max(3).default([])
+});
+export type StopServiceVerificationItem = z.infer<typeof stopServiceVerificationItemSchema>;
+
 export const dailyRouteStopSchema = z.object({
   order: z.number().int().nonnegative(),
   addressId: z.string(),
@@ -860,14 +872,27 @@ export const dailyRouteStopSchema = z.object({
   // The exact cans due at this stop (type + count), so the operator knows which
   // carts to roll. Defaults to empty for legacy routes built before this field.
   cans: z.array(scheduleCanSchema).default([]),
+  // Pet-waste removal due at this stop (number of dogs; 0 = none).
+  petWasteDogs: z.number().int().nonnegative().default(0),
+  // The per-item verification the operator completed (checked items + photos).
+  serviceVerification: z.array(stopServiceVerificationItemSchema).default([]),
   // Timestamp when the operator marked this stop serviced; null if not yet done.
   servicedAt: z.string().nullable()
 });
 
 export const operatorStopServiceSchema = z.object({
   addressId: z.string(),
-  serviced: z.boolean()
+  serviced: z.boolean(),
+  // The completed per-item checklist (with photos) captured when marking
+  // serviced. Optional so un-marking (serviced:false) needs no payload.
+  verification: z.array(stopServiceVerificationItemSchema).max(20).optional()
 });
+
+// Response from the service-photo upload endpoint: the stored blob path.
+export const servicePhotoUploadResponseSchema = z.object({
+  path: z.string().min(1)
+});
+export type ServicePhotoUploadResponse = z.infer<typeof servicePhotoUploadResponseSchema>;
 
 export const dailyRouteSchema = z.object({
   id: z.string(),

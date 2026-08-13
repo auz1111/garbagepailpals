@@ -473,6 +473,12 @@ model RouteStop {
   // Snapshot of the exact cans due at this stop (type + count), taken when the
   // route is built — so the operator sees which carts to roll.
   cans             Json           @default("[]")
+  // Snapshot of the number of dogs for pet-waste removal due at this stop (0 =
+  // none), so it appears as its own verification step.
+  petWasteDogs     Int            @default(0)
+  // Per-item service verification the operator completed: one entry per can /
+  // service, each with up to 3 photo blob paths. [] until the stop is serviced.
+  serviceVerification Json        @default("[]")
   servicedAt       DateTime?
   route            DailyRoute     @relation(fields: [routeId], references: [id], onDelete: Cascade)
   serviceAddress   ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)

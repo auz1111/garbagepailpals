@@ -1,9 +1,17 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { CurrentUser, DailyRoute, TimeOffStatus } from "@gpp/shared";
+import type {
+  CurrentUser,
+  DailyRoute,
+  StopServiceVerificationItem,
+  TimeOffStatus
+} from "@gpp/shared";
 import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
+import { StopServiceVerification } from "./StopServiceVerification";
+
+type RouteStop = DailyRoute["stops"][number];
 import {
   acceptOperatorRoute,
   getOperatorRoutes,
@@ -160,12 +168,25 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
   });
 
   const serviceMutation = useMutation({
-    mutationFn: ({ routeId, addressId, serviced }: { routeId: string; addressId: string; serviced: boolean }) =>
-      markStopServiced(routeId, addressId, serviced, accessToken),
+    mutationFn: ({
+      routeId,
+      addressId,
+      serviced,
+      verification
+    }: {
+      routeId: string;
+      addressId: string;
+      serviced: boolean;
+      verification?: StopServiceVerificationItem[];
+    }) => markStopServiced(routeId, addressId, serviced, accessToken, verification),
     onSuccess: (data) => {
       queryClient.setQueryData(["operator-routes"], data);
+      setVerifyStop(null);
     }
   });
+
+  // The stop currently being verified in the step-by-step modal (null = closed).
+  const [verifyStop, setVerifyStop] = useState<{ routeId: string; stop: RouteStop } | null>(null);
 
   const timeOffQuery = useQuery({
     queryKey: ["operator-timeoff"],
@@ -398,15 +419,21 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                                 type="button"
                                 className={`stop-service-btn${done ? " is-done" : ""}`}
                                 disabled={serviceMutation.isPending}
-                                onClick={() =>
-                                  serviceMutation.mutate({
-                                    routeId: route.id,
-                                    addressId: stop.addressId,
-                                    serviced: !done
-                                  })
-                                }
+                                onClick={() => {
+                                  // Marking serviced opens the step-by-step
+                                  // verification; un-marking is immediate.
+                                  if (done) {
+                                    serviceMutation.mutate({
+                                      routeId: route.id,
+                                      addressId: stop.addressId,
+                                      serviced: false
+                                    });
+                                  } else {
+                                    setVerifyStop({ routeId: route.id, stop });
+                                  }
+                                }}
                               >
-                                {done ? "✓ Serviced" : "Mark serviced"}
+                                {done ? "✓ Serviced — undo" : "Mark serviced"}
                               </button>
                             ) : done ? (
                               <span className="stop-service-tag">✓ Serviced</span>
@@ -453,6 +480,24 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         {acceptMutation.isError ? <p className="error">{getErrorMessage(acceptMutation.error)}</p> : null}
         {serviceMutation.isError ? <p className="error">{getErrorMessage(serviceMutation.error)}</p> : null}
       </article>
+
+      {verifyStop ? (
+        <StopServiceVerification
+          stop={verifyStop.stop}
+          accessToken={accessToken}
+          saving={serviceMutation.isPending}
+          error={serviceMutation.isError ? getErrorMessage(serviceMutation.error) : null}
+          onCancel={() => setVerifyStop(null)}
+          onComplete={(verification) =>
+            serviceMutation.mutate({
+              routeId: verifyStop.routeId,
+              addressId: verifyStop.stop.addressId,
+              serviced: true,
+              verification
+            })
+          }
+        />
+      ) : null}
     </div>
   );
 }

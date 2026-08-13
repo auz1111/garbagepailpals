@@ -11,17 +11,26 @@ import {
   routeCancelSchema,
   routeHistoryResponseSchema,
   scheduleCanSchema,
-  type ScheduleCan
+  stopServiceVerificationItemSchema,
+  type ScheduleCan,
+  type StopServiceVerificationItem
 } from "@gpp/shared";
 import { z } from "zod";
 import { env } from "../lib/env";
 
 const cansArraySchema = z.array(scheduleCanSchema);
+const verificationArraySchema = z.array(stopServiceVerificationItemSchema);
 
 // Parse a stored cans JSON blob; fall back to empty so route building/serializing
 // never throws on a malformed or legacy value.
 function parseCans(value: unknown): ScheduleCan[] {
   const parsed = cansArraySchema.safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
+
+// Parse a stored service-verification JSON blob; empty on malformed/legacy.
+function parseVerification(value: unknown): StopServiceVerificationItem[] {
+  const parsed = verificationArraySchema.safeParse(value);
   return parsed.success ? parsed.data : [];
 }
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
@@ -58,6 +67,7 @@ type ServiceWork = {
   jobTypes: string[]; // "CURB_OUT" (roll cart out) and/or "CURB_IN" (roll cart in)
   canCount: number;
   cans: ScheduleCan[];
+  petWasteDogs: number;
 };
 
 const SERVICE_ADDRESS_INCLUDE = {
@@ -126,12 +136,14 @@ async function collectTodaysWork(
     const chosenSched = rollOutSched ?? rollInSched;
     const canCount = chosenSched?.canCount ?? 0;
     const cans = parseCans(chosenSched?.cans);
+    const petWasteDogs = chosenSched?.petWasteDogs ?? 0;
     work.push({
       address: a as unknown as ServiceWork["address"],
       subscriptionId,
       jobTypes,
       canCount,
-      cans
+      cans,
+      petWasteDogs
     });
   }
   return work;
@@ -191,6 +203,8 @@ export type DailyRouteRow = {
     jobTypes: string;
     canCount: number;
     cans: unknown;
+    petWasteDogs: number;
+    serviceVerification: unknown;
     servicedAt: Date | null;
     serviceAddress: {
       line1: string;
@@ -239,6 +253,8 @@ export function serializeDailyRoute(route: DailyRouteRow) {
       jobTypes: s.jobTypes.split(",").filter(Boolean),
       canCount: s.canCount,
       cans: parseCans(s.cans),
+      petWasteDogs: s.petWasteDogs,
+      serviceVerification: parseVerification(s.serviceVerification),
       servicedAt: s.servicedAt ? s.servicedAt.toISOString() : null
     }))
   };
@@ -683,6 +699,7 @@ type StopBuild = {
   jobTypes: string[];
   canCount: number;
   cans: ScheduleCan[];
+  petWasteDogs: number;
 };
 
 export async function adminTodaysRouteHandler(
@@ -742,7 +759,8 @@ export async function adminTodaysRouteHandler(
             subscriptionId: w.subscriptionId,
             jobTypes: w.jobTypes,
             canCount: w.canCount,
-            cans: w.cans
+            cans: w.cans,
+            petWasteDogs: w.petWasteDogs
           }));
 
         // Resolve operator names for labelling assigned legs.
@@ -835,7 +853,8 @@ export async function adminTodaysRouteHandler(
                     lng: stop.lng,
                     jobTypes: [...stop.jobTypes].sort(),
                     canCount: stop.canCount,
-                    cans: stop.cans
+                    cans: stop.cans,
+                    petWasteDogs: stop.petWasteDogs
                   }
                 : null;
             })
@@ -888,7 +907,8 @@ export async function adminTodaysRouteHandler(
                     sequence: stop.order,
                     jobTypes: [...stop.jobTypes].sort().join(","),
                     canCount: stop.canCount,
-                    cans: stop.cans as unknown as Prisma.InputJsonValue
+                    cans: stop.cans as unknown as Prisma.InputJsonValue,
+                    petWasteDogs: stop.petWasteDogs
                   }))
                 }
               }

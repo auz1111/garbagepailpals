@@ -5,8 +5,8 @@
   "type": "module",
   "main": "dist/index.cjs",
   "scripts": {
-    "build": "tsc -p tsconfig.json --noEmit && pnpm exec esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.cjs --external:@azure/functions --external:@prisma/client --external:prisma --external:@prisma/engines",
-    "bundle": "pnpm exec esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.cjs --external:@azure/functions --external:@prisma/client --external:prisma --external:@prisma/engines",
+    "build": "tsc -p tsconfig.json --noEmit && pnpm exec esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.cjs --external:@azure/functions --external:@azure/storage-blob --external:@prisma/client --external:prisma --external:@prisma/engines",
+    "bundle": "pnpm exec esbuild src/index.ts --bundle --platform=node --target=node22 --format=cjs --outfile=dist/index.cjs --external:@azure/functions --external:@azure/storage-blob --external:@prisma/client --external:prisma --external:@prisma/engines",
     "dev": "pnpm run bundle && func start",
     "dev:watch": "pnpm run bundle -- --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@azure/functions": "^4.6.0",
+    "@azure/storage-blob": "^12.26.0",
     "@gpp/db": "workspace:*",
     "@gpp/shared": "workspace:*",
     "@prisma/client": "^5.22.0",

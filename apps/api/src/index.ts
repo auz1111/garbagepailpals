@@ -54,6 +54,7 @@ import {
   operatorServiceStopHandler
 } from "./routes/operatorRoutes";
 import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
+import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
 import { operatorZoneRequestHandler, operatorZonesHandler } from "./routes/operatorZones";
 import { adminOperatorsHandler, adminOperatorTimeOffHandler } from "./routes/adminOperators";
 import {
@@ -242,6 +243,20 @@ app.http("operator-route-stop-service", {
   methods: ["PATCH", "OPTIONS"],
   authLevel: "anonymous",
   handler: operatorServiceStopHandler
+});
+
+app.http("service-photo-upload", {
+  route: "uploads/service-photo",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: uploadServicePhotoHandler
+});
+
+app.http("service-photo-get", {
+  route: "uploads/service-photo/{blob}",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: getServicePhotoHandler
 });
 
 app.http("operator-zones", {
