@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { pickupScheduleSuggestionSchema, type PickupScheduleSuggestion } from "@gpp/shared";
 import type { HaulerLookupInput, HaulerProvider } from "./types";
 import { createRecollectProvider } from "./recollect";
+import { createRepublicProvider } from "./republic";
 
 // Cached matches are reused for a week; hauler schedules change rarely and this
 // keeps us off the third-party APIs on repeat loads of the same address.
@@ -10,9 +11,10 @@ const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const EMPTY: PickupScheduleSuggestion = { matched: false, streams: [] };
 
-// Registered haulers. Phase 1 ships Cascade Disposal (ReCollect); additional
-// ReCollect haulers are one more entry, and other platforms (e.g. Republic) are
-// a new provider implementing HaulerProvider.
+// Registered haulers, tried in order (first match wins). Cascade (ReCollect) is
+// region-scoped to Oregon; Republic is a large national hauler, so we probe it
+// everywhere and let its own coverage decide. Additional ReCollect haulers are
+// one more createRecollectProvider entry.
 const PROVIDERS: HaulerProvider[] = [
   createRecollectProvider({
     id: "cascade",
@@ -22,6 +24,13 @@ const PROVIDERS: HaulerProvider[] = [
     serviceId: 399,
     // Cascade serves the Bend / Deschutes County area (Central Oregon).
     serves: (input) => input.state.trim().toUpperCase() === "OR"
+  }),
+  createRepublicProvider({
+    id: "republic",
+    label: "Republic Services",
+    // National hauler — probe for any US address; publicPickup returns nothing
+    // for addresses Republic doesn't service.
+    serves: () => true
   })
 ];
 
