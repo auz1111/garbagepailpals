@@ -31,17 +31,159 @@ const PROVIDERS: HaulerProvider[] = [
     area: "cascadedisposal",
     service: "waste",
     serviceId: 399,
+    coverageLabel: "Oregon",
     // Cascade serves the Bend / Deschutes County area (Central Oregon).
     serves: (input) => input.state.trim().toUpperCase() === "OR"
   }),
   createRepublicProvider({
     id: "republic",
     label: "Republic Services",
+    coverageLabel: "National (US)",
     // National hauler — probe for any US address; publicPickup returns nothing
     // for addresses Republic doesn't service.
     serves: () => true
   })
 ];
+
+// The wired provider registry, for the super-admin coverage view.
+export function describeProviders(): Array<{
+  id: string;
+  label: string;
+  platform: string;
+  coverageLabel: string;
+}> {
+  return PROVIDERS.map((p) => ({
+    id: p.id,
+    label: p.label,
+    platform: p.platform,
+    coverageLabel: p.coverageLabel
+  }));
+}
+
+// Which registered providers are configured to cover a given state (by their
+// serves() region rule). Empty/unknown state -> only national providers qualify.
+export function providersForState(state: string | null | undefined): Array<{ id: string; label: string }> {
+  const probe: HaulerLookupInput = { line1: "", city: "", state: state ?? "", postalCode: "" };
+  return PROVIDERS.filter((p) => p.serves(probe)).map((p) => ({ id: p.id, label: p.label }));
+}
+
+// Super-admin coverage overview: the wired providers plus, per service area
+// (zone), which providers are configured for it and how many active addresses
+// have actually matched a hauler lookup (empirical, from the cache).
+export async function getHaulerCoverage(): Promise<{
+  providers: ReturnType<typeof describeProviders>;
+  areas: Array<{
+    zoneId: string | null;
+    name: string;
+    city: string | null;
+    state: string | null;
+    isTest: boolean;
+    configuredProviders: Array<{ id: string; label: string }>;
+    totalAddresses: number;
+    matched: number;
+    unmatched: number;
+    matchedByProvider: Array<{ provider: string; providerLabel: string; count: number }>;
+  }>;
+}> {
+  const providers = describeProviders();
+  const labelFor = (id: string) => providers.find((p) => p.id === id)?.label ?? id;
+
+  const [rows, addresses, zones] = await Promise.all([
+    prisma.haulerScheduleLookup.findMany({
+      where: { matched: true },
+      select: { addressHash: true, provider: true }
+    }),
+    prisma.serviceAddress.findMany({
+      where: { isActive: true },
+      select: {
+        line1: true,
+        city: true,
+        state: true,
+        postalCode: true,
+        neighborhood: { select: { zoneId: true } }
+      }
+    }),
+    prisma.zone.findMany({ orderBy: { name: "asc" } })
+  ]);
+
+  const providerByHash = new Map(rows.map((r) => [r.addressHash, r.provider]));
+
+  type Bucket = {
+    zoneId: string | null;
+    name: string;
+    city: string | null;
+    state: string | null;
+    isTest: boolean;
+    total: number;
+    matched: number;
+    byProvider: Map<string, number>;
+  };
+  const NONE = "__none__";
+  const buckets = new Map<string, Bucket>();
+  for (const z of zones) {
+    buckets.set(z.id, {
+      zoneId: z.id,
+      name: z.name,
+      city: z.city,
+      state: z.state,
+      isTest: z.isTest,
+      total: 0,
+      matched: 0,
+      byProvider: new Map()
+    });
+  }
+  buckets.set(NONE, {
+    zoneId: null,
+    name: "No service area",
+    city: null,
+    state: null,
+    isTest: false,
+    total: 0,
+    matched: 0,
+    byProvider: new Map()
+  });
+
+  for (const address of addresses) {
+    const key = address.neighborhood?.zoneId ?? NONE;
+    const bucket = buckets.get(key) ?? buckets.get(NONE)!;
+    bucket.total += 1;
+    const provider = providerByHash.get(
+      haulerAddressHash({
+        line1: address.line1,
+        city: address.city,
+        state: address.state,
+        postalCode: address.postalCode
+      })
+    );
+    if (provider) {
+      bucket.matched += 1;
+      bucket.byProvider.set(provider, (bucket.byProvider.get(provider) ?? 0) + 1);
+    }
+  }
+
+  const areas = [...buckets.values()]
+    // Show every real zone; only show the catch-all bucket when it has addresses.
+    .filter((b) => b.zoneId !== null || b.total > 0)
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((b) => ({
+      zoneId: b.zoneId,
+      name: b.name,
+      city: b.city,
+      state: b.state,
+      isTest: b.isTest,
+      configuredProviders: providersForState(b.state),
+      totalAddresses: b.total,
+      matched: b.matched,
+      unmatched: b.total - b.matched,
+      matchedByProvider: [...b.byProvider.entries()].map(([provider, count]) => ({
+        provider,
+        providerLabel: labelFor(provider),
+        count
+      }))
+    }));
+
+  return { providers, areas };
+}
 
 function providerById(id: string): HaulerProvider | undefined {
   return PROVIDERS.find((provider) => provider.id === id);

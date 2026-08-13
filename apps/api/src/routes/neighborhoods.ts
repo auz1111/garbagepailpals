@@ -4,6 +4,7 @@ import {
   addressMonthlyCents,
   adminLocationNeighborhoodUpdateSchema,
   adminLocationsResponseSchema,
+  haulerCoverageResponseSchema,
   isSuperAdminRole,
   neighborhoodCreateSchema,
   neighborhoodUpdateSchema,
@@ -15,6 +16,7 @@ import {
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { allowedZoneIds } from "../lib/zoneScope";
+import { getHaulerCoverage } from "../services/haulerSchedule";
 
 async function zonesList(userId: string, role: string) {
   const allowed = isSuperAdminRole(role)
@@ -133,6 +135,31 @@ export async function adminZoneByIdHandler(
           }
         });
         return jsonResponse(200, await zonesList(auth.sub, auth.role));
+      },
+      { roles: ["ADMIN"] }
+    )(request, context)
+  );
+}
+
+// Super-admin overview of which haulers are wired up and which service areas
+// have working lookups (configured + empirically matched).
+export async function adminHaulerCoverageHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (_req, _ctx, auth) => {
+        if (!isSuperAdminRole(auth.role)) {
+          throw new HttpError(403, "Only a super admin can view hauler coverage.");
+        }
+        const coverage = await getHaulerCoverage();
+        return jsonResponse(200, haulerCoverageResponseSchema.parse(coverage));
       },
       { roles: ["ADMIN"] }
     )(request, context)

@@ -33,6 +33,10 @@ export type ProviderResult = {
 export interface HaulerProvider {
   id: string;
   label: string;
+  // The integration platform behind this hauler (e.g. "ReCollect", "Republic
+  // API") and a human-readable coverage scope, both for the admin registry view.
+  platform: string;
+  coverageLabel: string;
   serves(input: HaulerLookupInput): boolean;
   lookup(input: HaulerLookupInput): Promise<ProviderResult | null>;
   // Concrete, holiday-accurate collection dates over a window. Returns null on

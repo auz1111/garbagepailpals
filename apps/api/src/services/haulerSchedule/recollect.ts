@@ -25,6 +25,8 @@ export type RecollectConfig = {
   service: string;
   // Numeric service id used in the events path, e.g. 399.
   serviceId: number;
+  // Human-readable coverage scope for the admin registry (e.g. "Oregon").
+  coverageLabel: string;
   serves: (input: HaulerLookupInput) => boolean;
 };
 
@@ -169,6 +171,8 @@ export function createRecollectProvider(config: RecollectConfig): HaulerProvider
   return {
     id: config.id,
     label: config.label,
+    platform: "ReCollect",
+    coverageLabel: config.coverageLabel,
     serves: config.serves,
     async lookup(input: HaulerLookupInput): Promise<ProviderResult | null> {
       // 1. Resolve the address to a ReCollect place_id. The suggest endpoint is a

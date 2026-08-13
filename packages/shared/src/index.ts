@@ -121,6 +121,35 @@ export const haulerUpcomingSchema = z.object({
   pickups: z.array(haulerUpcomingPickupSchema)
 });
 
+// --- Super-admin hauler coverage overview ---------------------------------
+export const haulerProviderInfoSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  platform: z.string(),
+  coverageLabel: z.string()
+});
+
+export const haulerCoverageAreaSchema = z.object({
+  zoneId: z.string().nullable(),
+  name: z.string(),
+  city: z.string().nullable(),
+  state: z.string().nullable(),
+  isTest: z.boolean(),
+  // Providers whose region rule covers this zone's state.
+  configuredProviders: z.array(z.object({ id: z.string(), label: z.string() })),
+  totalAddresses: z.number().int(),
+  matched: z.number().int(),
+  unmatched: z.number().int(),
+  matchedByProvider: z.array(
+    z.object({ provider: z.string(), providerLabel: z.string(), count: z.number().int() })
+  )
+});
+
+export const haulerCoverageResponseSchema = z.object({
+  providers: z.array(haulerProviderInfoSchema),
+  areas: z.array(haulerCoverageAreaSchema)
+});
+
 export const serviceAddressInputSchema = z.object({
   line1: z.string().min(1).max(120),
   line2: z.string().max(120).optional(),
@@ -1021,6 +1050,9 @@ export type PickupStream = z.infer<typeof pickupStreamSchema>;
 export type PickupScheduleSuggestion = z.infer<typeof pickupScheduleSuggestionSchema>;
 export type HaulerUpcomingPickup = z.infer<typeof haulerUpcomingPickupSchema>;
 export type HaulerUpcoming = z.infer<typeof haulerUpcomingSchema>;
+export type HaulerProviderInfo = z.infer<typeof haulerProviderInfoSchema>;
+export type HaulerCoverageArea = z.infer<typeof haulerCoverageAreaSchema>;
+export type HaulerCoverageResponse = z.infer<typeof haulerCoverageResponseSchema>;
 export type ServiceAddressInput = z.infer<typeof serviceAddressInputSchema>;
 export type CreateAddressRequest = z.infer<typeof createAddressRequestSchema>;
 export type ServiceAddress = z.infer<typeof serviceAddressSchema>;

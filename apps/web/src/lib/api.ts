@@ -29,6 +29,7 @@ import type {
   NeighborhoodUpdate,
   AdminLocationsResponse,
   AdminLocationNeighborhoodUpdate,
+  HaulerCoverageResponse,
   AvailableOperatorsResponse,
   OperatorAvailabilityResponse,
   OperatorAvailabilityUpdate,
@@ -241,6 +242,15 @@ export function deleteNeighborhood(id: string, accessToken: string): Promise<Nei
 
 export function getAdminLocations(accessToken: string): Promise<AdminLocationsResponse> {
   return request<undefined, AdminLocationsResponse>("/ops-admin/locations", "GET", undefined, accessToken);
+}
+
+export function getHaulerCoverage(accessToken: string): Promise<HaulerCoverageResponse> {
+  return request<undefined, HaulerCoverageResponse>(
+    "/ops-admin/hauler-coverage",
+    "GET",
+    undefined,
+    accessToken
+  );
 }
 
 export function setLocationNeighborhood(

@@ -214,6 +214,8 @@ function toStreams(containers: Container[]): PickupStream[] {
 export type RepublicConfig = {
   id: string;
   label: string;
+  // Human-readable coverage scope for the admin registry (e.g. "National (US)").
+  coverageLabel: string;
   serves: (input: HaulerLookupInput) => boolean;
 };
 
@@ -221,6 +223,8 @@ export function createRepublicProvider(config: RepublicConfig): HaulerProvider {
   return {
     id: config.id,
     label: config.label,
+    platform: "Republic API",
+    coverageLabel: config.coverageLabel,
     serves: config.serves,
     async lookup(input: HaulerLookupInput): Promise<ProviderResult | null> {
       // 1. Resolve the one-line address to Republic's addressHash.
