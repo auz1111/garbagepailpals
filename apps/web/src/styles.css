@@ -4083,6 +4083,23 @@ button[type="submit"]:disabled {
 .button-row button:hover {
   border-color: var(--ink);
 }
+/* Keep primary CTAs marigold even inside a button row (which otherwise renders
+   neutral outlined buttons). */
+.button-row button.cta-primary {
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  color: var(--teal-deep);
+  border-color: transparent;
+  box-shadow: var(--shadow-gold);
+  padding: 0.7rem 1.5rem;
+}
+.button-row button.cta-primary:hover:not(:disabled) {
+  border-color: transparent;
+  transform: translateY(-1px);
+}
+.button-row button.cta-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .link-button {
   border: 0;

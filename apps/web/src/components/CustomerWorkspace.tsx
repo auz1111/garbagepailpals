@@ -35,9 +35,11 @@ import {
   listHistoryJobs,
   listUpcomingJobs,
   deleteAddress,
+  updateAddress,
   updateAddressSchedule
 } from "../lib/api";
 import { ProviderSyncReview } from "./ProviderSyncReview";
+import { AddLocationWizard } from "./AddLocationWizard";
 
 // A schedule row from the API mapped to the shared pricing input.
 function toPricingDay(day: PickupDay): PricingDay {
@@ -82,7 +84,7 @@ const defaultAddressValues: CreateAddressRequest = {
   cadence: "WEEKLY"
 };
 
-const DEFAULT_PICKUP_DAYS = [2];
+const DEFAULT_PICKUP_DAYS = [5];
 
 const WEEKDAYS = [
   "Sunday",
@@ -136,12 +138,8 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   ]);
 
   function closeAddressForm(): void {
+    // The add-location wizard owns its own form state; just hide it.
     setShowAddressForm(false);
-    createAddressMutation.reset();
-    addressForm.reset(defaultAddressValues);
-    setAreaCheck(null);
-    setPickupSuggestion(null);
-    setSuggestionDismissed(false);
   }
 
   async function checkAddressArea(postalCode: string): Promise<void> {
@@ -729,247 +727,25 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
           <p className="subtext">Add a pickup location and review your saved locations.</p>
         </div>
 
-        <div className={formOpen && hasAddress ? "panel-grid" : ""}>
+        <div>
           {formOpen ? (
-          <article className="panel">
-            <div className="panel-head-row">
-              <h3>Add Service Location</h3>
-              {hasAddress ? (
-                <button type="button" className="link-inline" onClick={closeAddressForm}>
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-            <form onSubmit={addressForm.handleSubmit((values) => createAddressMutation.mutate(values))}>
-              <label>
-                Line 1
-                <input
-                  {...addressForm.register("line1", { required: "Street address is required" })}
-                  placeholder="123 Main St"
-                />
-              </label>
-              {addressForm.formState.errors.line1 ? (
-                <p className="error">{addressForm.formState.errors.line1.message}</p>
-              ) : null}
-              <label>
-                City
-                <input {...addressForm.register("city", { required: "City is required" })} placeholder="Bend" />
-              </label>
-              {addressForm.formState.errors.city ? (
-                <p className="error">{addressForm.formState.errors.city.message}</p>
-              ) : null}
-              <label>
-                State
-                <input
-                  {...addressForm.register("state", {
-                    required: "State is required",
-                    minLength: { value: 2, message: "Use the 2-letter state code" }
-                  })}
-                  placeholder="OR"
-                />
-              </label>
-              {addressForm.formState.errors.state ? (
-                <p className="error">{addressForm.formState.errors.state.message}</p>
-              ) : null}
-              <label>
-                Postal code
-                <input
-                  {...addressForm.register("postalCode", {
-                    required: "Postal code is required",
-                    minLength: { value: 3, message: "Enter a valid postal code" },
-                    onBlur: (event) => void checkAddressArea((event.target as HTMLInputElement).value)
-                  })}
-                  placeholder="97702"
-                />
-              </label>
-              {addressForm.formState.errors.postalCode ? (
-                <p className="error">{addressForm.formState.errors.postalCode.message}</p>
-              ) : areaChecking ? (
-                <p className="subtext">Checking service area…</p>
-              ) : areaCheck ? (
-                <p className={areaCheck.eligible ? "success-inline" : "error"}>
-                  {areaCheck.eligible
-                    ? `✓ We service ${areaCheck.postalCode} — you're good to add this address.`
-                    : `✗ We don't service ${areaCheck.postalCode} yet. Adding it will be rejected.`}
-                </p>
-              ) : null}
-              <label>
-                Timezone
-                <input
-                  {...addressForm.register("timezone", { required: "Timezone is required" })}
-                  placeholder="America/Los_Angeles"
-                />
-              </label>
-              <label>
-                Access notes
-                <input
-                  {...addressForm.register("accessNotes", { required: "Add a note for the operator" })}
-                  placeholder="Gate opens inward"
-                />
-              </label>
-              <h4 className="form-section-title">First pickup day</h4>
-              {suggestionLoading ? (
-                <p className="subtext">Checking your trash provider's pickup schedule…</p>
-              ) : pickupSuggestion?.matched && pickupSuggestion.garbage && !suggestionDismissed ? (
-                <div className="pickup-suggestion">
-                  <p>
-                    <strong>
-                      We found your schedule
-                      {pickupSuggestion.providerLabel ? ` — ${pickupSuggestion.providerLabel}` : ""}.
-                    </strong>{" "}
-                    Garbage is picked up{" "}
-                    <strong>
-                      {WEEKDAYS[pickupSuggestion.garbage.dayOfWeek]},{" "}
-                      {pickupSuggestion.garbage.cadence === "BIWEEKLY" ? "every 2 weeks" : "every week"}
-                    </strong>
-                    . We've set your first pickup below — adjust it if that's not right.
-                  </p>
-                  {pickupSuggestion.recycling ? (
-                    <p className="subtext">
-                      Recycling: {WEEKDAYS[pickupSuggestion.recycling.dayOfWeek]},{" "}
-                      {pickupSuggestion.recycling.cadence === "BIWEEKLY" ? "every 2 weeks" : "every week"}.
-                    </p>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => setSuggestionDismissed(true)}
-                  >
-                    Dismiss
-                  </button>
-                </div>
-              ) : pickupSuggestion && !pickupSuggestion.matched ? (
-                <p className="subtext">
-                  We couldn't look up your trash provider's schedule automatically — set your first
-                  pickup day below.
-                </p>
-              ) : null}
-              <div className="field-row">
-                <label>
-                  Pickup day
-                  <select
-                    {...addressForm.register("pickupDayOfWeek", {
-                      valueAsNumber: true,
-                      // Choosing a day manually opts out of provider sync.
-                      onChange: () => addressForm.setValue("providerSynced", false)
-                    })}
-                  >
-                    {WEEKDAYS.map((label, value) => (
-                      <option key={label} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Cadence
-                  <select {...addressForm.register("cadence")}>
-                    <option value="WEEKLY">Every week</option>
-                    <option value="BIWEEKLY">Every 2 weeks</option>
-                  </select>
-                </label>
-              </div>
-              {addressCadence === "BIWEEKLY" ? (
-                <label className="field-single">
-                  First pickup date
-                  <input
-                    type="datetime-local"
-                    {...addressForm.register("biweeklyAnchorDate", {
-                      required: "Pick a first date for a biweekly schedule"
-                    })}
-                  />
-                </label>
-              ) : null}
-              {addressForm.formState.errors.biweeklyAnchorDate ? (
-                <p className="error">{addressForm.formState.errors.biweeklyAnchorDate?.message}</p>
-              ) : null}
-              <label className="field-single">
-                Cans
-                <input
-                  type="number"
-                  min={1}
-                  max={20}
-                  {...addressForm.register("canCount", {
-                    valueAsNumber: true,
-                    required: "Required",
-                    min: { value: 1, message: "Min 1" },
-                    max: { value: 20, message: "Max 20" }
-                  })}
-                />
-              </label>
-              {addressForm.formState.errors.canCount ? (
-                <p className="error">{addressForm.formState.errors.canCount?.message}</p>
-              ) : null}
-              <label className="checkbox-field">
-                <input type="checkbox" {...addressForm.register("rollIn")} />
-                <span>
-                  <strong>Bring cans back the next day (roll-in)</strong>
-                  <span className="subtext">
-                    We return the cans the day after pickup. Turn off for roll-out only.
-                  </span>
-                </span>
-              </label>
-              <label className="checkbox-field">
-                <input type="checkbox" {...addressForm.register("glassRecycling")} />
-                <span>
-                  <strong>
-                    Glass recycling container (+{formatUsd(PRICING.glassRecyclingMonthlyCents)}/mo)
-                  </strong>
-                  <span className="subtext">
-                    We will also take out the glass recycling container.
-                  </span>
-                </span>
-              </label>
-              <label className="checkbox-field">
-                <input
-                  type="checkbox"
-                  checked={addressDogs > 0}
-                  onChange={(event) =>
-                    addressForm.setValue("petWasteDogs", event.target.checked ? 1 : 0)
-                  }
-                />
-                <span>
-                  <strong>
-                    Pet waste removal (from {formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo)
-                  </strong>
-                  <span className="subtext">
-                    We'll clean your dog's waste from the yard and bin it before rolling out. +
-                    {formatUsd(PRICING.petWasteExtraDogMonthlyCents)}/mo per extra dog.
-                  </span>
-                </span>
-              </label>
-              {addressDogs > 0 ? (
-                <label className="field-single">
-                  Dogs
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    {...addressForm.register("petWasteDogs", { valueAsNumber: true })}
-                  />
-                </label>
-              ) : null}
-              <p className="subtext">
-                This sets up your first pickup — {formatUsd(firstDayMonthly)}/mo. Add more pickup days
-                on the next screen.
-              </p>
-              <button type="submit" disabled={createAddressMutation.isPending}>
-                {createAddressMutation.isPending ? "Saving..." : "Save Location"}
-              </button>
-            </form>
-            {createAddressMutation.isError ? <p className="error">{getErrorMessage(createAddressMutation.error)}</p> : null}
-          </article>
+            <AddLocationWizard
+              accessToken={accessToken}
+              onCancel={hasAddress ? closeAddressForm : undefined}
+              onDone={(createdId) => {
+                setShowAddressForm(false);
+                navigate(`/customer/addresses/${createdId}`);
+              }}
+            />
           ) : null}
 
-          {hasAddress ? (
+          {!formOpen ? (
           <article className="panel">
             <div className="panel-head-row">
               <h3>Your Locations</h3>
-              {!showAddressForm ? (
-                <button type="button" className="add-address-btn" onClick={() => setShowAddressForm(true)}>
-                  + Add Location
-                </button>
-              ) : null}
+              <button type="button" className="add-address-btn" onClick={() => setShowAddressForm(true)}>
+                + Add Location
+              </button>
             </div>
             <p className="subtext">Select a location to set its pickup schedule, cans, and pickup days.</p>
             {summary && uncoveredCount > 0 ? (
@@ -1343,21 +1119,28 @@ function LocationDetail({
   const [reviewingProvider, setReviewingProvider] = useState(false);
 
   const providerConnect = useMutation({
-    mutationFn: () => connectProvider(address.id, accessToken),
-    onSuccess: (result) => {
+    mutationFn: (_opts: { force?: boolean } = {}) => connectProvider(address.id, accessToken),
+    onSuccess: (result, opts) => {
       setProviderResult(result);
-      if (result.matched) {
-        // Only prompt when there's something to do: a provider day missing from
-        // the schedule, or an existing pickup on a provider day that isn't synced.
-        const providerWeekdays = new Set(result.streams.map((s) => s.dayOfWeek));
-        const scheduleWeekdays = new Set(address.schedules.map((s) => s.dayOfWeek));
-        const missingDay = [...providerWeekdays].some((w) => !scheduleWeekdays.has(w));
-        const unsynced = address.schedules.some(
-          (s) => providerWeekdays.has(s.dayOfWeek) && !s.providerSynced
-        );
-        if (missingDay || unsynced) {
-          setReviewingProvider(true);
-        }
+      if (!result.matched) {
+        return;
+      }
+      if (opts?.force) {
+        // Explicit re-check or an address change — always open the review.
+        setReviewingProvider(true);
+        return;
+      }
+      // Auto (on open): only prompt when there's something to do — a provider day
+      // missing from the schedule, or an existing pickup on a provider day that
+      // isn't synced.
+      const providerWeekdays = new Set(result.streams.map((s) => s.dayOfWeek));
+      const scheduleWeekdays = new Set(address.schedules.map((s) => s.dayOfWeek));
+      const missingDay = [...providerWeekdays].some((w) => !scheduleWeekdays.has(w));
+      const unsynced = address.schedules.some(
+        (s) => providerWeekdays.has(s.dayOfWeek) && !s.providerSynced
+      );
+      if (missingDay || unsynced) {
+        setReviewingProvider(true);
       }
     }
   });
@@ -1387,9 +1170,47 @@ function LocationDetail({
 
   // Attempt the provider sync once when the location opens.
   useEffect(() => {
-    providerConnect.mutate();
+    providerConnect.mutate({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [address.id]);
+
+  // ---- Edit address ----
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addr, setAddr] = useState({
+    line1: address.line1,
+    city: address.city,
+    state: address.state,
+    postalCode: address.postalCode
+  });
+  const addressMutation = useMutation({
+    mutationFn: () =>
+      updateAddress(
+        address.id,
+        {
+          line1: addr.line1.trim(),
+          city: addr.city.trim(),
+          state: addr.state.trim(),
+          postalCode: addr.postalCode.trim()
+        },
+        accessToken
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+      await queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
+      setEditingAddress(false);
+      // The address changed — re-detect the trash provider and prompt to re-sync.
+      providerConnect.mutate({ force: true });
+    }
+  });
+  const openEditAddress = (): void => {
+    setAddr({
+      line1: address.line1,
+      city: address.city,
+      state: address.state,
+      postalCode: address.postalCode
+    });
+    setEditingAddress(true);
+  };
 
   const usedDays = new Set(days.map((d) => d.dayOfWeek));
   const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
@@ -1489,8 +1310,62 @@ function LocationDetail({
               {covered ? "✓ Serviced" : "Not serviced"}
             </span>
           ) : null}
+          {!editingAddress ? (
+            <>
+              {" · "}
+              <button type="button" className="link-button" onClick={openEditAddress}>
+                Edit address
+              </button>
+            </>
+          ) : null}
         </p>
       </div>
+
+      {editingAddress ? (
+        <article className="panel">
+          <div className="panel-head-row">
+            <h3>Edit address</h3>
+            <button type="button" className="link-inline" onClick={() => setEditingAddress(false)}>
+              Cancel
+            </button>
+          </div>
+          <p className="subtext">Saving re-checks the trash provider and offers to re-sync your days.</p>
+          <label>
+            Line 1
+            <input value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} />
+          </label>
+          <div className="field-row">
+            <label>
+              City
+              <input value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
+            </label>
+            <label>
+              State
+              <input value={addr.state} onChange={(e) => setAddr({ ...addr, state: e.target.value })} />
+            </label>
+          </div>
+          <label className="field-single">
+            Postal code
+            <input
+              value={addr.postalCode}
+              onChange={(e) => setAddr({ ...addr, postalCode: e.target.value })}
+            />
+          </label>
+          <div className="button-row">
+            <button
+              type="button"
+              className="cta-primary"
+              disabled={addressMutation.isPending}
+              onClick={() => addressMutation.mutate()}
+            >
+              {addressMutation.isPending ? "Saving…" : "Update address"}
+            </button>
+          </div>
+          {addressMutation.isError ? (
+            <p className="error">{getErrorMessage(addressMutation.error)}</p>
+          ) : null}
+        </article>
+      ) : null}
 
       <form onSubmit={handleSaveAll}>
         <article className="panel">
@@ -1531,18 +1406,28 @@ function LocationDetail({
               onApply={(payload) => providerApply.mutate(payload)}
               onSkip={() => setReviewingProvider(false)}
             />
-          ) : providerResult?.matched ? (
-            <p className="subtext">
-              ♻️ Trash provider: <strong>{providerResult.providerLabel}</strong>.{" "}
-              <button
-                type="button"
-                className="link-button"
-                onClick={() => setReviewingProvider(true)}
-              >
-                Review &amp; sync pickups
-              </button>
+          ) : (
+            <p className="subtext provider-status-line">
+              {providerConnect.isPending ? (
+                "Checking your trash provider…"
+              ) : providerResult?.matched ? (
+                <>
+                  ♻️ Trash provider: <strong>{providerResult.providerLabel}</strong>.{" "}
+                </>
+              ) : (
+                <>No trash provider connected for this address. </>
+              )}
+              {!providerConnect.isPending ? (
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => providerConnect.mutate({ force: true })}
+                >
+                  {providerResult?.matched ? "Review & sync pickups" : "Check for a trash provider"}
+                </button>
+              ) : null}
             </p>
-          ) : null}
+          )}
 
           <ul className="pickup-day-list">
             {days.map((day, idx) => {

@@ -146,7 +146,7 @@ export async function createAddressHandler(
             lat: finalLat,
             lng: finalLng,
             timezone,
-            accessNotes: input.accessNotes,
+            accessNotes: input.accessNotes ?? "",
             gateCode: input.gateCode,
             canCount: input.canCount,
             pickupsPerWeek: 1,
@@ -154,7 +154,7 @@ export async function createAddressHandler(
             isActive: input.isActive ?? true,
             schedules: {
               create: {
-                pickupDayOfWeek: input.pickupDayOfWeek ?? 2,
+                pickupDayOfWeek: input.pickupDayOfWeek ?? 5,
                 cadence: input.cadence ?? "WEEKLY",
                 biweeklyAnchorDate: input.biweeklyAnchorDate
                   ? new Date(input.biweeklyAnchorDate)

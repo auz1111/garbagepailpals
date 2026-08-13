@@ -159,7 +159,8 @@ export const serviceAddressInputSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   timezone: z.string().min(3).max(80),
-  accessNotes: z.string().min(1).max(500),
+  // Optional operator notes (gate code, where the cans are kept, etc.).
+  accessNotes: z.string().max(500).default(""),
   gateCode: z.string().max(40).optional(),
   canCount: z.number().int().min(1).max(20),
   pickupsPerWeek: z.number().int().min(1).max(7),
@@ -208,7 +209,7 @@ export const scheduleUpdateSchema = z.object({
 // Creating a location also sets up its first pickup day. Cans + roll-in come
 // from the address input; add the weekday and cadence for that first day.
 export const createAddressRequestSchema = serviceAddressInputSchema.extend({
-  pickupDayOfWeek: z.number().int().min(0).max(6).default(2),
+  pickupDayOfWeek: z.number().int().min(0).max(6).default(5),
   cadence: z.enum(["WEEKLY", "BIWEEKLY"]).default("WEEKLY"),
   biweeklyAnchorDate: z.string().datetime().optional(),
   // Glass recycling for the first pickup day.

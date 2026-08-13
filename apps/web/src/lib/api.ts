@@ -637,8 +637,14 @@ export function reopenAdminIncident(
   );
 }
 
-export function checkServiceArea(postalCode: string): Promise<ServiceAreaCheckResponse> {
+export function checkServiceArea(
+  postalCode: string,
+  opts: { includeTest?: boolean } = {}
+): Promise<ServiceAreaCheckResponse> {
   const params = new URLSearchParams({ postalCode });
+  if (opts.includeTest) {
+    params.set("includeTest", "true");
+  }
   return request<undefined, ServiceAreaCheckResponse>(`/service-areas/check?${params.toString()}`, "GET");
 }
 

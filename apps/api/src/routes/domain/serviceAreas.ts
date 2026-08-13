@@ -26,9 +26,14 @@ export async function serviceAreaCheckHandler(
       return jsonResponse(400, { message: "postalCode query parameter is required" });
     }
 
+    // Signed-in customers adding a location create with `includeTest`, so the
+    // pre-check can opt into test zones too (keeps the message consistent with
+    // what creation actually allows). The public/marketing check stays strict.
+    const includeTest = request.query.get("includeTest") === "true";
+
     const response = serviceAreaCheckResponseSchema.parse({
       postalCode,
-      eligible: await isPostalServiceable(postalCode)
+      eligible: await isPostalServiceable(postalCode, { includeTest })
     });
 
     return jsonResponse(200, response);

@@ -1347,7 +1347,7 @@ function AdminScheduleEditorForm({
           }))
       : [
           {
-            dayOfWeek: 2,
+            dayOfWeek: 5,
             cadence: "WEEKLY",
             canCount: 2,
             rollIn: true,
