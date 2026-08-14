@@ -3,7 +3,7 @@ import { env } from "../lib/env";
 
 export type ActiveEntitlement = {
   userId: string;
-  source: "STRIPE" | "PAYPAL" | "REVENUECAT" | "DEV";
+  source: "STRIPE" | "PAYPAL" | "REVENUECAT" | "DEV" | "MANAGED";
   externalSubscriptionId: string;
   expiresAt: Date | null;
 };
@@ -102,6 +102,20 @@ export async function getActiveEntitlement(userId: string): Promise<ActiveEntitl
 
   const active = entitlements[0];
   if (!active) {
+    // PailPal-managed customers pay offline (no Stripe/PayPal entitlement) but are
+    // fully entitled to the customer app by virtue of being managed + approved.
+    const managed = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { managedById: true }
+    });
+    if (managed?.managedById) {
+      return {
+        userId,
+        source: "MANAGED",
+        externalSubscriptionId: `managed:${managed.managedById}`,
+        expiresAt: null
+      };
+    }
     return null;
   }
 

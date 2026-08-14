@@ -1034,6 +1034,42 @@ export const customerHistoryResponseSchema = z.object({
   stops: z.array(customerHistoryStopSchema)
 });
 
+// PailPal: create a managed customer (a real login the PailPal sets a password
+// for and hands off however they like).
+export const pailpalCustomerCreateSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email(),
+  phone: z.string().max(40).optional(),
+  password: z.string().min(8).max(128)
+});
+
+// A managed customer as their PailPal sees them, with a summary of their
+// locations (full location/schedule editing reuses the normal address flow).
+export const pailpalCustomerLocationSchema = z.object({
+  id: z.string(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  isActive: z.boolean(),
+  serviceApproved: z.boolean(),
+  pickupDays: z.array(z.number().int())
+});
+
+export const pailpalCustomerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  email: z.string(),
+  phone: z.string().nullable(),
+  createdAt: z.string(),
+  locations: z.array(pailpalCustomerLocationSchema)
+});
+
+export const pailpalCustomersResponseSchema = z.object({
+  customers: z.array(pailpalCustomerSchema)
+});
+export const pailpalCustomerResponseSchema = z.object({ customer: pailpalCustomerSchema });
+
 // Admin cancel request — an optional free-text reason kept for the record.
 export const routeCancelSchema = z.object({
   reason: z.string().trim().max(500).optional()
@@ -1289,6 +1325,11 @@ export type RouteHistorySummary = z.infer<typeof routeHistorySummarySchema>;
 export type DailyRouteStop = z.infer<typeof dailyRouteStopSchema>;
 export type CustomerHistoryStop = z.infer<typeof customerHistoryStopSchema>;
 export type CustomerHistoryResponse = z.infer<typeof customerHistoryResponseSchema>;
+export type PailpalCustomerCreate = z.infer<typeof pailpalCustomerCreateSchema>;
+export type PailpalCustomerLocation = z.infer<typeof pailpalCustomerLocationSchema>;
+export type PailpalCustomer = z.infer<typeof pailpalCustomerSchema>;
+export type PailpalCustomersResponse = z.infer<typeof pailpalCustomersResponseSchema>;
+export type PailpalCustomerResponse = z.infer<typeof pailpalCustomerResponseSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
 export type AdminRouteSummary = z.infer<typeof adminRouteSummarySchema>;
 export type AdminTodaysLocation = z.infer<typeof adminTodaysLocationSchema>;

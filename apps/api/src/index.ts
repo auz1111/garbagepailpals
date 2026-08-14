@@ -48,6 +48,11 @@ import {
   operatorServiceStopHandler
 } from "./routes/operatorRoutes";
 import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
+import {
+  pailpalApproveLocationHandler,
+  pailpalBuildRouteHandler,
+  pailpalCustomersHandler
+} from "./routes/pailpalRoutes";
 import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
 import { dayStatusHandler, refreshSchedulesHandler } from "./routes/dayStatus";
 import { operatorZoneRequestHandler, operatorZonesHandler } from "./routes/operatorZones";
@@ -471,6 +476,27 @@ app.http("jobs-history", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: historyJobsHandler
+});
+
+app.http("pailpal-customers", {
+  route: "pailpal/customers",
+  methods: ["GET", "POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalCustomersHandler
+});
+
+app.http("pailpal-location-approve", {
+  route: "pailpal/locations/{addressId}/approve",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalApproveLocationHandler
+});
+
+app.http("pailpal-routes-build", {
+  route: "pailpal/routes/build",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalBuildRouteHandler
 });
 
 app.http("billing-summary", {

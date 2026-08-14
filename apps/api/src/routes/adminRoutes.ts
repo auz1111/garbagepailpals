@@ -43,7 +43,7 @@ import { reconcileTodaysWork, type WorkScope } from "../services/todaysWork";
 const ORS_BASE = "https://api.openrouteservice.org";
 
 // The work for a single location on a given operating day.
-type ServiceWork = {
+export type ServiceWork = {
   address: {
     id: string;
     line1: string;
@@ -74,7 +74,7 @@ type ServiceWork = {
 // (holiday-accurate) dates by reconcileTodaysWork, so a shifted/cancelled pickup
 // doesn't land on a route. "Tomorrow"/"yesterday" resolve in EACH location's own
 // timezone, so a UTC-hosted server never rolls the operating day over wrong.
-async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promise<ServiceWork[]> {
+export async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promise<ServiceWork[]> {
   const reconciled = await reconcileTodaysWork(now, scope);
   const work: ServiceWork[] = [];
   for (const r of reconciled) {

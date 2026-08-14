@@ -32,7 +32,7 @@ function canTypeToStreamKind(type: CanType): PickupStream["kind"] {
 
 const SERVICE_ADDRESS_INCLUDE = {
   schedules: true,
-  user: { select: { id: true, name: true } },
+  user: { select: { id: true, name: true, managedById: true } },
   neighborhood: { select: { name: true } },
   subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
 } as const;
@@ -40,7 +40,10 @@ const SERVICE_ADDRESS_INCLUDE = {
 type AddressRow = Awaited<ReturnType<typeof loadServiceableAddresses>>[number];
 type ScheduleRow = AddressRow["schedules"][number];
 
-export type WorkScope = { neighborhoodId?: string; zoneIds?: string[] };
+// ownerId scopes to a PailPal's own managed customers (used for their self-only
+// route building). Without it, the global set is active-subscription customers
+// plus any PailPal-managed customer (who pay offline, so have no subscription).
+export type WorkScope = { neighborhoodId?: string; zoneIds?: string[]; ownerId?: string };
 
 // Provider health for one roll action (roll-out or roll-in) at an address:
 //   NOT_SYNCED    — this pickup day isn't tied to a trash provider
@@ -80,11 +83,21 @@ async function loadServiceableAddresses(scope: WorkScope) {
   return prisma.serviceAddress.findMany({
     where: {
       isActive: true,
-      // Only admin-approved locations are serviceable (routable / counted).
+      // Only approved locations are serviceable (routable / counted).
       serviceApprovedAt: { not: null },
       ...(scope.neighborhoodId ? { neighborhoodId: scope.neighborhoodId } : {}),
       ...(scope.zoneIds ? { neighborhood: { zoneId: { in: scope.zoneIds } } } : {}),
-      subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
+      // A PailPal building their own route sees only their managed customers (who
+      // pay offline, so we don't require a subscription). Otherwise the set is
+      // active-subscription customers OR any PailPal-managed customer.
+      ...(scope.ownerId
+        ? { user: { managedById: scope.ownerId } }
+        : {
+            OR: [
+              { subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } } },
+              { user: { managedById: { not: null } } }
+            ]
+          }),
       schedules: { some: {} }
     },
     include: SERVICE_ADDRESS_INCLUDE
@@ -138,7 +151,10 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
 
   const result: ReconciledWork[] = [];
   for (const a of addresses) {
-    const subscriptionId = a.subscriptions[0]?.id;
+    // PailPal-managed customers pay offline and have no Subscription row; use a
+    // synthetic id for them (it's only a reference label — never persisted).
+    const subscriptionId =
+      a.subscriptions[0]?.id ?? (a.user.managedById ? `managed:${a.user.managedById}` : null);
     if (!subscriptionId) continue;
 
     const zone = resolveZone(a.timezone);

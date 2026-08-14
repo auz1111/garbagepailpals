@@ -16,6 +16,7 @@ import {
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
+import { canActForAddress, canActForUser } from "../../lib/ownership";
 import { geocodeAddressParts } from "../../services/geocoding";
 import { lookupPickupSchedule } from "../../services/haulerSchedule";
 import { timezoneForCoords } from "../../lib/timezone";
@@ -115,16 +116,17 @@ export async function createAddressHandler(
           });
         }
 
-        // Admins may create a location on behalf of a customer by passing userId;
-        // everyone else always creates for themselves. Verify the target exists.
+        // Admins may create a location on behalf of any customer by passing
+        // userId; a PailPal may do so for the customers they manage; everyone
+        // else always creates for themselves. Verify the target exists.
         let ownerId = auth.sub;
         if (input.userId && input.userId !== auth.sub) {
-          if (!isAdminRole(auth.role)) {
-            return jsonResponse(403, { message: "Only admins can add a location for another user" });
-          }
           const target = await prisma.user.findUnique({ where: { id: input.userId } });
           if (!target) {
             return jsonResponse(404, { message: "Customer not found" });
+          }
+          if (!(await canActForUser(auth, target.id))) {
+            return jsonResponse(403, { message: "You can only add a location for your own customers" });
           }
           ownerId = target.id;
         }
@@ -197,7 +199,7 @@ export async function createAddressHandler(
 
         return jsonResponse(201, { address: toAddressResponse(created) });
       },
-      { roles: ["CUSTOMER", "ADMIN"] }
+      { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
     )(request, context)
   );
 }
@@ -372,7 +374,7 @@ export async function upsertScheduleHandler(
           return jsonResponse(404, { message: "Address not found" });
         }
 
-        if (!isAdminRole(auth.role) && address.userId !== auth.sub) {
+        if (!(await canActForAddress(auth, address.userId))) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 
@@ -419,7 +421,7 @@ export async function upsertScheduleHandler(
             .map(toScheduleResponse)
         });
       },
-      { roles: ["CUSTOMER", "ADMIN"] }
+      { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
     )(request, context)
   );
 }
