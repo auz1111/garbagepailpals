@@ -14,6 +14,7 @@ enum UserRole {
   OPERATOR
   ADMIN
   PRO_OPERATOR
+  PAILPAL
   SUPER_ADMIN
 }
 
@@ -81,6 +82,11 @@ model User {
   revenueCatAppUserId  String?
   requestedServiceArea String?
   operatorAccess       Boolean        @default(false)
+  // For a customer managed by a PailPal: the PailPal who owns them (they're only
+  // visible to that PailPal). Null for self-signup customers and for staff.
+  managedById          String?
+  managedBy            User?          @relation("ManagedCustomers", fields: [managedById], references: [id], onDelete: SetNull)
+  managedCustomers     User[]         @relation("ManagedCustomers")
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   serviceAddresses     ServiceAddress[]

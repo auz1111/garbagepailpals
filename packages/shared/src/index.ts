@@ -3,25 +3,32 @@ import { z } from "zod";
 // SUPER_ADMIN administers every zone. PRO_OPERATOR is a sub-admin scoped to the
 // zones granted to them — they can both assign and run routes there. ADMIN is
 // the legacy full-admin role, kept during the transition and treated as an
-// all-zone admin.
+// all-zone admin. PAILPAL is an operator who owns their own customers: they
+// create/approve those customers (payments handled offline) and build routes
+// only for them.
 export const roleSchema = z.enum([
   "CUSTOMER",
   "OPERATOR",
   "ADMIN",
   "PRO_OPERATOR",
+  "PAILPAL",
   "SUPER_ADMIN"
 ]);
 
 // Roles that reach the admin surfaces (dashboard, routes, etc.).
 export const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "PRO_OPERATOR"] as const;
-// Roles that can run/operate routes (admins can operate too).
-export const STAFF_ROLES = ["OPERATOR", "ADMIN", "SUPER_ADMIN", "PRO_OPERATOR"] as const;
+// Roles that can run/operate routes (admins can operate too; PailPals run their
+// own routes).
+export const STAFF_ROLES = ["OPERATOR", "ADMIN", "SUPER_ADMIN", "PRO_OPERATOR", "PAILPAL"] as const;
 
 export function isAdminRole(role: string | undefined | null): boolean {
   return role != null && (ADMIN_ROLES as readonly string[]).includes(role);
 }
 export function isSuperAdminRole(role: string | undefined | null): boolean {
   return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+export function isPailpalRole(role: string | undefined | null): boolean {
+  return role === "PAILPAL";
 }
 
 export const registerSchema = z.object({

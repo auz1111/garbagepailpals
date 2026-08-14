@@ -18,9 +18,12 @@ type AuthOptions = {
 // keep working without editing every call site. Zone-level scoping (who may act
 // in WHICH zone) is enforced inside the handlers, not here.
 const ROLE_GRANTS: Record<Role, Role[]> = {
-  SUPER_ADMIN: ["SUPER_ADMIN", "PRO_OPERATOR", "ADMIN", "OPERATOR", "CUSTOMER"],
+  SUPER_ADMIN: ["SUPER_ADMIN", "PRO_OPERATOR", "ADMIN", "PAILPAL", "OPERATOR", "CUSTOMER"],
   PRO_OPERATOR: ["PRO_OPERATOR", "ADMIN", "OPERATOR"],
   ADMIN: ["ADMIN", "OPERATOR"],
+  // A PailPal runs their own routes through the operator endpoints (scoped to
+  // themselves), so they satisfy OPERATOR as well as their own PAILPAL gate.
+  PAILPAL: ["PAILPAL", "OPERATOR"],
   OPERATOR: ["OPERATOR"],
   CUSTOMER: ["CUSTOMER"]
 };

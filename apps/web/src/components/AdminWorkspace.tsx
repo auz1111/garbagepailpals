@@ -80,6 +80,7 @@ const ROLE_LABELS: Record<Role, string> = {
   OPERATOR: "Operator",
   ADMIN: "Admin",
   PRO_OPERATOR: "Pro operator",
+  PAILPAL: "PailPal",
   SUPER_ADMIN: "Super admin"
 };
 
@@ -921,6 +922,7 @@ function AdminUserDetail({
             <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
               <option value="CUSTOMER">Customer</option>
               <option value="OPERATOR">Operator</option>
+              <option value="PAILPAL">PailPal</option>
               <option value="PRO_OPERATOR">Pro operator</option>
               <option value="ADMIN">Admin</option>
               <option value="SUPER_ADMIN">Super admin</option>
@@ -1740,6 +1742,7 @@ function CreateUserForm({
           <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
             <option value="CUSTOMER">Customer</option>
             <option value="OPERATOR">Operator</option>
+            <option value="PAILPAL">PailPal</option>
             <option value="PRO_OPERATOR">Pro operator</option>
             <option value="ADMIN">Admin</option>
             <option value="SUPER_ADMIN">Super admin</option>
