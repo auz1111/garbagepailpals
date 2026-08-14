@@ -55,6 +55,9 @@ import type {
   ServiceAddress,
   ServiceAddressInput,
   CreateAddressRequest,
+  PailpalCustomersResponse,
+  PailpalCustomerResponse,
+  PailpalCustomerCreate,
   ServiceAreaCheckResponse,
   PickupScheduleSuggestion,
   ServiceJob,
@@ -751,6 +754,39 @@ export function createAddress(
   accessToken: string
 ): Promise<ServiceAddressResponse> {
   return request<CreateAddressRequest, ServiceAddressResponse>("/addresses", "POST", input, accessToken);
+}
+
+export function listPailpalCustomers(accessToken: string): Promise<PailpalCustomersResponse> {
+  return request<undefined, PailpalCustomersResponse>("/pailpal/customers", "GET", undefined, accessToken);
+}
+
+export function createPailpalCustomer(
+  input: PailpalCustomerCreate,
+  accessToken: string
+): Promise<PailpalCustomerResponse> {
+  return request<PailpalCustomerCreate, PailpalCustomerResponse>(
+    "/pailpal/customers",
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function approvePailpalLocation(
+  addressId: string,
+  approved: boolean,
+  accessToken: string
+): Promise<{ approved: boolean }> {
+  return request<{ approved: boolean }, { approved: boolean }>(
+    `/pailpal/locations/${addressId}/approve`,
+    "POST",
+    { approved },
+    accessToken
+  );
+}
+
+export function buildPailpalRoute(accessToken: string): Promise<AdminRouteResponse> {
+  return request<undefined, AdminRouteResponse>("/pailpal/routes/build", "POST", undefined, accessToken);
 }
 
 export function updateAddress(

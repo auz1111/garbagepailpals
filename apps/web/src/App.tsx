@@ -33,6 +33,7 @@ import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
 import { OperatorDashboard } from "./components/OperatorDashboard";
 import { AdminWorkspace, ADMIN_NAV } from "./components/AdminWorkspace";
+import { PailPalWorkspace, PAILPAL_NAV } from "./components/PailPalWorkspace";
 
 type AuthMode = "LOGIN" | "REGISTER";
 const REFRESH_TOKEN_KEY = "gpp.refreshToken";
@@ -187,6 +188,7 @@ export function App() {
   const customerBlocked = user?.role === "CUSTOMER" && Boolean(user?.requestedServiceArea);
   const isAdmin = isAdminRole(user?.role);
   const isOperator = user?.role === "OPERATOR";
+  const isPailpal = user?.role === "PAILPAL";
 
   // Admin alert: locations with no neighborhood assigned (drives the nav badge).
   const adminLocationsQuery = useQuery({
@@ -262,10 +264,18 @@ export function App() {
     superOnly?: boolean;
   }> = isAdmin
     ? [...adminNav, ...adminOperatorSection, ...adminCustomerSection]
-    : isOperator
-      ? OPERATOR_NAV
-      : CUSTOMER_NAV;
-  const dashboardMenuLabel = isAdmin ? "Admin" : isOperator ? "Operator" : "Dashboard";
+    : isPailpal
+      ? PAILPAL_NAV
+      : isOperator
+        ? OPERATOR_NAV
+        : CUSTOMER_NAV;
+  const dashboardMenuLabel = isAdmin
+    ? "Admin"
+    : isPailpal
+      ? "PailPal"
+      : isOperator
+        ? "Operator"
+        : "Dashboard";
 
   const primaryActionPath = isAuthenticated && user ? defaultRouteForRole(user.role) : "/auth";
 
@@ -756,6 +766,17 @@ export function App() {
             />
           </Route>
 
+          <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["PAILPAL"]} />}>
+            <Route
+              path="/pailpal/*"
+              element={
+                user && accessToken ? (
+                  <PailPalWorkspace user={user} accessToken={accessToken} />
+                ) : null
+              }
+            />
+          </Route>
+
           <Route
             path="/forbidden"
             element={
@@ -843,6 +864,10 @@ function PasswordInput({
 function defaultRouteForRole(role: Role): string {
   if (isAdminRole(role)) {
     return "/admin";
+  }
+
+  if (role === "PAILPAL") {
+    return "/pailpal";
   }
 
   if (role === "OPERATOR") {

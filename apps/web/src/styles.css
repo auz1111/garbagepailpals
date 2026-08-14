@@ -5719,3 +5719,90 @@ a.provider-pill:hover {
 }
 .issue-dot.is-warn { background: #f7a81b; }
 .issue-dot.is-bad { background: #dc2626; }
+
+/* PailPal workspace */
+.pailpal-cust-form,
+.pailpal-loc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.pailpal-cust-form {
+  max-width: 440px;
+}
+.pailpal-cust-form label,
+.pailpal-loc-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.pailpal-loc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+.pailpal-rollin {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem;
+}
+.pailpal-customer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.pailpal-customer {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 14px);
+  background: var(--surface, #ffffff);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.pailpal-customer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.pailpal-loc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.pailpal-loc {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--slate-6, #f7f9fa);
+}
+.pailpal-loc-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pailpal-loc-form {
+  border-top: 1px dashed var(--line);
+  padding-top: 0.75rem;
+}
+.pailpal-build {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
