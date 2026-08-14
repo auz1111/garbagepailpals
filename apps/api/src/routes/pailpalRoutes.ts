@@ -9,12 +9,22 @@ import {
   pailpalCustomerCreateSchema,
   pailpalCustomerResponseSchema,
   pailpalCustomersResponseSchema,
+  pailpalLocationCreateSchema,
   type ScheduleCan
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { canActForUser } from "../lib/ownership";
-import { collectTodaysWork, todayServiceDate } from "./adminRoutes";
+import { geocodeAddressParts } from "../services/geocoding";
+import { timezoneForCoords } from "../lib/timezone";
+import {
+  DAILY_ROUTE_INCLUDE,
+  buildRouteHistoryResponse,
+  collectTodaysWork,
+  serializeDailyRoute,
+  todayServiceDate,
+  type DailyRouteRow
+} from "./adminRoutes";
 import { env } from "../lib/env";
 
 const ORS_BASE = "https://api.openrouteservice.org";
@@ -27,7 +37,7 @@ const NO_LOGIN_DOMAIN = "no-login.gpp.local";
 const CUSTOMER_INCLUDE = {
   serviceAddresses: {
     orderBy: { createdAt: "asc" as const },
-    include: { schedules: { select: { pickupDayOfWeek: true } } }
+    include: { schedules: { orderBy: { pickupDayOfWeek: "asc" as const } } }
   }
 } as const;
 
@@ -46,7 +56,14 @@ function serializeCustomer(user: {
     postalCode: string;
     isActive: boolean;
     serviceApprovedAt: Date | null;
-    schedules: Array<{ pickupDayOfWeek: number }>;
+    schedules: Array<{
+      pickupDayOfWeek: number;
+      cans: unknown;
+      rollIn: boolean;
+      petWasteDogs: number;
+      providerSynced: boolean;
+      biweeklyAnchorDate: Date | null;
+    }>;
   }>;
 }) {
   const syntheticEmail = user.email.endsWith(`@${NO_LOGIN_DOMAIN}`);
@@ -65,7 +82,15 @@ function serializeCustomer(user: {
       postalCode: a.postalCode,
       isActive: a.isActive,
       serviceApproved: a.serviceApprovedAt != null,
-      pickupDays: a.schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y)
+      pickupDays: a.schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
+      days: a.schedules.map((s) => ({
+        dayOfWeek: s.pickupDayOfWeek,
+        cans: (s.cans as unknown as any[]) ?? [],
+        rollIn: s.rollIn,
+        petWasteDogs: s.petWasteDogs,
+        providerSynced: s.providerSynced,
+        biweeklyAnchorDate: s.biweeklyAnchorDate ? s.biweeklyAnchorDate.toISOString() : null
+      }))
     }))
   };
 }
@@ -141,6 +166,59 @@ export async function pailpalCustomersHandler(
             customers: rows.map((r) => serializeCustomer(r as any))
           })
         );
+      },
+      { roles: ["PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// Create a location (address only) for a managed customer. The location starts
+// with NO days of service — the PailPal adds them afterward on the location.
+export async function pailpalCreateLocationHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const input = await parseJson(req, pailpalLocationCreateSchema);
+        if (!(await canActForUser(auth, input.customerId))) {
+          throw new HttpError(403, "You can only add locations for your own customers");
+        }
+
+        const geocoded = await geocodeAddressParts({
+          line1: input.line1,
+          city: input.city,
+          state: input.state,
+          postalCode: input.postalCode
+        }).catch(() => null);
+        const lat = geocoded?.lat ?? 0;
+        const lng = geocoded?.lng ?? 0;
+        const timezone = timezoneForCoords(lat, lng);
+
+        const created = await prisma.serviceAddress.create({
+          data: {
+            userId: input.customerId,
+            line1: input.line1,
+            line2: input.line2 ?? null,
+            city: input.city,
+            state: input.state,
+            postalCode: input.postalCode,
+            lat,
+            lng,
+            timezone,
+            accessNotes: "",
+            canCount: 0,
+            pickupsPerWeek: 0,
+            rollIn: true,
+            isActive: true
+            // No schedules — days of service are added afterward.
+          }
+        });
+        return jsonResponse(201, { id: created.id });
       },
       { roles: ["PAILPAL"] }
     )(request, context)
@@ -359,6 +437,41 @@ export async function pailpalBuildRouteHandler(
             emptyReason: null
           })
         );
+      },
+      { roles: ["PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// The PailPal's own route history (only routes assigned to / run by them),
+// returned in the same shape the admin history uses so the UI is shared.
+export async function pailpalRouteHistoryHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const url = new URL(req.url);
+        const daysParam = Number(url.searchParams.get("days"));
+        const rangeDays = Number.isFinite(daysParam)
+          ? Math.min(Math.max(Math.trunc(daysParam), 1), 365)
+          : 30;
+
+        const now = new Date();
+        const from = new Date(todayServiceDate(now));
+        from.setUTCDate(from.getUTCDate() - (rangeDays - 1));
+
+        const rows = await prisma.dailyRoute.findMany({
+          where: { operatorId: auth.sub, serviceDate: { gte: from } },
+          include: DAILY_ROUTE_INCLUDE,
+          orderBy: [{ serviceDate: "desc" }, { createdAt: "asc" }]
+        });
+        const routes = rows.map((r) => serializeDailyRoute(r as unknown as DailyRouteRow));
+        return jsonResponse(200, buildRouteHistoryResponse(routes, rangeDays, now));
       },
       { roles: ["PAILPAL"] }
     )(request, context)

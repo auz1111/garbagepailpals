@@ -51,7 +51,9 @@ import { operatorTimeOffRouteHandler } from "./routes/operatorTimeOff";
 import {
   pailpalApproveLocationHandler,
   pailpalBuildRouteHandler,
-  pailpalCustomersHandler
+  pailpalCreateLocationHandler,
+  pailpalCustomersHandler,
+  pailpalRouteHistoryHandler
 } from "./routes/pailpalRoutes";
 import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
 import { dayStatusHandler, refreshSchedulesHandler } from "./routes/dayStatus";
@@ -485,6 +487,13 @@ app.http("pailpal-customers", {
   handler: pailpalCustomersHandler
 });
 
+app.http("pailpal-locations-create", {
+  route: "pailpal/locations",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalCreateLocationHandler
+});
+
 app.http("pailpal-location-approve", {
   route: "pailpal/locations/{addressId}/approve",
   methods: ["POST", "OPTIONS"],
@@ -497,6 +506,13 @@ app.http("pailpal-routes-build", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: pailpalBuildRouteHandler
+});
+
+app.http("pailpal-routes-history", {
+  route: "pailpal/routes/history",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalRouteHistoryHandler
 });
 
 app.http("billing-summary", {

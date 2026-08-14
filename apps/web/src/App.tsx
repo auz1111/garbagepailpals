@@ -238,7 +238,7 @@ export function App() {
     (customerBillingQuery.data?.active !== true || customerBillingQuery.data?.needsUpdate === true);
   const showDashboardMenu =
     isAuthenticated &&
-    ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator);
+    ((user?.role === "CUSTOMER" && !customerBlocked) || isAdmin || isOperator || isPailpal);
   // The admin drawer is split into clearly-labelled sections: administration,
   // the operator view, and the admin's own customer account.
   const adminOperatorSection = [
@@ -327,9 +327,13 @@ export function App() {
             </nav>
           ) : null}
           {isAuthenticated ? (
-            <button type="button" onClick={logout}>
-              Logout
-            </button>
+            // When the dashboard drawer is available, logout lives at the bottom
+            // of the side nav; keep a header logout only where there's no drawer.
+            !showDashboardMenu ? (
+              <button type="button" onClick={logout}>
+                Logout
+              </button>
+            ) : null
           ) : (
             <button type="button" onClick={goToSignIn}>
               Sign in
@@ -352,6 +356,17 @@ export function App() {
                   ×
                 </button>
               </div>
+              {user ? (
+                <div className="drawer-profile">
+                  <span className="drawer-avatar" aria-hidden="true">
+                    {initials(user.name)}
+                  </span>
+                  <span className="drawer-profile-info">
+                    <strong className="drawer-profile-name">{user.name}</strong>
+                    <span className="drawer-profile-role">{roleLabel(user.role)}</span>
+                  </span>
+                </div>
+              ) : null}
               <nav className="drawer-nav">
                 {dashboardNav.map((item, idx) => {
                   const isPersonalOperatorLink =
@@ -400,6 +415,21 @@ export function App() {
                   );
                 })}
               </nav>
+              <div className="drawer-foot">
+                <button
+                  type="button"
+                  className="drawer-link drawer-logout"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    logout();
+                  }}
+                >
+                  <span className="drawer-link-icon" aria-hidden="true">
+                    ⎋
+                  </span>
+                  Log out
+                </button>
+              </div>
             </aside>
           </div>
         ) : null}
@@ -859,6 +889,34 @@ function PasswordInput({
       </button>
     </div>
   );
+}
+
+// Initials for the profile avatar placeholder (first + last name initial).
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  return (first + last).toUpperCase() || "?";
+}
+
+// Friendly label for the signed-in user's role, shown under their name.
+function roleLabel(role: Role): string {
+  switch (role) {
+    case "CUSTOMER":
+      return "Customer";
+    case "OPERATOR":
+      return "Operator";
+    case "PAILPAL":
+      return "PailPal";
+    case "PRO_OPERATOR":
+      return "Pro operator";
+    case "ADMIN":
+      return "Admin";
+    case "SUPER_ADMIN":
+      return "Super admin";
+    default:
+      return role;
+  }
 }
 
 function defaultRouteForRole(role: Role): string {

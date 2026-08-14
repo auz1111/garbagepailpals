@@ -159,8 +159,8 @@ export async function createAddressHandler(
         // use the location's real zone regardless of what the form defaulted to.
         const timezone = timezoneForCoords(finalLat, finalLng);
 
-        // Seed a sensible default pickup day (Tuesday, weekly) from the form's
-        // cans/roll-in, so a new location has a schedule and a price immediately.
+        // Seed a sensible default pickup day (from the form's cans/roll-in) so a
+        // new location has a schedule and a price immediately.
         const created = await prisma.serviceAddress.create({
           data: {
             userId: ownerId,

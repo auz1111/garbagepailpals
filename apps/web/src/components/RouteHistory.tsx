@@ -7,7 +7,16 @@ import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import { getRouteHistory, getZones } from "../lib/api";
 import { formatCans } from "./CanRowsEditor";
 
-type RouteHistoryProps = { accessToken: string };
+type RouteHistoryProps = {
+  accessToken: string;
+  // Data source — defaults to the admin all-routes history; a PailPal passes
+  // their own-routes fetcher. `showZones` hides the zone tabs (and the admin-only
+  // /zones lookup) for non-admin viewers.
+  fetchHistory?: (days: number, accessToken: string, zoneId?: string) => Promise<RouteHistoryResponse>;
+  showZones?: boolean;
+  title?: string;
+  intro?: string;
+};
 
 const RANGES = [
   { days: 7, label: "7 days" },
@@ -131,17 +140,27 @@ function HistoryRouteMap({ route }: { route: DailyRoute }): JSX.Element {
   return <div className="history-route-map" ref={containerRef} />;
 }
 
-export function RouteHistory({ accessToken }: RouteHistoryProps): JSX.Element {
+export function RouteHistory({
+  accessToken,
+  fetchHistory = getRouteHistory,
+  showZones = true,
+  title = "Route History",
+  intro = "Every route and serviced location over time. Pick a window, then expand a route to see exactly what happened."
+}: RouteHistoryProps): JSX.Element {
   const [rangeDays, setRangeDays] = useState(30);
   const [zoneId, setZoneId] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const zonesQuery = useQuery({ queryKey: ["zones"], queryFn: async () => getZones(accessToken) });
-  const zones = zonesQuery.data?.zones ?? [];
+  const zonesQuery = useQuery({
+    queryKey: ["zones"],
+    queryFn: async () => getZones(accessToken),
+    enabled: showZones
+  });
+  const zones = showZones ? zonesQuery.data?.zones ?? [] : [];
 
   const historyQuery = useQuery({
-    queryKey: ["route-history", rangeDays, zoneId],
-    queryFn: async () => getRouteHistory(rangeDays, accessToken, zoneId || undefined)
+    queryKey: ["route-history", showZones ? "admin" : "self", rangeDays, zoneId],
+    queryFn: async () => fetchHistory(rangeDays, accessToken, zoneId || undefined)
   });
 
   const data: RouteHistoryResponse | undefined = historyQuery.data;
@@ -166,11 +185,8 @@ export function RouteHistory({ accessToken }: RouteHistoryProps): JSX.Element {
   return (
     <div className="dash-page">
       <div className="dash-page-head">
-        <h2>Route History</h2>
-        <p className="subtext">
-          Every route and serviced location over time. Pick a window, then expand a route to see
-          exactly what happened.
-        </p>
+        <h2>{title}</h2>
+        <p className="subtext">{intro}</p>
       </div>
 
       <div className="history-range">

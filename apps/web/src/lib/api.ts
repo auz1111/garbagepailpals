@@ -58,6 +58,7 @@ import type {
   PailpalCustomersResponse,
   PailpalCustomerResponse,
   PailpalCustomerCreate,
+  PailpalLocationCreate,
   ServiceAreaCheckResponse,
   PickupScheduleSuggestion,
   ServiceJob,
@@ -378,6 +379,18 @@ export function getRouteHistory(
 ): Promise<RouteHistoryResponse> {
   return request<undefined, RouteHistoryResponse>(
     `/ops-admin/routes/history${scopeQuery({ days: String(days), zoneId })}`,
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function getPailpalRouteHistory(
+  days: number,
+  accessToken: string
+): Promise<RouteHistoryResponse> {
+  return request<undefined, RouteHistoryResponse>(
+    `/pailpal/routes/history?days=${days}`,
     "GET",
     undefined,
     accessToken
@@ -766,6 +779,18 @@ export function createPailpalCustomer(
 ): Promise<PailpalCustomerResponse> {
   return request<PailpalCustomerCreate, PailpalCustomerResponse>(
     "/pailpal/customers",
+    "POST",
+    input,
+    accessToken
+  );
+}
+
+export function createPailpalLocation(
+  input: PailpalLocationCreate,
+  accessToken: string
+): Promise<{ id: string }> {
+  return request<PailpalLocationCreate, { id: string }>(
+    "/pailpal/locations",
     "POST",
     input,
     accessToken
