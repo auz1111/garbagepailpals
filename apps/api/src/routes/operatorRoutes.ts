@@ -114,6 +114,9 @@ export async function operatorServiceStopHandler(
         await prisma.routeStop.updateMany({
           where: { routeId, serviceAddressId: addressId },
           data: {
+            // The stop is the single record of real work: SERVICED once completed,
+            // back to PENDING if un-marked.
+            status: serviced ? "SERVICED" : "PENDING",
             servicedAt: serviced ? new Date() : null,
             // Store the completed checklist when marking serviced; clear it when
             // un-marking so a re-verify starts fresh.

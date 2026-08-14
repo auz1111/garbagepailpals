@@ -563,50 +563,6 @@ export type BillingAddressSummary = z.infer<typeof billingAddressSummarySchema>;
 export type SubscriptionUpdateRequest = z.infer<typeof subscriptionUpdateRequestSchema>;
 export type SubscriptionUpdateResponse = z.infer<typeof subscriptionUpdateResponseSchema>;
 
-export const operatorQueueJobSchema = z.object({
-  id: z.string(),
-  serviceAddressId: z.string(),
-  subscriptionId: z.string(),
-  scheduledDate: z.string(),
-  type: z.enum(["CURB_OUT", "CURB_IN"]),
-  status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"]),
-  assignedOperatorId: z.string().nullable(),
-  routeSequence: z.number().int().nullable(),
-  customerName: z.string(),
-  addressLine1: z.string(),
-  city: z.string(),
-  state: z.string(),
-  postalCode: z.string(),
-  accessNotes: z.string(),
-  gateCode: z.string().nullable(),
-  // Set when a hauler holiday moved this pickup, so the operator has context.
-  shiftReason: z.string().nullable().optional()
-});
-
-export const operatorQueueResponseSchema = z.object({
-  jobs: z.array(operatorQueueJobSchema)
-});
-
-export const operatorJobClaimResponseSchema = z.object({
-  jobId: z.string(),
-  assignedOperatorId: z.string(),
-  status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"])
-});
-
-export const operatorJobStatusUpdateSchema = z.object({
-  status: z.enum(["COMPLETED", "SKIPPED", "FAILED"]),
-  photoBlobPath: z.string().min(1).max(500).optional(),
-  failureReason: z.string().min(1).max(500).optional()
-});
-
-export const operatorJobStatusResponseSchema = z.object({
-  jobId: z.string(),
-  status: z.enum(["SCHEDULED", "COMPLETED", "SKIPPED", "FAILED"]),
-  completedAt: z.string().nullable(),
-  failureReason: z.string().nullable(),
-  photoBlobPath: z.string().nullable()
-});
-
 export const adminDashboardMetricsSchema = z.object({
   users: z.object({
     total: z.number().int().nonnegative(),
@@ -1268,11 +1224,6 @@ export type StripePortalRequest = z.infer<typeof stripePortalRequestSchema>;
 export type StripePortalResponse = z.infer<typeof stripePortalResponseSchema>;
 export type PayPalCreateSubscriptionRequest = z.infer<typeof paypalCreateSubscriptionRequestSchema>;
 export type PayPalCreateSubscriptionResponse = z.infer<typeof paypalCreateSubscriptionResponseSchema>;
-export type OperatorQueueJob = z.infer<typeof operatorQueueJobSchema>;
-export type OperatorQueueResponse = z.infer<typeof operatorQueueResponseSchema>;
-export type OperatorJobClaimResponse = z.infer<typeof operatorJobClaimResponseSchema>;
-export type OperatorJobStatusUpdate = z.infer<typeof operatorJobStatusUpdateSchema>;
-export type OperatorJobStatusResponse = z.infer<typeof operatorJobStatusResponseSchema>;
 export type AdminDashboardMetrics = z.infer<typeof adminDashboardMetricsSchema>;
 export type AdminUser = z.infer<typeof adminUserSchema>;
 export type AdminUsersResponse = z.infer<typeof adminUsersResponseSchema>;

@@ -109,19 +109,16 @@ export async function adminIncidentsHandler(
         const filter = parseIncidentFilter(request);
 
         const [failedJobs, failedNotifications, staleWebhooks, lifecycleEvents] = await Promise.all([
-          prisma.serviceJob.findMany({
-            where: {
-              status: "FAILED",
-              updatedAt: { gte: weekAgo }
-            },
-            orderBy: { updatedAt: "desc" },
-            take: 40,
-            select: {
-              id: true,
-              failureReason: true,
-              updatedAt: true
-            }
-          }),
+          // Failed service is now recorded on the route stop, not a job row.
+          (async () =>
+            (
+              await prisma.routeStop.findMany({
+                where: { status: "FAILED", route: { serviceDate: { gte: weekAgo } } },
+                orderBy: { route: { serviceDate: "desc" } },
+                take: 40,
+                select: { id: true, failureReason: true, route: { select: { serviceDate: true } } }
+              })
+            ).map((s) => ({ id: s.id, failureReason: s.failureReason, updatedAt: s.route.serviceDate })))(),
           prisma.auditLog.findMany({
             where: {
               createdAt: { gte: weekAgo },

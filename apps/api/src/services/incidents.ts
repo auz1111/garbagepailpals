@@ -238,10 +238,10 @@ export function buildAdminIncidentFeed(args: {
         id: incidentId,
         source: "JOB",
         severity: "CRITICAL",
-        title: "Service job failed",
-        detail: job.failureReason?.trim() || "Job marked as failed without a specific reason",
+        title: "Service stop failed",
+        detail: job.failureReason?.trim() || "Stop marked as failed without a specific reason",
         occurredAt: job.updatedAt,
-        entityType: "ServiceJob",
+        entityType: "RouteStop",
         entityId: job.id,
         now,
         eventsByIncidentId

@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@gpp/db";
 import { Prisma } from "@prisma/client";
+import { projectServiceCalendar } from "../services/serviceCalendar";
 import {
   addressMonthlyCents,
   adminCreateUserSchema,
@@ -398,14 +399,16 @@ export async function adminDashboardMetricsHandler(
           }
         });
 
-        const scheduledNext7Days = await prisma.serviceJob.count({
-          where: { scheduledDate: { gte: now, lte: in7Days }, status: "SCHEDULED" }
+        // Upcoming work is computed from schedules (no pre-generated jobs);
+        // completed/failed come from the route stops that recorded real service.
+        const scheduledNext7Days = (
+          await projectServiceCalendar(now, { throughDate: in7Days })
+        ).length;
+        const completedLast7Days = await prisma.routeStop.count({
+          where: { status: "SERVICED", servicedAt: { gte: weekAgo } }
         });
-        const completedLast7Days = await prisma.serviceJob.count({
-          where: { completedAt: { gte: weekAgo }, status: "COMPLETED" }
-        });
-        const failedLast7Days = await prisma.serviceJob.count({
-          where: { updatedAt: { gte: weekAgo }, status: "FAILED" }
+        const failedLast7Days = await prisma.routeStop.count({
+          where: { status: "FAILED", route: { serviceDate: { gte: weekAgo } } }
         });
 
         // Webhook events (last 24h) by provider in one query.

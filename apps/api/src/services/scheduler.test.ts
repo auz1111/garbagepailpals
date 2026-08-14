@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DateTime } from "luxon";
 import type { HaulerUpcoming } from "@gpp/shared";
-import { calculateJobsForAddress, shouldRunForAddressNow } from "./scheduler";
+import { calculateJobsForAddress } from "./scheduler";
 
 const weekly = (day: number, rollIn = true) => ({
   pickupDayOfWeek: day,
@@ -247,11 +247,4 @@ describe("calculateJobsForAddress", () => {
     expect(jobs.filter((j) => j.type === "CURB_OUT").length).toBe(3);
   });
 
-  it("runs only when local timezone hour is 02:00", () => {
-    const shouldRun = shouldRunForAddressNow("America/Los_Angeles", new Date("2026-08-10T09:15:00.000Z"));
-    const shouldSkip = shouldRunForAddressNow("America/Los_Angeles", new Date("2026-08-10T13:15:00.000Z"));
-
-    expect(shouldRun).toBe(true);
-    expect(shouldSkip).toBe(false);
-  });
 });

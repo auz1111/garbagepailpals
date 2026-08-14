@@ -14,8 +14,7 @@ import {
   connectProviderHandler,
   upsertScheduleHandler
 } from "./routes/domain/addresses";
-import { generateJobsHandler, historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
-import { nightlySchedulerHandler } from "./timers/nightlyScheduler";
+import { historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
 import { reminderSweepHandler } from "./timers/reminders";
 import {
   billingSummaryHandler,
@@ -26,11 +25,6 @@ import {
   updateSubscriptionHandler
 } from "./routes/payments";
 import { paypalWebhookHandler, stripeWebhookHandler } from "./routes/webhooks";
-import {
-  claimOperatorJobHandler,
-  operatorQueueHandler,
-  updateOperatorJobStatusHandler
-} from "./routes/operatorJobs";
 import {
   adminUserByIdHandler,
   adminUserAvailabilityHandler,
@@ -113,27 +107,6 @@ app.http("auth-me", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: meHandler
-});
-
-app.http("operator-jobs", {
-  route: "operator/jobs",
-  methods: ["GET", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: operatorQueueHandler
-});
-
-app.http("operator-jobs-claim", {
-  route: "operator/jobs/{jobId}/claim",
-  methods: ["POST", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: claimOperatorJobHandler
-});
-
-app.http("operator-jobs-status", {
-  route: "operator/jobs/{jobId}/status",
-  methods: ["PATCH", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: updateOperatorJobStatusHandler
 });
 
 app.http("admin-dashboard", {
@@ -500,13 +473,6 @@ app.http("jobs-history", {
   handler: historyJobsHandler
 });
 
-app.http("jobs-generate", {
-  route: "jobs/generate",
-  methods: ["POST", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: generateJobsHandler
-});
-
 app.http("billing-summary", {
   route: "billing/summary",
   methods: ["GET", "OPTIONS"],
@@ -561,12 +527,6 @@ app.http("webhooks-paypal", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: paypalWebhookHandler
-});
-
-app.timer("nightly-job-generation", {
-  schedule: "0 0 * * * *",
-  runOnStartup: false,
-  handler: nightlySchedulerHandler
 });
 
 app.timer("reminder-sweep", {

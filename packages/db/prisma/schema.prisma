@@ -43,18 +43,6 @@ enum EntitlementStatus {
   PAUSED
 }
 
-enum ServiceJobType {
-  CURB_OUT
-  CURB_IN
-}
-
-enum ServiceJobStatus {
-  SCHEDULED
-  COMPLETED
-  SKIPPED
-  FAILED
-}
-
 enum PlanInterval {
   MONTHLY
   YEARLY
@@ -65,6 +53,13 @@ enum RouteStatus {
   ACCEPTED
   COMPLETED
   CANCELLED
+}
+
+enum RouteStopStatus {
+  PENDING
+  SERVICED
+  SKIPPED
+  FAILED
 }
 
 enum TimeOffStatus {
@@ -91,7 +86,6 @@ model User {
   serviceAddresses     ServiceAddress[]
   subscriptions        Subscription[]
   entitlements         Entitlement[]
-  assignedJobs         ServiceJob[]   @relation("AssignedOperatorJobs")
   refreshTokens        RefreshToken[]
   auditLogs            AuditLog[]     @relation("AuditActorLogs")
   availability         OperatorAvailability[]
@@ -156,7 +150,6 @@ model ServiceAddress {
   neighborhood     Neighborhood?     @relation(fields: [neighborhoodId], references: [id], onDelete: SetNull)
   schedules        ServiceSchedule[]
   subscriptions    Subscription[]
-  jobs             ServiceJob[]
   holds            ServiceHold[]
   routeStops       RouteStop[]
 
@@ -296,7 +289,6 @@ model Subscription {
   user                   User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   serviceAddress         ServiceAddress     @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
   plan                   Plan?              @relation(fields: [planId], references: [id], onDelete: Restrict)
-  jobs                   ServiceJob[]
 
   @@unique([userId, serviceAddressId])
   @@index([userId])
@@ -334,32 +326,6 @@ model Plan {
   createdAt                   DateTime        @default(now())
   updatedAt                   DateTime        @updatedAt
   subscriptions               Subscription[]
-}
-
-model ServiceJob {
-  id                  String           @id @default(cuid())
-  serviceAddressId    String
-  subscriptionId      String
-  scheduledDate       DateTime
-  type                ServiceJobType
-  status              ServiceJobStatus
-  assignedOperatorId  String?
-  routeSequence       Int?
-  completedAt         DateTime?
-  photoBlobPath       String?
-  failureReason       String?
-  // When a hauler holiday moved this pickup: the date it would normally fall on,
-  // and the reason (holiday name). Null for normal, unshifted jobs.
-  shiftedFromDate     DateTime?
-  shiftReason         String?
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  serviceAddress      ServiceAddress   @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
-  subscription        Subscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  assignedOperator    User?            @relation("AssignedOperatorJobs", fields: [assignedOperatorId], references: [id], onDelete: SetNull)
-
-  @@unique([serviceAddressId, scheduledDate, type])
-  @@index([status, scheduledDate])
 }
 
 model ServiceHold {
@@ -483,6 +449,10 @@ model RouteStop {
   // Per-item service verification the operator completed: one entry per can /
   // service, each with up to 3 photo blob paths. [] until the stop is serviced.
   serviceVerification Json        @default("[]")
+  // Lifecycle of the stop: PENDING when the route is built, then SERVICED once the
+  // operator completes it, or SKIPPED/FAILED (with failureReason) if it can't be.
+  status           RouteStopStatus @default(PENDING)
+  failureReason    String?
   servicedAt       DateTime?
   route            DailyRoute     @relation(fields: [routeId], references: [id], onDelete: Cascade)
   serviceAddress   ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)

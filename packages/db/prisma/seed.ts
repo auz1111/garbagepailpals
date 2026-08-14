@@ -6,7 +6,6 @@ async function seed() {
   await prisma.$transaction([
     prisma.auditLog.deleteMany(),
     prisma.webhookEvent.deleteMany(),
-    prisma.serviceJob.deleteMany(),
     prisma.serviceHold.deleteMany(),
     prisma.subscription.deleteMany(),
     prisma.entitlement.deleteMany(),
@@ -230,61 +229,8 @@ async function seed() {
     ]
   });
 
-  const monthJobs: Array<{
-    serviceAddressId: string;
-    subscriptionId: string;
-    scheduledDate: Date;
-    type: "CURB_OUT" | "CURB_IN";
-    status: "SCHEDULED";
-    assignedOperatorId: string;
-  }> = [];
-
-  for (let dayOffset = 0; dayOffset < 30; dayOffset += 1) {
-    const date = addDays(startOfDay(now), dayOffset);
-
-    if (date.getDay() === 2) {
-      monthJobs.push({
-        serviceAddressId: address1.id,
-        subscriptionId: sub1.id,
-        scheduledDate: addHours(date, 18),
-        type: "CURB_OUT",
-        status: "SCHEDULED",
-        assignedOperatorId: operator.id
-      });
-      monthJobs.push({
-        serviceAddressId: address1.id,
-        subscriptionId: sub1.id,
-        scheduledDate: addHours(date, 21),
-        type: "CURB_IN",
-        status: "SCHEDULED",
-        assignedOperatorId: operator.id
-      });
-    }
-
-    const isBiweeklyThursday = date.getDay() === 4 && Math.floor(dayOffset / 7) % 2 === 0;
-    if (isBiweeklyThursday) {
-      monthJobs.push({
-        serviceAddressId: address2.id,
-        subscriptionId: sub2.id,
-        scheduledDate: addHours(date, 17),
-        type: "CURB_OUT",
-        status: "SCHEDULED",
-        assignedOperatorId: operator.id
-      });
-      monthJobs.push({
-        serviceAddressId: address2.id,
-        subscriptionId: sub2.id,
-        scheduledDate: addHours(date, 21),
-        type: "CURB_IN",
-        status: "SCHEDULED",
-        assignedOperatorId: operator.id
-      });
-    }
-  }
-
-  if (monthJobs.length > 0) {
-    await prisma.serviceJob.createMany({ data: monthJobs });
-  }
+  // Upcoming pickups are computed on demand from each location's schedule
+  // (see serviceCalendar.ts) — no ServiceJob rows are seeded.
 
   await prisma.auditLog.create({
     data: {

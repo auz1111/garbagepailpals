@@ -36,10 +36,6 @@ import type {
   OperatorAvailabilityUpdate,
   AuthResponse,
   LoginInput,
-  OperatorJobClaimResponse,
-  OperatorJobStatusResponse,
-  OperatorJobStatusUpdate,
-  OperatorQueueResponse,
   OperatorRoutesResponse,
   OperatorStopService,
   ServicePhotoUploadResponse,
@@ -145,33 +141,8 @@ export function getMe(accessToken: string): Promise<MeResponse> {
   return request<undefined, MeResponse>("/auth/me", "GET", undefined, accessToken);
 }
 
-export function getOperatorRoute(accessToken: string): Promise<ProtectedMessage> {
-  return request<undefined, ProtectedMessage>("/operator/jobs", "GET", undefined, accessToken);
-}
-
 export function getAdminRoute(accessToken: string): Promise<ProtectedMessage> {
   return request<undefined, ProtectedMessage>("/ops-admin/dashboard", "GET", undefined, accessToken);
-}
-
-export function getOperatorQueue(accessToken: string): Promise<OperatorQueueResponse> {
-  return request<undefined, OperatorQueueResponse>("/operator/jobs", "GET", undefined, accessToken);
-}
-
-export function claimOperatorJob(jobId: string, accessToken: string): Promise<OperatorJobClaimResponse> {
-  return request<undefined, OperatorJobClaimResponse>(`/operator/jobs/${jobId}/claim`, "POST", undefined, accessToken);
-}
-
-export function updateOperatorJobStatus(
-  jobId: string,
-  input: OperatorJobStatusUpdate,
-  accessToken: string
-): Promise<OperatorJobStatusResponse> {
-  return request<OperatorJobStatusUpdate, OperatorJobStatusResponse>(
-    `/operator/jobs/${jobId}/status`,
-    "PATCH",
-    input,
-    accessToken
-  );
 }
 
 export function getAdminDashboardMetrics(accessToken: string): Promise<AdminDashboardMetrics> {
@@ -831,10 +802,6 @@ export function listUpcomingJobs(accessToken: string): Promise<ServiceJobsRespon
 
 export function listHistoryJobs(accessToken: string): Promise<ServiceJobsResponse> {
   return request<undefined, ServiceJobsResponse>("/jobs/history", "GET", undefined, accessToken);
-}
-
-export function generateJobs(accessToken: string): Promise<{ created: number }> {
-  return request<undefined, { created: number }>("/jobs/generate", "POST", undefined, accessToken);
 }
 
 export function getBillingSummary(accessToken: string): Promise<BillingSummary> {
