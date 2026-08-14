@@ -101,12 +101,14 @@ export async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promi
   return work;
 }
 
-// Users who can run a route: operators, pro operators (scoped sub-admins who
-// also operate), plus super/legacy admins granted operator access.
+// Users who can run a route: operators, PailPals (who also drive routes admins
+// assign them), pro operators (scoped sub-admins who also operate), plus
+// super/legacy admins granted operator access.
 function operatorWhere() {
   return {
     OR: [
       { role: "OPERATOR" as const },
+      { role: "PAILPAL" as const },
       { role: "PRO_OPERATOR" as const },
       { role: "ADMIN" as const, operatorAccess: true },
       { role: "SUPER_ADMIN" as const, operatorAccess: true }

@@ -812,7 +812,8 @@ function AdminUserDetail({
 
   // Admins grant zones to operators (serviceable areas) and pro-operators (admin
   // scope). Approving a requested zone = checking it.
-  const showZoneGrants = user.role === "PRO_OPERATOR" || user.role === "OPERATOR";
+  const showZoneGrants =
+    user.role === "PRO_OPERATOR" || user.role === "OPERATOR" || user.role === "PAILPAL";
   const requestedSet = new Set(user.requestedZoneIds);
   const detailQueryClient = useQueryClient();
   const grantZonesQuery = useQuery({
