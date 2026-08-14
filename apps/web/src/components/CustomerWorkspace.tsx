@@ -31,7 +31,6 @@ import {
   getBillingSummary,
   updateSubscription,
   listAddresses,
-  listHistoryJobs,
   listUpcomingJobs,
   deleteAddress,
   updateAddress,
@@ -40,6 +39,7 @@ import {
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { AddLocationWizard } from "./AddLocationWizard";
 import { CanRowsEditor } from "./CanRowsEditor";
+import { CustomerHistory } from "./CustomerHistory";
 
 // A schedule row from the API mapped to the shared pricing input.
 function toPricingDay(day: PickupDay): PricingDay {
@@ -111,12 +111,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   const upcomingJobsQuery = useQuery({
     queryKey: ["customer-jobs-upcoming"],
     queryFn: async () => listUpcomingJobs(accessToken),
-    enabled: hasActivePlan
-  });
-
-  const historyJobsQuery = useQuery({
-    queryKey: ["customer-jobs-history"],
-    queryFn: async () => listHistoryJobs(accessToken),
     enabled: hasActivePlan
   });
 
@@ -222,9 +216,9 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   // Address/schedule config is available before paying; only the job feeds are
   // entitlement-gated, so a 402 there is our "no active subscription" signal.
   const entitlementBlocked = useMemo(() => {
-    const errors = [upcomingJobsQuery.error, historyJobsQuery.error];
+    const errors = [upcomingJobsQuery.error];
     return errors.some((error) => error instanceof ApiError && error.status === 402);
-  }, [historyJobsQuery.error, upcomingJobsQuery.error]);
+  }, [upcomingJobsQuery.error]);
 
   const firstName = user.name.split(" ")[0];
 
@@ -808,27 +802,7 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
   }
 
   function renderHistory(): JSX.Element {
-    return (
-      <div className="dash-page">
-        <div className="dash-page-head">
-          <h2>Recent History</h2>
-          <p className="subtext">A look back at your recent pickups.</p>
-        </div>
-        <article className="panel">
-          <ul className="meta-list compact">
-            {historyJobsQuery.data?.jobs.slice(0, 8).map((job) => (
-              <li key={job.id}>
-                {new Date(job.scheduledDate).toLocaleDateString()} - {job.type} ({job.status})
-              </li>
-            ))}
-          </ul>
-          {historyJobsQuery.data && historyJobsQuery.data.jobs.length === 0 ? (
-            <p className="subtext">No past jobs yet.</p>
-          ) : null}
-          {historyJobsQuery.isError ? <p className="error">{getErrorMessage(historyJobsQuery.error)}</p> : null}
-        </article>
-      </div>
-    );
+    return <CustomerHistory accessToken={accessToken} enabled={hasActivePlan} />;
   }
 
   return (

@@ -58,6 +58,7 @@ import type {
   ServiceAreaCheckResponse,
   PickupScheduleSuggestion,
   ServiceJob,
+  CustomerHistoryResponse,
   PickupDay,
   ScheduleUpdateInput,
   StripeCheckoutRequest,
@@ -800,8 +801,8 @@ export function listUpcomingJobs(accessToken: string): Promise<ServiceJobsRespon
   return request<undefined, ServiceJobsResponse>("/jobs/upcoming", "GET", undefined, accessToken);
 }
 
-export function listHistoryJobs(accessToken: string): Promise<ServiceJobsResponse> {
-  return request<undefined, ServiceJobsResponse>("/jobs/history", "GET", undefined, accessToken);
+export function listHistoryJobs(accessToken: string): Promise<CustomerHistoryResponse> {
+  return request<undefined, CustomerHistoryResponse>("/jobs/history", "GET", undefined, accessToken);
 }
 
 export function getBillingSummary(accessToken: string): Promise<BillingSummary> {

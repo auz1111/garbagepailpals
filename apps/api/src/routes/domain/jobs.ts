@@ -1,6 +1,6 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { prisma } from "@gpp/db";
-import { serviceJobsResponseSchema } from "@gpp/shared";
+import { customerHistoryResponseSchema, serviceJobsResponseSchema } from "@gpp/shared";
 import { handleOptions, jsonResponse, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
 import { withEntitlement } from "../../lib/withEntitlement";
@@ -66,49 +66,45 @@ export async function historyJobsHandler(
       withEntitlement(async (_req, _ctx, auth) => {
         const now = new Date();
 
-        // History is now the record of real visits: past route stops. Each stop
-        // can carry a roll-out and/or roll-in — expand it back into per-action
-        // entries so the calendar/history UI keeps its familiar shape.
+        // History is the record of real visits: the customer's own past route
+        // stops, with full detail (what was done, the exact cans, the operator's
+        // verification photos, and where it happened) for a rich per-stop view.
         const stops = await prisma.routeStop.findMany({
           where: {
             route: { serviceDate: { lt: now } },
             ...(auth.role === "ADMIN" ? {} : { serviceAddress: { userId: auth.sub } })
           },
           orderBy: { route: { serviceDate: "desc" } },
-          take: 100,
+          take: 60,
           include: {
-            route: { select: { serviceDate: true } },
-            serviceAddress: { select: { subscriptions: { select: { id: true }, take: 1 } } }
+            route: { select: { serviceDate: true, operator: { select: { name: true } } } },
+            serviceAddress: {
+              select: { line1: true, city: true, state: true, postalCode: true, lat: true, lng: true }
+            }
           }
         });
 
-        const statusMap = {
-          SERVICED: "COMPLETED",
-          SKIPPED: "SKIPPED",
-          FAILED: "FAILED",
-          PENDING: "SCHEDULED"
-        } as const;
-
-        const jobs = stops.flatMap((stop) => {
-          const types = stop.jobTypes.split(",").filter(Boolean);
-          const when = stop.servicedAt ?? stop.route.serviceDate;
-          const subscriptionId = stop.serviceAddress.subscriptions[0]?.id ?? "";
-          return types.map((type) => ({
-            id: `${stop.id}:${type}`,
-            serviceAddressId: stop.serviceAddressId,
-            subscriptionId,
-            scheduledDate: when.toISOString(),
-            type: type as "CURB_OUT" | "CURB_IN",
-            status: statusMap[stop.status],
-            completedAt: stop.servicedAt?.toISOString() ?? null,
-            photoBlobPath: null,
+        const response = customerHistoryResponseSchema.parse({
+          stops: stops.map((stop) => ({
+            id: stop.id,
+            serviceDate: stop.route.serviceDate.toISOString(),
+            servicedAt: stop.servicedAt?.toISOString() ?? null,
+            status: stop.status,
+            jobTypes: stop.jobTypes.split(",").filter(Boolean),
+            cans: (stop.cans as unknown as any[]) ?? [],
+            canCount: stop.canCount,
+            petWasteDogs: stop.petWasteDogs,
             failureReason: stop.failureReason ?? null,
-            shiftedFromDate: null,
-            shiftReason: null
-          }));
+            line1: stop.serviceAddress.line1,
+            city: stop.serviceAddress.city,
+            state: stop.serviceAddress.state,
+            postalCode: stop.serviceAddress.postalCode,
+            lat: stop.serviceAddress.lat ? Number(stop.serviceAddress.lat) : 0,
+            lng: stop.serviceAddress.lng ? Number(stop.serviceAddress.lng) : 0,
+            operatorName: stop.route.operator?.name ?? null,
+            verification: (stop.serviceVerification as unknown as any[]) ?? []
+          }))
         });
-
-        const response = serviceJobsResponseSchema.parse({ jobs });
 
         return jsonResponse(200, response);
       }),

@@ -4841,6 +4841,97 @@ button[type="submit"]:disabled {
   z-index: 0;
 }
 
+/* Customer history — rich per-stop cards with a map. */
+.history-stop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.history-stop {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+  background: var(--surface, #ffffff);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 14px);
+  padding: 1rem;
+}
+.history-stop-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.history-stop-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+.history-stop-when {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.history-stop-date {
+  font-size: 1.02rem;
+}
+.history-stop-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.history-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--slate-6, #eef2f4);
+  color: var(--slate-1, #1f2937);
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.history-chip.is-time {
+  background: #dcfce7;
+  color: #166534;
+}
+.history-chip.is-muted {
+  background: transparent;
+  color: var(--slate-2);
+  font-weight: 500;
+}
+.history-stop-reason {
+  margin: 0;
+  color: #b45309;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+.history-stop-map {
+  flex: 0 0 240px;
+  align-self: stretch;
+  min-height: 160px;
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  z-index: 0;
+}
+@media (max-width: 720px) {
+  .history-stop {
+    flex-direction: column;
+  }
+  .history-stop-map {
+    flex-basis: auto;
+    min-height: 200px;
+  }
+}
+
 /* ===== Dashboard: Important links ===== */
 .important-link-grid {
   display: grid;

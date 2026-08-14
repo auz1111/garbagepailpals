@@ -996,6 +996,37 @@ export const dailyRouteSchema = z.object({
   stops: z.array(dailyRouteStopSchema)
 });
 
+// The lifecycle of a single route stop (mirrors the RouteStop.status column).
+export const routeStopStatusSchema = z.enum(["PENDING", "SERVICED", "SKIPPED", "FAILED"]);
+
+// One serviced (or missed) stop as the CUSTOMER sees it in their own history: the
+// full detail of what happened at their location, including where it is on a map
+// and the operator's verification photos. Scoped to the customer's own stops only.
+export const customerHistoryStopSchema = z.object({
+  id: z.string(),
+  // The service day (UTC-midnight ISO) and the exact time it was serviced.
+  serviceDate: z.string(),
+  servicedAt: z.string().nullable(),
+  status: routeStopStatusSchema,
+  jobTypes: z.array(z.enum(["CURB_OUT", "CURB_IN"])),
+  cans: z.array(scheduleCanSchema).default([]),
+  canCount: z.number().int().nonnegative(),
+  petWasteDogs: z.number().int().nonnegative().default(0),
+  failureReason: z.string().nullable(),
+  line1: z.string(),
+  city: z.string(),
+  state: z.string(),
+  postalCode: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+  operatorName: z.string().nullable(),
+  verification: z.array(stopServiceVerificationItemSchema).default([])
+});
+
+export const customerHistoryResponseSchema = z.object({
+  stops: z.array(customerHistoryStopSchema)
+});
+
 // Admin cancel request — an optional free-text reason kept for the record.
 export const routeCancelSchema = z.object({
   reason: z.string().trim().max(500).optional()
@@ -1249,6 +1280,8 @@ export type RouteCancel = z.infer<typeof routeCancelSchema>;
 export type RouteHistoryResponse = z.infer<typeof routeHistoryResponseSchema>;
 export type RouteHistorySummary = z.infer<typeof routeHistorySummarySchema>;
 export type DailyRouteStop = z.infer<typeof dailyRouteStopSchema>;
+export type CustomerHistoryStop = z.infer<typeof customerHistoryStopSchema>;
+export type CustomerHistoryResponse = z.infer<typeof customerHistoryResponseSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;
 export type AdminRouteSummary = z.infer<typeof adminRouteSummarySchema>;
 export type AdminTodaysLocation = z.infer<typeof adminTodaysLocationSchema>;
