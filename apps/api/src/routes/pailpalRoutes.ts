@@ -1,4 +1,5 @@
 import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import { randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "@gpp/db";
 import { Prisma } from "@prisma/client";
@@ -18,6 +19,11 @@ import { env } from "../lib/env";
 
 const ORS_BASE = "https://api.openrouteservice.org";
 
+// Login-less managed customers still need a unique email for the User table's
+// unique constraint; we store a placeholder in this reserved domain and treat it
+// as "no email" everywhere it surfaces.
+const NO_LOGIN_DOMAIN = "no-login.gpp.local";
+
 const CUSTOMER_INCLUDE = {
   serviceAddresses: {
     orderBy: { createdAt: "asc" as const },
@@ -29,6 +35,7 @@ function serializeCustomer(user: {
   id: string;
   name: string;
   email: string;
+  passwordHash: string | null;
   phone: string | null;
   createdAt: Date;
   serviceAddresses: Array<{
@@ -42,10 +49,12 @@ function serializeCustomer(user: {
     schedules: Array<{ pickupDayOfWeek: number }>;
   }>;
 }) {
+  const syntheticEmail = user.email.endsWith(`@${NO_LOGIN_DOMAIN}`);
   return {
     id: user.id,
     name: user.name,
-    email: user.email,
+    email: syntheticEmail ? null : user.email,
+    hasLogin: user.passwordHash != null,
     phone: user.phone,
     createdAt: user.createdAt.toISOString(),
     locations: user.serviceAddresses.map((a) => ({
@@ -75,20 +84,31 @@ export async function pailpalCustomersHandler(
       async (req, _ctx, auth) => {
         if (req.method === "POST") {
           const input = await parseJson(req, pailpalCustomerCreateSchema);
-          const existing = await prisma.user.findUnique({ where: { email: input.email } });
-          if (existing) {
-            throw new HttpError(409, "That email is already in use by another account.");
+          const wantsLogin = input.addLogin === true;
+          const providedEmail = input.email?.trim() || null;
+
+          // Any real email must be unique (whether or not a login is being set).
+          if (providedEmail) {
+            const existing = await prisma.user.findUnique({ where: { email: providedEmail } });
+            if (existing) {
+              throw new HttpError(409, "That email is already in use by another account.");
+            }
           }
-          const passwordHash = await bcrypt.hash(input.password, 12);
+
+          // No email → a placeholder so the unique constraint holds; it's treated
+          // as "no email" everywhere it surfaces. A login needs a real email.
+          const email = providedEmail ?? `managed-${randomUUID()}@${NO_LOGIN_DOMAIN}`;
+          const passwordHash = wantsLogin ? await bcrypt.hash(input.password as string, 12) : null;
+
           const created = await prisma.user.create({
             data: {
               name: input.name,
-              email: input.email,
+              email,
               phone: input.phone ?? null,
               role: "CUSTOMER",
               managedById: auth.sub,
               passwordHash,
-              authProviderId: `local:${input.email}`
+              authProviderId: wantsLogin ? `local:${email}` : null
             }
           });
           await prisma.auditLog.create({
@@ -97,7 +117,7 @@ export async function pailpalCustomersHandler(
               action: "pailpal.customer.created",
               entityType: "User",
               entityId: created.id,
-              metadata: { email: input.email }
+              metadata: { email: providedEmail, hasLogin: wantsLogin }
             }
           });
           const row = await prisma.user.findUnique({

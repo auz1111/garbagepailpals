@@ -1034,14 +1034,22 @@ export const customerHistoryResponseSchema = z.object({
   stops: z.array(customerHistoryStopSchema)
 });
 
-// PailPal: create a managed customer (a real login the PailPal sets a password
-// for and hands off however they like).
-export const pailpalCustomerCreateSchema = z.object({
-  name: z.string().min(1).max(120),
-  email: z.string().email(),
-  phone: z.string().max(40).optional(),
-  password: z.string().min(8).max(128)
-});
+// PailPal: create a managed customer. A login is optional — by default the
+// PailPal just operates on their behalf. Only when `addLogin` is set does the
+// customer get credentials (then email + password are required).
+export const pailpalCustomerCreateSchema = z
+  .object({
+    name: z.string().min(1).max(120),
+    phone: z.string().max(40).optional(),
+    // Email is optional contact info unless a login is being added.
+    email: z.string().email().optional(),
+    addLogin: z.boolean().optional().default(false),
+    password: z.string().min(8).max(128).optional()
+  })
+  .refine((d) => !d.addLogin || (!!d.email && !!d.password), {
+    message: "Email and a password (min 8 characters) are required to add a login.",
+    path: ["password"]
+  });
 
 // A managed customer as their PailPal sees them, with a summary of their
 // locations (full location/schedule editing reuses the normal address flow).
@@ -1059,7 +1067,10 @@ export const pailpalCustomerLocationSchema = z.object({
 export const pailpalCustomerSchema = z.object({
   id: z.string(),
   name: z.string(),
-  email: z.string(),
+  // Null when the customer has no real email on file (login-less, no contact
+  // email). `hasLogin` is true only when the customer can actually sign in.
+  email: z.string().nullable(),
+  hasLogin: z.boolean(),
   phone: z.string().nullable(),
   createdAt: z.string(),
   locations: z.array(pailpalCustomerLocationSchema)

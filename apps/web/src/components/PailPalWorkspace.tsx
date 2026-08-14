@@ -151,7 +151,10 @@ function CustomerCard({
       <div className="pailpal-customer-head">
         <div>
           <strong>{customer.name}</strong>
-          <span className="admin-table-sub">{customer.email}</span>
+          <span className="admin-table-sub">
+            {customer.email ?? "No email"}
+            {customer.hasLogin ? " · Login enabled" : " · No login"}
+          </span>
         </div>
         <span className="admin-table-sub">
           {customer.locations.length} location{customer.locations.length === 1 ? "" : "s"}
@@ -221,6 +224,7 @@ function PailpalCustomers({ accessToken }: { accessToken: string }): JSX.Element
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [addLogin, setAddLogin] = useState(false);
   const [password, setPassword] = useState("");
 
   const customersQuery = useQuery({
@@ -234,11 +238,21 @@ function PailpalCustomers({ accessToken }: { accessToken: string }): JSX.Element
 
   const createMutation = useMutation({
     mutationFn: () =>
-      createPailpalCustomer({ name, email, phone: phone || undefined, password }, accessToken),
+      createPailpalCustomer(
+        {
+          name,
+          email: email || undefined,
+          phone: phone || undefined,
+          addLogin,
+          password: addLogin ? password : undefined
+        },
+        accessToken
+      ),
     onSuccess: () => {
       setName("");
       setEmail("");
       setPhone("");
+      setAddLogin(false);
       setPassword("");
       invalidate();
     }
@@ -267,24 +281,39 @@ function PailpalCustomers({ accessToken }: { accessToken: string }): JSX.Element
             <input value={name} onChange={(e) => setName(e.target.value)} required />
           </label>
           <label>
-            Email
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </label>
-          <label>
-            Phone
-            <input value={phone} onChange={(e) => setPhone(e.target.value)} />
-          </label>
-          <label>
-            Password
+            {addLogin ? "Email" : "Email (optional)"}
             <input
-              type="text"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-              placeholder="min 8 characters"
-              required
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required={addLogin}
             />
           </label>
+          <label>
+            Phone (optional)
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} />
+          </label>
+          <label className="pailpal-rollin">
+            <input
+              type="checkbox"
+              checked={addLogin}
+              onChange={(e) => setAddLogin(e.target.checked)}
+            />
+            Add a login for this customer
+          </label>
+          {addLogin ? (
+            <label>
+              Password
+              <input
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={8}
+                placeholder="min 8 characters"
+                required
+              />
+            </label>
+          ) : null}
           {createMutation.isError ? (
             <p className="error">{getErrorMessage(createMutation.error)}</p>
           ) : null}
