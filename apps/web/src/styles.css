@@ -2845,6 +2845,39 @@ a {
   display: grid;
   gap: 0.55rem;
 }
+/* Header row: title on the left, "+ Add can" pinned to the top-right. */
+.can-rows-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.can-rows-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+  color: var(--slate-2);
+}
+.can-add-btn {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 0.4rem 0.95rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  color: var(--teal-deep);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+}
+.can-add-btn:hover {
+  border-color: transparent;
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(247, 168, 27, 0.35);
+}
 .can-row {
   display: flex;
   flex-wrap: wrap;

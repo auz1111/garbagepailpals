@@ -23,10 +23,14 @@ export function formatCans(cans: ScheduleCan[]): string {
 // wizard so they all share one shape.
 export function CanRowsEditor({
   cans,
-  onChange
+  onChange,
+  // When set, a header row shows this title on the left and the "Add can" button
+  // on the top-right (instead of a full-width button below the rows).
+  title
 }: {
   cans: ScheduleCan[];
   onChange: (cans: ScheduleCan[]) => void;
+  title?: string;
 }): JSX.Element {
   const used = new Set(cans.map((c) => c.type));
   const firstFree = CAN_TYPES_ORDER.find((t) => !used.has(t));
@@ -38,8 +42,20 @@ export function CanRowsEditor({
     if (firstFree) onChange([...cans, { type: firstFree, cadence: "WEEKLY", count: 1 }]);
   };
 
+  const addButton = firstFree ? (
+    <button type="button" className="ghost-btn can-add-btn" onClick={add}>
+      + Add can
+    </button>
+  ) : null;
+
   return (
     <div className="can-rows">
+      {title ? (
+        <div className="can-rows-head">
+          <span className="can-rows-title">{title}</span>
+          {addButton}
+        </div>
+      ) : null}
       {cans.map((can, i) => (
         <div className="can-row" key={i}>
           <label>
@@ -84,11 +100,7 @@ export function CanRowsEditor({
           ) : null}
         </div>
       ))}
-      {firstFree ? (
-        <button type="button" className="ghost-btn" onClick={add}>
-          + Add can
-        </button>
-      ) : null}
+      {!title ? addButton : null}
     </div>
   );
 }

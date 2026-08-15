@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CurrentUser, PailpalLocationDay, ScheduleCan } from "@gpp/shared";
@@ -145,6 +145,30 @@ function LocationScheduleEditor({
     onSuccess: onSaved
   });
 
+  // Stable, key-order-independent snapshot so we can tell edited from pristine.
+  const serialize = (list: EditableDay[]): string =>
+    JSON.stringify(
+      list.map((d) => ({
+        dayOfWeek: d.dayOfWeek,
+        rollIn: d.rollIn,
+        biweeklyAnchorDate: d.biweeklyAnchorDate,
+        cans: d.cans.map((c) => ({ type: c.type, cadence: c.cadence, count: c.count }))
+      }))
+    );
+  const baseline = useMemo(
+    () =>
+      serialize(
+        initialDays.map((d) => ({
+          dayOfWeek: d.dayOfWeek,
+          cans: d.cans,
+          rollIn: d.rollIn,
+          biweeklyAnchorDate: d.biweeklyAnchorDate
+        }))
+      ),
+    [initialDays]
+  );
+  const dirty = serialize(days) !== baseline;
+
   const usedDays = new Set(days.map((d) => d.dayOfWeek));
   const addDay = (): void => {
     const free = [2, 1, 3, 4, 5, 0, 6].find((d) => !usedDays.has(d));
@@ -190,8 +214,11 @@ function LocationScheduleEditor({
             </div>
           </div>
           <div className="pailpal-day-cans">
-            <span className="pailpal-day-cans-label">Cans serviced</span>
-            <CanRowsEditor cans={day.cans} onChange={(cans) => updateDay(i, { cans })} />
+            <CanRowsEditor
+              title="Cans serviced"
+              cans={day.cans}
+              onChange={(cans) => updateDay(i, { cans })}
+            />
             <label className="pailpal-rollin-row">
               <input
                 type="checkbox"
@@ -212,14 +239,18 @@ function LocationScheduleEditor({
         <button type="button" className="cta-secondary" onClick={addDay}>
           + Add day
         </button>
-        {days.length > 0 ? (
+        {dirty ? (
           <button
             type="button"
             className="cta-primary"
             onClick={() => save.mutate()}
             disabled={save.isPending}
           >
-            {save.isPending ? "Saving…" : "Save days of service"}
+            {save.isPending
+              ? "Saving…"
+              : initialDays.length === 0
+                ? "Save schedule"
+                : "Update schedule"}
           </button>
         ) : null}
       </div>
