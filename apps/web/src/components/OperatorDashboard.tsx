@@ -14,6 +14,7 @@ import { StopServiceVerification } from "./StopServiceVerification";
 type RouteStop = DailyRoute["stops"][number];
 import {
   acceptOperatorRoute,
+  declineOperatorRoute,
   getOperatorRoutes,
   getOperatorTimeOff,
   getOperatorZones,
@@ -165,6 +166,15 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
     mutationFn: (routeId: string) => acceptOperatorRoute(routeId, accessToken),
     onSuccess: (data) => {
       queryClient.setQueryData(["operator-routes"], data);
+    }
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: (routeId: string) => declineOperatorRoute(routeId, accessToken),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["operator-routes"], data);
+      // A declined route freed its locations — refresh any route-build views.
+      void queryClient.invalidateQueries({ queryKey: ["pailpal-customers"] });
     }
   });
 
@@ -466,14 +476,32 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                       Open in Maps
                     </a>
                     {isAssigned ? (
-                      <button
-                        type="button"
-                        className="cta-primary accept-route-btn"
-                        onClick={() => acceptMutation.mutate(route.id)}
-                        disabled={acceptMutation.isPending}
-                      >
-                        {acceptMutation.isPending ? "Accepting…" : "✓ Accept route"}
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          className="ghost-btn is-danger"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Decline this route? It will be removed and its stops freed for reassignment."
+                              )
+                            ) {
+                              declineMutation.mutate(route.id);
+                            }
+                          }}
+                          disabled={declineMutation.isPending || acceptMutation.isPending}
+                        >
+                          {declineMutation.isPending ? "Declining…" : "Decline"}
+                        </button>
+                        <button
+                          type="button"
+                          className="cta-primary accept-route-btn"
+                          onClick={() => acceptMutation.mutate(route.id)}
+                          disabled={acceptMutation.isPending || declineMutation.isPending}
+                        >
+                          {acceptMutation.isPending ? "Accepting…" : "✓ Accept route"}
+                        </button>
+                      </>
                     ) : isCompleted ? (
                       <span className="operator-route-lock is-complete">✓ Route complete</span>
                     ) : isCancelled ? (

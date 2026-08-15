@@ -483,6 +483,20 @@ export function acceptOperatorRoute(
   );
 }
 
+// Decline an assigned route before accepting it — removes it and frees its
+// locations to be reassigned.
+export function declineOperatorRoute(
+  routeId: string,
+  accessToken: string
+): Promise<OperatorRoutesResponse> {
+  return request<undefined, OperatorRoutesResponse>(
+    `/operator/routes/${routeId}/decline`,
+    "POST",
+    undefined,
+    accessToken
+  );
+}
+
 export function markStopServiced(
   routeId: string,
   addressId: string,

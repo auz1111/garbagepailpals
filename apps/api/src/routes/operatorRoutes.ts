@@ -81,6 +81,43 @@ export async function operatorAcceptRouteHandler(
   );
 }
 
+// The operator declines an assigned route before accepting it. The route is
+// removed (its stops cascade), freeing those locations to be reassigned by
+// dispatch or rebuilt. An already-accepted route is locked and can't be declined.
+export async function operatorDeclineRouteHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) {
+    return optionsResponse;
+  }
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const routeId = req.params.routeId;
+        if (!routeId) {
+          throw new HttpError(400, "routeId is required");
+        }
+        const route = await prisma.dailyRoute.findUnique({ where: { id: routeId } });
+        if (!route || route.operatorId !== auth.sub) {
+          throw new HttpError(404, "Route not found");
+        }
+        if (route.status === "ACCEPTED") {
+          throw new HttpError(409, "You've already accepted this route — it can no longer be declined.");
+        }
+        if (route.status === "COMPLETED") {
+          throw new HttpError(409, "This route is already completed.");
+        }
+        await prisma.dailyRoute.delete({ where: { id: routeId } });
+        return jsonResponse(200, await myRoutesResponse(auth.sub));
+      },
+      { roles: ["OPERATOR", "ADMIN"] }
+    )(request, context)
+  );
+}
+
 // Operator marks a stop serviced (or un-marks it). The route auto-completes when
 // every stop is serviced. Only allowed once the route is accepted.
 export async function operatorServiceStopHandler(

@@ -45,6 +45,7 @@ import {
 } from "./routes/adminRoutes";
 import {
   operatorAcceptRouteHandler,
+  operatorDeclineRouteHandler,
   operatorRoutesHandler,
   operatorServiceStopHandler
 } from "./routes/operatorRoutes";
@@ -235,6 +236,13 @@ app.http("operator-routes-accept", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: operatorAcceptRouteHandler
+});
+
+app.http("operator-routes-decline", {
+  route: "operator/routes/{routeId}/decline",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: operatorDeclineRouteHandler
 });
 
 app.http("operator-route-stop-service", {
