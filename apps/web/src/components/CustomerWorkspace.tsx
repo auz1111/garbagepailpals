@@ -33,8 +33,7 @@ import {
   listAddresses,
   listUpcomingJobs,
   deleteAddress,
-  updateAddress,
-  updateAddressSchedule
+  updateAddress
 } from "../lib/api";
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { AddLocationWizard } from "./AddLocationWizard";
@@ -139,28 +138,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
       void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
       void queryClient.invalidateQueries({ queryKey: ["customer-jobs-history"] });
-    }
-  });
-
-  const scheduleMutation = useMutation({
-    mutationFn: ({ addressId, days }: { addressId: string; days: PickupDayInput[] }) => {
-      // A datetime-local field yields "YYYY-MM-DDTHH:mm"; the API expects a full
-      // ISO-8601 timestamp, so normalize each day's anchor (only for biweekly).
-      const normalized: PickupDayInput[] = days.map((day) => {
-        let anchor: string | undefined;
-        const raw = day.biweeklyAnchorDate?.trim();
-        if (cansToCadence(day.cans) === "BIWEEKLY" && raw) {
-          const parsed = new Date(raw);
-          anchor = Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
-        }
-        return { ...day, biweeklyAnchorDate: anchor };
-      });
-      return updateAddressSchedule(addressId, { days: normalized }, accessToken);
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
-      void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
     }
   });
 
@@ -684,10 +661,6 @@ export function CustomerWorkspace({ user, accessToken, refreshUser }: CustomerWo
           }
         }}
         removing={deleteAddressMutation.isPending && deleteAddressMutation.variables === address.id}
-        onSaveSchedule={(id, days) => scheduleMutation.mutate({ addressId: id, days })}
-        savingSchedule={scheduleMutation.isPending}
-        scheduleError={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
-        scheduleSaved={scheduleMutation.isSuccess}
       />
     );
   }
@@ -928,10 +901,6 @@ function LocationDetail({
   covered: boolean | undefined;
   onRemove: (id: string) => void;
   removing: boolean;
-  onSaveSchedule: (id: string, days: PickupDayInput[]) => void;
-  savingSchedule: boolean;
-  scheduleError: string | null;
-  scheduleSaved: boolean;
 }): JSX.Element {
   const queryClient = useQueryClient();
 

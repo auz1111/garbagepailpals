@@ -164,7 +164,6 @@ model ServiceAddress {
   updatedAt        DateTime          @updatedAt
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   neighborhood     Neighborhood?     @relation(fields: [neighborhoodId], references: [id], onDelete: SetNull)
-  schedules        ServiceSchedule[]
   locationServices LocationService[]
   subscriptions    Subscription[]
   holds            ServiceHold[]
@@ -261,32 +260,6 @@ model UserZone {
   @@unique([userId, zoneId])
   @@index([userId])
   @@index([zoneId])
-}
-
-model ServiceSchedule {
-  id                  String         @id @default(cuid())
-  serviceAddressId    String
-  pickupDayOfWeek     Int
-  cadence             Cadence        @default(WEEKLY)
-  biweeklyAnchorDate  DateTime?
-  canCount            Int            @default(2)
-  rollIn              Boolean        @default(true)
-  glassRecycling      Boolean        @default(false)
-  petWasteDogs        Int            @default(0)
-  // Per-cart breakdown: [{ type: TRASH|RECYCLING|YARD|GLASS, cadence, count }].
-  // Source of truth for pricing; canCount/cadence/glassRecycling are derived.
-  cans                Json           @default("[]")
-  // Whether this day is synced to the connected trash provider's collection day
-  // (holiday shifts follow the provider only for synced days).
-  providerSynced      Boolean        @default(false)
-  curbOutOffsetHours  Int            @default(-12)
-  curbInOffsetHours   Int            @default(8)
-  createdAt           DateTime       @default(now())
-  updatedAt           DateTime       @updatedAt
-  serviceAddress      ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
-
-  @@unique([serviceAddressId, pickupDayOfWeek])
-  @@index([serviceAddressId])
 }
 
 // One service a location subscribes to (trash, pet-waste, watering, mail check).

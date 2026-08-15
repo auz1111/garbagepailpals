@@ -21,7 +21,11 @@ import { withAuth } from "../../lib/withAuth";
 import { canActForAddress, canActForUser } from "../../lib/ownership";
 import { geocodeAddressParts } from "../../services/geocoding";
 import { lookupPickupSchedule } from "../../services/haulerSchedule";
-import { applyLocationServices, getLocationServices } from "../../services/locationServices";
+import {
+  applyLocationServices,
+  getLocationServices,
+  schedulesFromServices
+} from "../../services/locationServices";
 import { timezoneForCoords } from "../../lib/timezone";
 
 type ScheduleRow = {
@@ -78,8 +82,25 @@ function toAddressResponse(address: {
   serviceApprovedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
-  schedules?: ScheduleRow[];
+  locationServices?: Array<{
+    type: string;
+    options: unknown;
+    days: Array<{
+      dayOfWeek: number;
+      cadence: string;
+      biweeklyAnchorDate: Date | null;
+      rollIn: boolean;
+      providerSynced: boolean;
+      cans: unknown;
+    }>;
+  }>;
 }) {
+  // The schedule response is projected from the location's services.
+  const schedules = schedulesFromServices(
+    address.id,
+    address.locationServices ?? [],
+    address.updatedAt
+  );
   return serviceAddressSchema.parse({
     ...address,
     lat: address.lat.toNumber(),
@@ -89,10 +110,7 @@ function toAddressResponse(address: {
     serviceApproved: address.serviceApprovedAt != null,
     createdAt: address.createdAt.toISOString(),
     updatedAt: address.updatedAt.toISOString(),
-    schedules: (address.schedules ?? [])
-      .slice()
-      .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
-      .map(toScheduleResponse)
+    schedules: schedules.map(toScheduleResponse)
   });
 }
 
@@ -181,23 +199,8 @@ export async function createAddressHandler(
             pickupsPerWeek: 1,
             rollIn: input.rollIn ?? true,
             isActive: input.isActive ?? true,
-            schedules: {
-              create: {
-                pickupDayOfWeek: input.pickupDayOfWeek ?? 5,
-                cadence: cansToCadence(firstCans),
-                biweeklyAnchorDate: input.biweeklyAnchorDate
-                  ? new Date(input.biweeklyAnchorDate)
-                  : null,
-                canCount: cansToCanCount(firstCans),
-                rollIn: input.rollIn ?? true,
-                glassRecycling: cansHaveGlass(firstCans),
-                petWasteDogs: input.petWasteDogs ?? 0,
-                providerSynced: input.providerSynced ?? false,
-                cans: firstCans as unknown as Prisma.InputJsonValue
-              }
-            },
-            // Seed the generic service model too (billing reads this): a TRASH
-            // service for the first day, plus PET_WASTE if dogs were requested.
+            // Seed the service model: a TRASH service for the first day, plus
+            // PET_WASTE if dogs were requested.
             locationServices: {
               create: [
                 {
@@ -243,7 +246,7 @@ export async function createAddressHandler(
               ]
             }
           },
-          include: { schedules: true }
+          include: { locationServices: { include: { days: true } } }
         });
 
         return jsonResponse(201, { address: toAddressResponse(created) });
@@ -271,7 +274,7 @@ export async function listAddressesHandler(
         const rows = await prisma.serviceAddress.findMany({
           where: { userId: auth.sub },
           orderBy: { createdAt: "desc" },
-          include: { schedules: true }
+          include: { locationServices: { include: { days: true } } }
         });
 
         return jsonResponse(200, {
@@ -344,7 +347,7 @@ export async function updateAddressHandler(
             ...(coords ?? {}),
             ...(derivedTimezone ? { timezone: derivedTimezone } : {})
           },
-          include: { schedules: true }
+          include: { locationServices: { include: { days: true } } }
         });
 
         return jsonResponse(200, { address: toAddressResponse(updated) });
@@ -399,80 +402,6 @@ export async function addressByIdHandler(
     return deleteAddressHandler(request, context);
   }
   return updateAddressHandler(request, context);
-}
-
-export async function upsertScheduleHandler(
-  request: HttpRequest,
-  context: InvocationContext
-): Promise<HttpResponseInit> {
-  const optionsResponse = handleOptions(request);
-  if (optionsResponse) {
-    return optionsResponse;
-  }
-
-  return withErrorBoundary(context, async () =>
-    withAuth(
-      async (req, _ctx, auth) => {
-        const addressId = req.params.addressId;
-        if (!addressId) {
-          return jsonResponse(400, { message: "addressId is required" });
-        }
-
-        const address = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
-        if (!address) {
-          return jsonResponse(404, { message: "Address not found" });
-        }
-
-        if (!(await canActForAddress(auth, address.userId))) {
-          return jsonResponse(403, { message: "Forbidden" });
-        }
-
-        const { days } = await parseJson(req, scheduleUpdateSchema);
-        const biweeklyMissingAnchor = days.some(
-          (day) => cansToCadence(day.cans) === "BIWEEKLY" && !day.biweeklyAnchorDate
-        );
-        if (biweeklyMissingAnchor) {
-          return jsonResponse(400, {
-            message: "A first pickup date is required for every biweekly day"
-          });
-        }
-
-        // Replace the whole set of pickup days for this location, and keep
-        // pickups-per-week (a legacy convenience field) in sync with the count.
-        const [, , rows] = await prisma.$transaction([
-          prisma.serviceSchedule.deleteMany({ where: { serviceAddressId: addressId } }),
-          prisma.serviceSchedule.createMany({
-            data: days.map((day) => ({
-              serviceAddressId: addressId,
-              pickupDayOfWeek: day.dayOfWeek,
-              cadence: cansToCadence(day.cans),
-              biweeklyAnchorDate: day.biweeklyAnchorDate ? new Date(day.biweeklyAnchorDate) : null,
-              canCount: cansToCanCount(day.cans),
-              rollIn: day.rollIn,
-              glassRecycling: cansHaveGlass(day.cans),
-              petWasteDogs: day.petWasteDogs ?? 0,
-              providerSynced: day.providerSynced ?? false,
-              cans: day.cans as unknown as Prisma.InputJsonValue
-            }))
-          }),
-          prisma.serviceSchedule.findMany({ where: { serviceAddressId: addressId } })
-        ]);
-
-        await prisma.serviceAddress.update({
-          where: { id: addressId },
-          data: { pickupsPerWeek: days.length }
-        });
-
-        return jsonResponse(200, {
-          schedules: rows
-            .slice()
-            .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
-            .map(toScheduleResponse)
-        });
-      },
-      { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
-    )(request, context)
-  );
 }
 
 // Read all services for a location (generic service model).

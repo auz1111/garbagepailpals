@@ -33,7 +33,6 @@ import {
   getNeighborhoods,
   setLocationNeighborhood,
   updateAddress,
-  updateAddressSchedule,
   updateAdminUser,
   getAdminDashboardMetrics,
   getAdminIncidents,
@@ -1108,16 +1107,6 @@ function AdminLocationCard({
     await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
   };
 
-  const scheduleMutation = useMutation({
-    mutationFn: (days: PickupDayInput[]) => updateAddressSchedule(loc.id, { days }, accessToken),
-    onSuccess: async () => {
-      // Schedule changes reprice the location, so refresh both the detail and
-      // the users list (its monthly totals).
-      await refreshLists();
-      setEditing(false);
-    }
-  });
-
   const addressMutation = useMutation({
     mutationFn: async (patch: {
       line1: string;
@@ -1151,26 +1140,6 @@ function AdminLocationCard({
     }
   });
 
-  const connectMutation = useMutation({
-    mutationFn: () => connectHauler(loc.id, accessToken),
-    onSuccess: async (result) => {
-      setConnectResult(result);
-      if (result.matched) {
-        setReviewing(true);
-      }
-      await refreshLists();
-    }
-  });
-
-  // The review component builds the schedule payload; we just persist it.
-  const syncMutation = useMutation({
-    mutationFn: (days: PickupDayInput[]) => updateAddressSchedule(loc.id, { days }, accessToken),
-    onSuccess: async () => {
-      await refreshLists();
-      setReviewing(false);
-      setConnectResult(null);
-    }
-  });
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteAddress(loc.id, accessToken),

@@ -2,18 +2,20 @@ import type { HttpRequest, HttpResponseInit, InvocationContext } from "@azure/fu
 import { prisma } from "@gpp/db";
 import { z } from "zod";
 import {
-  addressMonthlyCents,
   adminLocationNeighborhoodUpdateSchema,
   adminLocationsResponseSchema,
   haulerCoverageResponseSchema,
   isSuperAdminRole,
   locationApprovalSchema,
+  locationServicesMonthlyCents,
   neighborhoodCreateSchema,
   neighborhoodUpdateSchema,
   neighborhoodsResponseSchema,
   pickupScheduleSuggestionSchema,
   scheduleCanSchema,
   type ScheduleCan,
+  type ServicePricing,
+  type ServiceType,
   zoneCreateSchema,
   zoneUpdateSchema,
   zonesResponseSchema
@@ -28,6 +30,25 @@ import {
   lookupPickupSchedule,
   refreshProviderUpcoming
 } from "../services/haulerSchedule";
+import { schedulesFromServices } from "../services/locationServices";
+
+// A location's monthly total (day-centric, matches billing).
+function addressMonthly(
+  services: { type: string; options: unknown; days: { dayOfWeek: number; cadence: string; rollIn: boolean; cans: unknown }[] }[]
+): number {
+  const pricing: ServicePricing[] = services.map((s) => ({
+    type: s.type as ServiceType,
+    days: s.days.map((d) => ({
+      dayOfWeek: d.dayOfWeek,
+      cadence: d.cadence as "WEEKLY" | "BIWEEKLY",
+      cans: cansArraySchema.safeParse(d.cans).success
+        ? (cansArraySchema.parse(d.cans) as ScheduleCan[])
+        : [],
+      rollIn: d.rollIn
+    }))
+  }));
+  return locationServicesMonthlyCents(pricing);
+}
 
 const cansArraySchema = z.array(scheduleCanSchema);
 function parseCans(cans: unknown): ScheduleCan[] {
@@ -326,7 +347,7 @@ export async function adminLocationsHandler(
           include: {
             user: { select: { name: true } },
             neighborhood: { include: { zone: true } },
-            schedules: true,
+            locationServices: { include: { days: true } },
             subscriptions: {
               where: { status: { in: ["ACTIVE", "TRIALING"] } },
               select: { id: true },
@@ -356,6 +377,7 @@ export async function adminLocationsHandler(
           adminLocationsResponseSchema.parse({
             locations: rows.map((a) => {
               const provider = providerByHash.get(hashOf(a)) ?? null;
+              const schedules = schedulesFromServices(a.id, a.locationServices, a.updatedAt);
               return {
                 id: a.id,
                 line1: a.line1,
@@ -369,21 +391,15 @@ export async function adminLocationsHandler(
                 zoneId: a.neighborhood?.zoneId ?? null,
                 zoneName: a.neighborhood?.zone?.name ?? null,
                 canCount: a.canCount,
-                glassRecycling: a.schedules.some((s) => s.glassRecycling),
-                petWaste: a.schedules.some((s) => s.petWasteDogs > 0),
+                glassRecycling: schedules.some((s) => s.glassRecycling),
+                petWaste: schedules.some((s) => s.petWasteDogs > 0),
                 serviceApproved: a.serviceApprovedAt != null,
                 billed: a.subscriptions.length > 0,
-                pickupDays: a.schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
+                pickupDays: schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
                 haulerProvider: provider,
                 haulerProviderLabel: provider ? labelFor(provider) : null,
-                providerSynced: a.schedules.some((s) => s.providerSynced),
-                monthlyCents: addressMonthlyCents(
-                  a.schedules.map((s) => ({
-                    cans: parseCans(s.cans),
-                    rollIn: s.rollIn,
-                    petWasteDogs: s.petWasteDogs
-                  }))
-                )
+                providerSynced: schedules.some((s) => s.providerSynced),
+                monthlyCents: addressMonthly(a.locationServices)
               };
             })
           })

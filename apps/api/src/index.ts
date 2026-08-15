@@ -13,7 +13,6 @@ import {
   addressesRootHandler,
   connectProviderHandler,
   getServicesHandler,
-  upsertScheduleHandler,
   upsertServicesHandler
 } from "./routes/domain/addresses";
 import { historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
@@ -446,13 +445,6 @@ app.http("address-by-id", {
   methods: ["PATCH", "DELETE", "OPTIONS"],
   authLevel: "anonymous",
   handler: addressByIdHandler
-});
-
-app.http("address-schedule-upsert", {
-  route: "addresses/{addressId}/schedule",
-  methods: ["PUT", "OPTIONS"],
-  authLevel: "anonymous",
-  handler: upsertScheduleHandler
 });
 
 app.http("address-services", {

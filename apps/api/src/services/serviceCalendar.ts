@@ -1,6 +1,7 @@
 import { prisma } from "@gpp/db";
 import { env } from "../lib/env";
 import { getUpcomingForAddress } from "./haulerSchedule";
+import { schedulesFromServices } from "./locationServices";
 import { calculateJobsForAddress } from "./scheduler";
 
 // A single serviceable occurrence (curb-out or curb-in) on a concrete date,
@@ -59,7 +60,7 @@ export async function projectServiceCalendar(
     },
     include: {
       serviceAddress: {
-        include: { schedules: true, holds: true }
+        include: { locationServices: { include: { days: true } }, holds: true }
       }
     }
   });
@@ -72,8 +73,8 @@ export async function projectServiceCalendar(
 
   for (const subscription of subscriptions) {
     const address = subscription.serviceAddress;
-    const schedules = address.schedules;
-    if (!schedules || schedules.length === 0) continue;
+    const schedules = schedulesFromServices(address.id, address.locationServices, address.updatedAt);
+    if (schedules.length === 0) continue;
 
     const applicableHolidays = holidays.filter(
       (h) => h.municipality.toLowerCase() === address.city.toLowerCase()

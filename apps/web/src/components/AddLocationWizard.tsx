@@ -16,7 +16,7 @@ import {
   createAddress,
   getPickupScheduleSuggestion,
   updateAddress,
-  updateAddressSchedule
+  updateLocationServices
 } from "../lib/api";
 import { streamToCanTypes } from "../lib/providerCans";
 import { ProviderSyncReview } from "./ProviderSyncReview";
@@ -193,9 +193,30 @@ export function AddLocationWizard({
     }
   });
 
+  // Persist a set of pickup days as the location's TRASH service (replace-all).
+  const saveTrashDays = (days: PickupDayInput[]) =>
+    updateLocationServices(
+      created!.id,
+      [
+        {
+          type: "TRASH",
+          options: {},
+          days: days.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            cadence: cansToCadence(d.cans),
+            biweeklyAnchorDate: d.biweeklyAnchorDate,
+            rollIn: d.rollIn ?? true,
+            providerSynced: d.providerSynced ?? false,
+            cans: d.cans
+          }))
+        }
+      ],
+      accessToken
+    );
+
   // Step 2 (provider match): the review builds the schedule; save then go to notes.
   const applyMutation = useMutation({
-    mutationFn: (days: PickupDayInput[]) => updateAddressSchedule(created!.id, { days }, accessToken),
+    mutationFn: (days: PickupDayInput[]) => saveTrashDays(days),
     onSuccess: async () => {
       await invalidate();
       setStep(3);
@@ -214,7 +235,7 @@ export function AddLocationWizard({
         petWasteDogs: 0,
         providerSynced: false
       }));
-      return updateAddressSchedule(created!.id, { days }, accessToken);
+      return saveTrashDays(days);
     },
     onSuccess: async () => {
       await invalidate();

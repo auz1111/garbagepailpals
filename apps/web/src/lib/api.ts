@@ -833,19 +833,6 @@ export function deleteAddress(addressId: string, accessToken: string): Promise<{
   return request<undefined, { deleted: boolean }>(`/addresses/${addressId}`, "DELETE", undefined, accessToken);
 }
 
-export function updateAddressSchedule(
-  addressId: string,
-  input: ScheduleUpdateInput,
-  accessToken: string
-): Promise<ScheduleUpdateResponse> {
-  return request<ScheduleUpdateInput, ScheduleUpdateResponse>(
-    `/addresses/${addressId}/schedule`,
-    "PUT",
-    input,
-    accessToken
-  );
-}
-
 // Run the trash-provider lookup for the customer's own location (verify-pickups
 // sync). Always re-fetches, bypassing the cache.
 export function connectProvider(

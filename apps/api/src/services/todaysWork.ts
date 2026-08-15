@@ -5,6 +5,7 @@ import { z } from "zod";
 import { biweeklyMatchesZoned, resolveZone, weekdayInZone, zonedDay } from "../lib/timezone";
 import { describeProviders, haulerAddressHash } from "./haulerSchedule";
 import { parseHaulerStreams } from "./providerReconcile";
+import { schedulesFromServices, type ProjectedSchedule } from "./locationServices";
 
 const ACTIVE_SUB_STATUSES: ("ACTIVE" | "TRIALING")[] = ["ACTIVE", "TRIALING"];
 
@@ -31,7 +32,6 @@ function canTypeToStreamKind(type: CanType): PickupStream["kind"] {
 }
 
 const SERVICE_ADDRESS_INCLUDE = {
-  schedules: true,
   locationServices: { include: { days: true } },
   user: { select: { id: true, name: true, managedById: true } },
   neighborhood: { select: { name: true } },
@@ -39,7 +39,9 @@ const SERVICE_ADDRESS_INCLUDE = {
 } as const;
 
 type AddressRow = Awaited<ReturnType<typeof loadServiceableAddresses>>[number];
-type ScheduleRow = AddressRow["schedules"][number];
+// Trash pickup days are projected from the location's TRASH service (see
+// schedulesFromServices) — ServiceSchedule no longer exists.
+type ScheduleRow = ProjectedSchedule;
 
 // ownerId scopes to a PailPal's own managed customers (used for their self-only
 // route building). Without it, the global set is active-subscription customers
@@ -104,7 +106,7 @@ async function loadServiceableAddresses(scope: WorkScope) {
               { user: { managedById: { not: null } } }
             ]
           }),
-      schedules: { some: {} }
+      locationServices: { some: {} }
     },
     include: SERVICE_ADDRESS_INCLUDE
   });
@@ -163,6 +165,9 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
       a.subscriptions[0]?.id ?? (a.user.managedById ? `managed:${a.user.managedById}` : null);
     if (!subscriptionId) continue;
 
+    // Trash pickup days, projected from this location's TRASH service.
+    const schedules = schedulesFromServices(a.id, a.locationServices, a.updatedAt);
+
     const zone = resolveZone(a.timezone);
     // Roll OUT the evening before pickup → pickups scheduled TOMORROW.
     // Roll IN the same day as pickup, after collection → pickups scheduled TODAY.
@@ -210,7 +215,7 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
       day: ReturnType<typeof zonedDay>,
       requireRollIn: boolean
     ): ReconciledAction => {
-      for (const s of a.schedules) {
+      for (const s of schedules) {
         if (requireRollIn && !s.rollIn) continue;
 
         if (s.providerSynced) {

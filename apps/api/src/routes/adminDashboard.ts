@@ -5,7 +5,6 @@ import { prisma } from "@gpp/db";
 import { Prisma } from "@prisma/client";
 import { projectServiceCalendar } from "../services/serviceCalendar";
 import {
-  addressMonthlyCents,
   adminCreateUserSchema,
   adminUserResponseSchema,
   adminUserUpdateSchema,
@@ -13,16 +12,20 @@ import {
   adminDashboardMetricsSchema,
   isAdminRole,
   isSuperAdminRole,
+  locationServicesMonthlyCents,
   operatorAvailabilityResponseSchema,
   operatorAvailabilityUpdateSchema,
   operatorZonesUpdateSchema,
   scheduleCanSchema,
-  type ScheduleCan
+  type ScheduleCan,
+  type ServicePricing,
+  type ServiceType
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { allowedZoneIds } from "../lib/zoneScope";
 import { describeProviders, haulerAddressHash } from "../services/haulerSchedule";
+import { schedulesFromServices } from "../services/locationServices";
 
 const ACTIVE_SUB_STATUSES = ["ACTIVE", "TRIALING"];
 
@@ -30,7 +33,7 @@ const USER_AGGREGATE_INCLUDE = {
   serviceAddresses: {
     where: { isActive: true },
     include: {
-      schedules: true,
+      locationServices: { include: { days: true } },
       subscriptions: {
         where: { status: { in: ["ACTIVE", "TRIALING"] } },
         select: { id: true },
@@ -43,23 +46,21 @@ const USER_AGGREGATE_INCLUDE = {
   zoneRequests: { where: { status: "PENDING" }, select: { zoneId: true } }
 } satisfies Prisma.UserInclude;
 
-type ScheduleRow = {
-  pickupDayOfWeek: number;
-  canCount: number;
-  cadence: string;
-  rollIn: boolean;
-  glassRecycling: boolean;
-  petWasteDogs: number;
-  providerSynced: boolean;
-  biweeklyAnchorDate: Date | null;
-  cans: unknown;
-};
-
 const cansArraySchema = z.array(scheduleCanSchema);
 function parseCans(cans: unknown): ScheduleCan[] {
   const parsed = cansArraySchema.safeParse(cans);
   return parsed.success ? parsed.data : [];
 }
+
+type ServiceDayRaw = {
+  dayOfWeek: number;
+  cadence: string;
+  biweeklyAnchorDate: Date | null;
+  rollIn: boolean;
+  providerSynced: boolean;
+  cans: unknown;
+};
+type LocationServiceRaw = { type: string; options: unknown; days: ServiceDayRaw[] };
 
 type AddressRow = {
   id: string;
@@ -69,9 +70,27 @@ type AddressRow = {
   postalCode: string;
   neighborhoodId: string | null;
   serviceApprovedAt: Date | null;
+  updatedAt: Date;
   subscriptions: { id: string }[];
-  schedules: ScheduleRow[];
+  locationServices: LocationServiceRaw[];
 };
+
+// The location's monthly total, day-centric — matches billing (includes flat
+// services), unlike the old per-day trash-only computation.
+function toServicePricing(services: LocationServiceRaw[]): ServicePricing[] {
+  return services.map((s) => ({
+    type: s.type as ServiceType,
+    days: s.days.map((d) => ({
+      dayOfWeek: d.dayOfWeek,
+      cadence: d.cadence as "WEEKLY" | "BIWEEKLY",
+      cans: parseCans(d.cans),
+      rollIn: d.rollIn
+    }))
+  }));
+}
+function addressMonthly(services: LocationServiceRaw[]): number {
+  return locationServicesMonthlyCents(toServicePricing(services));
+}
 
 type UserAggregateRow = {
   id: string;
@@ -88,17 +107,9 @@ type UserAggregateRow = {
   zoneRequests: Array<{ zoneId: string }>;
 };
 
-function pricingDays(schedules: ScheduleRow[]) {
-  return schedules.map((s) => ({
-    cans: parseCans(s.cans),
-    rollIn: s.rollIn,
-    petWasteDogs: s.petWasteDogs
-  }));
-}
-
 function toAdminUser(row: UserAggregateRow) {
   const monthlyCents = row.serviceAddresses.reduce(
-    (sum, address) => sum + addressMonthlyCents(pricingDays(address.schedules)),
+    (sum, address) => sum + addressMonthly(address.locationServices),
     0
   );
   return {
@@ -141,26 +152,28 @@ async function toAdminUserDetail(row: UserAggregateRow) {
     ...toAdminUser(row),
     grantedZoneIds: row.zones.map((z) => z.zoneId),
     requestedZoneIds: row.zoneRequests.map((z) => z.zoneId),
-    locations: row.serviceAddresses.map((address) => ({
+    locations: row.serviceAddresses.map((address) => {
+      const schedules = schedulesFromServices(address.id, address.locationServices, address.updatedAt);
+      return {
       id: address.id,
       line1: address.line1,
       city: address.city,
       state: address.state,
       postalCode: address.postalCode,
       neighborhoodId: address.neighborhoodId,
-      glassRecycling: address.schedules.some((s) => s.glassRecycling),
+      glassRecycling: schedules.some((s) => s.glassRecycling),
       serviceApproved: address.serviceApprovedAt != null,
       billed: address.subscriptions.length > 0,
-      monthlyCents: addressMonthlyCents(pricingDays(address.schedules)),
+      monthlyCents: addressMonthly(address.locationServices),
       haulerProvider: providerByHash.get(hashOf(address)) ?? null,
       haulerProviderLabel: providerByHash.has(hashOf(address))
         ? labelFor(providerByHash.get(hashOf(address))!)
         : null,
-      pickups: [...address.schedules]
+      pickups: [...schedules]
         .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
         .map((s) => ({
           dayOfWeek: s.pickupDayOfWeek,
-          cans: parseCans(s.cans),
+          cans: s.cans,
           cadence: s.cadence as "WEEKLY" | "BIWEEKLY",
           canCount: s.canCount,
           rollIn: s.rollIn,
@@ -169,7 +182,8 @@ async function toAdminUserDetail(row: UserAggregateRow) {
           providerSynced: s.providerSynced,
           biweeklyAnchorDate: s.biweeklyAnchorDate?.toISOString()
         }))
-    }))
+      };
+    })
   };
 }
 

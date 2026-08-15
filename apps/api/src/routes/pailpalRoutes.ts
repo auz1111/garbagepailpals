@@ -18,6 +18,7 @@ import { withAuth } from "../lib/withAuth";
 import { canActForUser } from "../lib/ownership";
 import { geocodeAddressParts } from "../services/geocoding";
 import { lookupPickupSchedule } from "../services/haulerSchedule";
+import { schedulesFromServices } from "../services/locationServices";
 import { timezoneForCoords } from "../lib/timezone";
 import {
   DAILY_ROUTE_INCLUDE,
@@ -39,7 +40,7 @@ const NO_LOGIN_DOMAIN = "no-login.gpp.local";
 const CUSTOMER_INCLUDE = {
   serviceAddresses: {
     orderBy: { createdAt: "asc" as const },
-    include: { schedules: { orderBy: { pickupDayOfWeek: "asc" as const } } }
+    include: { locationServices: { include: { days: true } } }
   }
 } as const;
 
@@ -58,13 +59,18 @@ function serializeCustomer(user: {
     postalCode: string;
     isActive: boolean;
     serviceApprovedAt: Date | null;
-    schedules: Array<{
-      pickupDayOfWeek: number;
-      cans: unknown;
-      rollIn: boolean;
-      petWasteDogs: number;
-      providerSynced: boolean;
-      biweeklyAnchorDate: Date | null;
+    updatedAt: Date;
+    locationServices: Array<{
+      type: string;
+      options: unknown;
+      days: Array<{
+        dayOfWeek: number;
+        cadence: string;
+        biweeklyAnchorDate: Date | null;
+        rollIn: boolean;
+        providerSynced: boolean;
+        cans: unknown;
+      }>;
     }>;
   }>;
 }) {
@@ -76,24 +82,27 @@ function serializeCustomer(user: {
     hasLogin: user.passwordHash != null,
     phone: user.phone,
     createdAt: user.createdAt.toISOString(),
-    locations: user.serviceAddresses.map((a) => ({
-      id: a.id,
-      line1: a.line1,
-      city: a.city,
-      state: a.state,
-      postalCode: a.postalCode,
-      isActive: a.isActive,
-      serviceApproved: a.serviceApprovedAt != null,
-      pickupDays: a.schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
-      days: a.schedules.map((s) => ({
-        dayOfWeek: s.pickupDayOfWeek,
-        cans: (s.cans as unknown as any[]) ?? [],
-        rollIn: s.rollIn,
-        petWasteDogs: s.petWasteDogs,
-        providerSynced: s.providerSynced,
-        biweeklyAnchorDate: s.biweeklyAnchorDate ? s.biweeklyAnchorDate.toISOString() : null
-      }))
-    }))
+    locations: user.serviceAddresses.map((a) => {
+      const schedules = schedulesFromServices(a.id, a.locationServices, a.updatedAt);
+      return {
+        id: a.id,
+        line1: a.line1,
+        city: a.city,
+        state: a.state,
+        postalCode: a.postalCode,
+        isActive: a.isActive,
+        serviceApproved: a.serviceApprovedAt != null,
+        pickupDays: schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
+        days: schedules.map((s) => ({
+          dayOfWeek: s.pickupDayOfWeek,
+          cans: s.cans,
+          rollIn: s.rollIn,
+          petWasteDogs: s.petWasteDogs,
+          providerSynced: s.providerSynced,
+          biweeklyAnchorDate: s.biweeklyAnchorDate ? s.biweeklyAnchorDate.toISOString() : null
+        }))
+      };
+    })
   };
 }
 

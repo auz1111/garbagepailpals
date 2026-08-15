@@ -1,10 +1,6 @@
-// The generic service model's read/write layer.
-//
-// applyLocationServices() is the single write path: it replaces a location's
-// LocationService/ServiceDay rows AND regenerates the legacy ServiceSchedule rows
-// from the trash/pet-waste projection in the same transaction (dual-write), so
-// every consumer still reading ServiceSchedule (billing, routing, serializers)
-// stays correct for trash/pet-waste until it's migrated to read services natively.
+// The generic service model's read/write layer, and the projection that lets the
+// trash-routing / calendar / serializer code keep its day-and-cans logic while
+// reading LocationService/ServiceDay (ServiceSchedule has been retired).
 import { prisma } from "@gpp/db";
 import { Prisma } from "@prisma/client";
 import {
@@ -12,7 +8,6 @@ import {
   cansHaveGlass,
   cansToCadence,
   cansToCanCount,
-  projectToLegacyDays,
   serviceMonthlyCents,
   serviceOptionsSchemaFor,
   type LocationServiceView,
@@ -144,44 +139,98 @@ export async function applyLocationServices(
       });
     }
 
-    // Dual-write: regenerate the legacy ServiceSchedule rows from the projection.
-    const legacyDays = projectToLegacyDays(
-      normalized.map((s) => ({
-        type: s.type,
-        options: s.options,
-        days: s.days.map((d) => ({
-          dayOfWeek: d.dayOfWeek,
-          cadence: d.cadence,
-          biweeklyAnchorDate: d.biweeklyAnchorDate ?? null,
-          rollIn: d.rollIn,
-          providerSynced: d.providerSynced,
-          cans: d.cans ?? []
-        }))
-      }))
-    );
-    await tx.serviceSchedule.deleteMany({ where: { serviceAddressId: addressId } });
-    if (legacyDays.length > 0) {
-      await tx.serviceSchedule.createMany({
-        data: legacyDays.map((day) => ({
-          serviceAddressId: addressId,
-          pickupDayOfWeek: day.dayOfWeek,
-          cadence: cansToCadence(day.cans),
-          biweeklyAnchorDate: day.biweeklyAnchorDate ? new Date(day.biweeklyAnchorDate) : null,
-          canCount: cansToCanCount(day.cans),
-          rollIn: day.rollIn,
-          glassRecycling: cansHaveGlass(day.cans),
-          petWasteDogs: day.petWasteDogs,
-          providerSynced: day.providerSynced,
-          cans: day.cans as unknown as Prisma.InputJsonValue
-        }))
-      });
-    }
-
+    // Keep the legacy pickupsPerWeek convenience field in sync (distinct weekdays
+    // across all services).
+    const weekdays = new Set<number>();
+    for (const s of normalized) for (const d of s.days) weekdays.add(d.dayOfWeek);
     await tx.serviceAddress.update({
       where: { id: addressId },
-      data: { pickupsPerWeek: legacyDays.length }
+      data: { pickupsPerWeek: weekdays.size }
     });
   });
 
   return getLocationServices(addressId);
+}
+
+// A location's services projected to the legacy per-day schedule shape (one row
+// per weekday: trash cans + pet-waste dogs merged), so trash-routing / calendar /
+// serializer code keeps its proven day-and-cans logic while reading the service
+// model. Dates are real (not ISO strings) so the routing reconcile works as-is.
+export type ProjectedSchedule = {
+  id: string;
+  serviceAddressId: string;
+  pickupDayOfWeek: number;
+  cadence: "WEEKLY" | "BIWEEKLY";
+  biweeklyAnchorDate: Date | null;
+  canCount: number;
+  rollIn: boolean;
+  glassRecycling: boolean;
+  petWasteDogs: number;
+  providerSynced: boolean;
+  cans: ScheduleCan[];
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+// Minimal day shape the projection needs (no id required, so any query that
+// includes ServiceDay rows can be passed in).
+type ProjectionDay = {
+  dayOfWeek: number;
+  cadence: string;
+  biweeklyAnchorDate: Date | null;
+  rollIn: boolean;
+  providerSynced: boolean;
+  cans: unknown;
+};
+type ServiceForProjection = { type: string; options: unknown; days: ProjectionDay[] };
+
+export function schedulesFromServices(
+  addressId: string,
+  services: ServiceForProjection[],
+  ts: Date
+): ProjectedSchedule[] {
+  const byDay = new Map<number, ProjectedSchedule>();
+  const ensure = (d: ProjectionDay): ProjectedSchedule => {
+    let row = byDay.get(d.dayOfWeek);
+    if (!row) {
+      row = {
+        id: `${addressId}:${d.dayOfWeek}`,
+        serviceAddressId: addressId,
+        pickupDayOfWeek: d.dayOfWeek,
+        cadence: (d.cadence as "WEEKLY" | "BIWEEKLY") ?? "WEEKLY",
+        biweeklyAnchorDate: d.biweeklyAnchorDate,
+        canCount: 0,
+        rollIn: d.rollIn,
+        glassRecycling: false,
+        petWasteDogs: 0,
+        providerSynced: d.providerSynced,
+        cans: [],
+        createdAt: ts,
+        updatedAt: ts
+      };
+      byDay.set(d.dayOfWeek, row);
+    }
+    return row;
+  };
+  // Trash defines the cans / cadence / roll-in / provider-sync for a weekday.
+  for (const s of services.filter((s) => s.type === "TRASH")) {
+    for (const d of s.days) {
+      const cans = parseCans(d.cans);
+      const row = ensure(d);
+      row.cans = cans;
+      row.cadence = cans.length > 0 ? cansToCadence(cans) : (d.cadence as "WEEKLY" | "BIWEEKLY");
+      row.canCount = cansToCanCount(cans);
+      row.glassRecycling = cansHaveGlass(cans);
+      row.biweeklyAnchorDate = d.biweeklyAnchorDate;
+      row.rollIn = d.rollIn;
+      row.providerSynced = d.providerSynced;
+    }
+  }
+  // Pet waste folds its dog count onto the matching weekday.
+  for (const s of services.filter((s) => s.type === "PET_WASTE")) {
+    const opts = s.options as { dogs?: unknown } | null;
+    const dogs = typeof opts?.dogs === "number" ? opts.dogs : 0;
+    for (const d of s.days) ensure(d).petWasteDogs = dogs;
+  }
+  return [...byDay.values()].sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek);
 }

@@ -63,7 +63,7 @@ export async function refreshSchedulesHandler(
             ...(scope.neighborhoodId ? { neighborhoodId: scope.neighborhoodId } : {}),
             ...(scope.zoneIds ? { neighborhood: { zoneId: { in: scope.zoneIds } } } : {}),
             subscriptions: { some: { status: { in: ACTIVE_SUB_STATUSES } } },
-            schedules: { some: { providerSynced: true } }
+            locationServices: { some: { type: "TRASH", days: { some: { providerSynced: true } } } }
           },
           select: { line1: true, city: true, state: true, postalCode: true },
           take: MAX_REFRESH
