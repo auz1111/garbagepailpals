@@ -21,6 +21,7 @@ import {
   updateAddressSchedule
 } from "../lib/api";
 import { CanRowsEditor } from "./CanRowsEditor";
+import { LocationServicesEditor } from "./LocationServicesEditor";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { RouteHistory } from "./RouteHistory";
@@ -436,9 +437,8 @@ function PailpalNewCustomer({ accessToken }: { accessToken: string }): JSX.Eleme
 }
 
 // --- Customer detail (manage locations) -----------------------------------
-// One customer location: route-approval, trash-provider sync (verify pickups),
-// and the days-of-service editor. Owns its own mutations so each location's
-// actions and errors stay independent inside the list.
+// One customer location: route-approval + the day-based schedule editor
+// (LocationServicesEditor). Trash provider sync lives inside the editor.
 function PailpalLocationBlock({
   loc,
   accessToken,
@@ -448,37 +448,14 @@ function PailpalLocationBlock({
   accessToken: string;
   onChanged: () => void;
 }): JSX.Element {
-  const [providerResult, setProviderResult] = useState<PickupScheduleSuggestion | null>(null);
-  const [reviewing, setReviewing] = useState(false);
-
   const approveMutation = useMutation({
     mutationFn: (approved: boolean) => approvePailpalLocation(loc.id, approved, accessToken),
     onSuccess: onChanged
   });
 
-  // Re-run the provider lookup; open the verify-pickups review when it matches.
-  const syncMutation = useMutation({
-    mutationFn: () => connectPailpalProvider(loc.id, accessToken),
-    onSuccess: (result) => {
-      setProviderResult(result);
-      setReviewing(result.matched);
-    }
-  });
-
-  // Persist the reviewed pickup days (carries per-day providerSynced flags).
-  const applyMutation = useMutation({
-    mutationFn: (payload: PickupDayInput[]) =>
-      updateAddressSchedule(loc.id, { days: payload }, accessToken),
-    onSuccess: () => {
-      setReviewing(false);
-      setProviderResult(null);
-      onChanged();
-    }
-  });
-
-  const providerSynced = loc.days.some((d) => d.providerSynced);
-  const noMatch =
-    syncMutation.isSuccess && providerResult !== null && !providerResult.matched && !reviewing;
+  // `loc.days` reflects the dual-written ServiceSchedule — a valid proxy for
+  // "this location has a schedule" (gates route approval).
+  const hasSchedule = loc.days.length > 0;
 
   return (
     <li className="pailpal-loc-block">
@@ -493,20 +470,11 @@ function PailpalLocationBlock({
           <span className={`coverage-badge ${loc.serviceApproved ? "covered" : "uncovered"}`}>
             {loc.serviceApproved ? "On route" : "Not approved"}
           </span>
-          {providerSynced ? <span className="coverage-badge covered">Provider synced</span> : null}
           <button
             type="button"
             className="cta-secondary"
-            disabled={syncMutation.isPending}
-            onClick={() => syncMutation.mutate()}
-          >
-            {syncMutation.isPending ? "Syncing…" : providerSynced ? "Re-sync provider" : "Sync provider"}
-          </button>
-          <button
-            type="button"
-            className="cta-secondary"
-            disabled={approveMutation.isPending || loc.days.length === 0}
-            title={loc.days.length === 0 ? "Add days of service first" : undefined}
+            disabled={approveMutation.isPending || !hasSchedule}
+            title={!hasSchedule ? "Add a service first" : undefined}
             onClick={() => approveMutation.mutate(!loc.serviceApproved)}
           >
             {loc.serviceApproved ? "Remove from route" : "Approve for route"}
@@ -514,41 +482,16 @@ function PailpalLocationBlock({
         </div>
       </div>
 
-      {syncMutation.isError ? (
-        <p className="error">{getErrorMessage(syncMutation.error)}</p>
-      ) : null}
       {approveMutation.isError ? (
         <p className="error">{getErrorMessage(approveMutation.error)}</p>
       ) : null}
-      {noMatch ? (
-        <p className="subtext">No trash provider matched this address.</p>
-      ) : null}
-
-      {reviewing && providerResult?.matched ? (
-        <ProviderSyncReview
-          providerLabel={providerResult.providerLabel}
-          streams={providerResult.streams}
-          pickups={loc.days.map((d) => ({
-            dayOfWeek: d.dayOfWeek,
-            cans: d.cans.length > 0 ? d.cans : [{ type: "TRASH", cadence: "WEEKLY", count: 1 }],
-            rollIn: d.rollIn,
-            petWasteDogs: d.petWasteDogs,
-            biweeklyAnchorDate: d.biweeklyAnchorDate ?? undefined
-          }))}
-          saving={applyMutation.isPending}
-          error={applyMutation.isError ? getErrorMessage(applyMutation.error) : null}
-          onApply={(payload) => applyMutation.mutate(payload)}
-          onSkip={() => setReviewing(false)}
-        />
-      ) : null}
 
       <div className="pailpal-days-label">Days of service</div>
-      <LocationScheduleEditor
-        key={`${loc.id}:${loc.days.map((d) => d.dayOfWeek).join(",")}`}
+      <LocationServicesEditor
         addressId={loc.id}
-        initialDays={loc.days}
         accessToken={accessToken}
-        onSaved={onChanged}
+        connectProvider={connectPailpalProvider}
+        onChanged={onChanged}
       />
     </li>
   );

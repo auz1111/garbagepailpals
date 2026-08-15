@@ -61,6 +61,8 @@ import type {
   PailpalLocationCreate,
   ServiceAreaCheckResponse,
   PickupScheduleSuggestion,
+  LocationServiceInput,
+  LocationServicesResponse,
   ServiceJob,
   CustomerHistoryResponse,
   PickupDay,
@@ -868,6 +870,32 @@ export function connectPailpalProvider(
     `/pailpal/locations/${addressId}/connect-provider`,
     "POST",
     undefined,
+    accessToken
+  );
+}
+
+// Generic service model: read / replace-all-write a location's services.
+export function getLocationServices(
+  addressId: string,
+  accessToken: string
+): Promise<LocationServicesResponse> {
+  return request<undefined, LocationServicesResponse>(
+    `/addresses/${addressId}/services`,
+    "GET",
+    undefined,
+    accessToken
+  );
+}
+
+export function updateLocationServices(
+  addressId: string,
+  services: LocationServiceInput[],
+  accessToken: string
+): Promise<LocationServicesResponse> {
+  return request<{ services: LocationServiceInput[] }, LocationServicesResponse>(
+    `/addresses/${addressId}/services`,
+    "PUT",
+    { services },
     accessToken
   );
 }

@@ -52,6 +52,7 @@ import { AdminLocations } from "./AdminLocations";
 import { AdminHaulerCoverage } from "./AdminHaulerCoverage";
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { CanRowsEditor } from "./CanRowsEditor";
+import { LocationServicesEditor } from "./LocationServicesEditor";
 import { AddLocationWizard } from "./AddLocationWizard";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { OperatorsAdmin } from "./OperatorsAdmin";
@@ -1255,13 +1256,17 @@ function AdminLocationCard({
       )}
 
       {editing ? (
-        <AdminScheduleEditorForm
-          loc={loc}
-          saving={scheduleMutation.isPending}
-          error={scheduleMutation.isError ? getErrorMessage(scheduleMutation.error) : null}
-          onCancel={() => setEditing(false)}
-          onSave={(days) => scheduleMutation.mutate(days)}
-        />
+        <div className="admin-schedule-editor">
+          <LocationServicesEditor
+            addressId={loc.id}
+            accessToken={accessToken}
+            connectProvider={connectHauler}
+            onChanged={refreshLists}
+          />
+          <button type="button" className="ghost-btn" onClick={() => setEditing(false)}>
+            Done editing
+          </button>
+        </div>
       ) : editingAddress ? null : (
         <div className="admin-loc-actions">
           {loc.serviceApproved ? (
@@ -1293,18 +1298,6 @@ function AdminLocationCard({
           </button>
           <button
             type="button"
-            className="ghost-btn"
-            disabled={connectMutation.isPending}
-            onClick={() => connectMutation.mutate()}
-          >
-            {connectMutation.isPending
-              ? "Checking…"
-              : loc.haulerProvider
-                ? "Re-check provider"
-                : "Connect a trash provider"}
-          </button>
-          <button
-            type="button"
             className="ghost-btn is-danger"
             disabled={deleteMutation.isPending}
             onClick={() => {
@@ -1323,26 +1316,6 @@ function AdminLocationCard({
       )}
       {deleteMutation.isError ? (
         <p className="error">{getErrorMessage(deleteMutation.error)}</p>
-      ) : null}
-      {connectMutation.isError ? (
-        <p className="error">{getErrorMessage(connectMutation.error)}</p>
-      ) : reviewing && connectResult?.matched ? (
-        <ProviderSyncReview
-          providerLabel={connectResult.providerLabel}
-          streams={connectResult.streams}
-          pickups={loc.pickups}
-          saving={syncMutation.isPending}
-          error={syncMutation.isError ? getErrorMessage(syncMutation.error) : null}
-          onApply={(days) => syncMutation.mutate(days)}
-          onSkip={() => {
-            setReviewing(false);
-            setConnectResult(null);
-          }}
-        />
-      ) : connectResult && !connectResult.matched ? (
-        <p className="subtext">
-          No trash provider lookup available for this address — leave the schedule as set manually.
-        </p>
       ) : null}
     </li>
   );

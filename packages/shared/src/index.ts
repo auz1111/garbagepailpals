@@ -584,6 +584,44 @@ export function addressServicesMonthlyCents(services: PricingService[]): number 
   return services.reduce((sum, service) => sum + serviceMonthlyCents(service), 0);
 }
 
+// --- Day-centric pricing --------------------------------------------------
+// Pricing is per DAY of service: each day carries a base visit fee, and every
+// service performed that day adds its own fee. Trash contributes its per-can
+// cost (as before); flat services add their monthly fee for EACH day they run,
+// scaled by cadence (weekly = full, biweekly = half).
+export const BIWEEKLY_FACTOR = VISITS_PER_MONTH_BIWEEKLY / VISITS_PER_MONTH_WEEKLY; // 0.5
+
+// The fee a single flat-priced service adds for one day it runs.
+export function flatServiceDayCents(type: ServiceType, cadence: "WEEKLY" | "BIWEEKLY"): number {
+  const flat = SERVICE_FLAT_PRICING_CENTS[type] ?? 0;
+  return Math.round(flat * (cadence === "WEEKLY" ? 1 : BIWEEKLY_FACTOR));
+}
+
+export type FlatServiceOnDay = { type: ServiceType; cadence: "WEEKLY" | "BIWEEKLY" };
+export type WeekdayPricing = {
+  // The day's overall cadence — weekly if any service on it is weekly. Only used
+  // to price the base fee when there's no trash (trash sets its own base).
+  cadence: "WEEKLY" | "BIWEEKLY";
+  trash?: { cans: ScheduleCan[]; rollIn: boolean };
+  flats: FlatServiceOnDay[];
+};
+
+// The monthly total for one day of service: base visit fee + trash cans (via the
+// existing per-day math, so trash-only days price identically to before) + each
+// flat service's per-day fee. A non-trash-only day still carries the base fee.
+export function weekdayMonthlyCents(day: WeekdayPricing): number {
+  let cents: number;
+  if (day.trash) {
+    // pickupDayMonthlyCents already includes the base visit fee + cans + roll-in.
+    cents = pickupDayMonthlyCents({ cans: day.trash.cans, rollIn: day.trash.rollIn });
+  } else {
+    const visits = day.cadence === "WEEKLY" ? VISITS_PER_MONTH_WEEKLY : VISITS_PER_MONTH_BIWEEKLY;
+    cents = Math.round(visits * PRICING.visitBaseCents);
+  }
+  for (const f of day.flats) cents += flatServiceDayCents(f.type, f.cadence);
+  return Math.max(0, cents);
+}
+
 // --- Compatibility projection: new service model -> legacy per-day shape ------
 // Rebuilds the old "one row per (address, weekday) with cans + petWasteDogs" view
 // from the generic service model, so existing pricing/routing/serializers keep

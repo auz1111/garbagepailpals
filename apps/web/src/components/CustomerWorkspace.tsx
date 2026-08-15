@@ -39,6 +39,7 @@ import {
 import { ProviderSyncReview } from "./ProviderSyncReview";
 import { AddLocationWizard } from "./AddLocationWizard";
 import { CanRowsEditor } from "./CanRowsEditor";
+import { LocationServicesEditor } from "./LocationServicesEditor";
 import { CustomerHistory } from "./CustomerHistory";
 
 // A schedule row from the API mapped to the shared pricing input.
@@ -920,11 +921,7 @@ function LocationDetail({
   accessToken,
   covered,
   onRemove,
-  removing,
-  onSaveSchedule,
-  savingSchedule,
-  scheduleError,
-  scheduleSaved
+  removing
 }: {
   address: ServiceAddress;
   accessToken: string;
@@ -937,89 +934,14 @@ function LocationDetail({
   scheduleSaved: boolean;
 }): JSX.Element {
   const queryClient = useQueryClient();
-  const initialDays: EditDay[] =
-    address.schedules.length > 0
-      ? [...address.schedules]
-          .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-          .map((s) => ({
-            dayOfWeek: s.dayOfWeek,
-            cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
-            rollIn: s.rollIn,
-            petWasteDogs: s.petWasteDogs,
-            providerSynced: s.providerSynced,
-            biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
-          }))
-      : [
-          {
-            dayOfWeek: DEFAULT_PICKUP_DAYS[0]!,
-            cans: DEFAULT_CANS,
-            rollIn: true,
-            petWasteDogs: 0,
-            providerSynced: false,
-            biweeklyAnchorDate: ""
-          }
-        ];
-  const [days, setDays] = useState<EditDay[]>(initialDays);
-  const [submitted, setSubmitted] = useState(false);
 
-  // Trash-provider sync: on open, attempt to match the address to a provider and,
-  // if the schedule isn't already aligned, prompt the customer to verify pickups.
-  const [providerResult, setProviderResult] = useState<PickupScheduleSuggestion | null>(null);
-  const [reviewingProvider, setReviewingProvider] = useState(false);
-
-  const providerConnect = useMutation({
-    mutationFn: (_opts: { force?: boolean } = {}) => connectProvider(address.id, accessToken),
-    onSuccess: (result, opts) => {
-      setProviderResult(result);
-      if (!result.matched) {
-        return;
-      }
-      if (opts?.force) {
-        // Explicit re-check or an address change — always open the review.
-        setReviewingProvider(true);
-        return;
-      }
-      // Auto (on open): only prompt when there's something to do — a provider day
-      // missing from the schedule, or an existing pickup on a provider day that
-      // isn't synced.
-      const providerWeekdays = new Set(result.streams.map((s) => s.dayOfWeek));
-      const scheduleWeekdays = new Set(address.schedules.map((s) => s.dayOfWeek));
-      const missingDay = [...providerWeekdays].some((w) => !scheduleWeekdays.has(w));
-      const unsynced = address.schedules.some(
-        (s) => providerWeekdays.has(s.dayOfWeek) && !s.providerSynced
-      );
-      if (missingDay || unsynced) {
-        setReviewingProvider(true);
-      }
-    }
-  });
-
-  const providerApply = useMutation({
-    mutationFn: (payload: PickupDayInput[]) => updateAddressSchedule(address.id, { days: payload }, accessToken),
-    onSuccess: async (_data, payload) => {
-      // Reflect the synced schedule in the editor immediately.
-      setDays(
-        payload.map((d) => ({
-          dayOfWeek: d.dayOfWeek,
-          cans: d.cans.length > 0 ? d.cans : DEFAULT_CANS,
-          rollIn: d.rollIn ?? true,
-          petWasteDogs: d.petWasteDogs ?? 0,
-          providerSynced: d.providerSynced ?? false,
-          biweeklyAnchorDate: d.biweeklyAnchorDate?.slice(0, 16) ?? ""
-        }))
-      );
-      await queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
-      await queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
-      setReviewingProvider(false);
-      setProviderResult(null);
-    }
-  });
-
-  // Attempt the provider sync once when the location opens.
-  useEffect(() => {
-    providerConnect.mutate({});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [address.id]);
+  // Keep the customer's address list, billing summary and upcoming jobs fresh
+  // whenever the schedule editor saves.
+  const invalidateCustomer = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
+    void queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
+    void queryClient.invalidateQueries({ queryKey: ["customer-jobs-upcoming"] });
+  };
 
   // Whether this address falls in a serviced area (re-checked when it changes).
   const [areaEligible, setAreaEligible] = useState<boolean | null>(null);
@@ -1036,10 +958,7 @@ function LocationDetail({
       active = false;
     };
   }, [address.postalCode]);
-
-  // Persistent warnings: address not in a serviced area, and/or no trash provider.
   const addressNotFound = areaEligible === false;
-  const providerNotFound = Boolean(providerResult) && !providerResult?.matched;
 
   // ---- Edit address ----
   const [editingAddress, setEditingAddress] = useState(false);
@@ -1062,11 +981,10 @@ function LocationDetail({
         accessToken
       ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["customer-addresses"] });
-      await queryClient.invalidateQueries({ queryKey: ["customer-billing-summary"] });
+      invalidateCustomer();
+      // The address changed — refresh the services editor so it can re-sync.
+      await queryClient.invalidateQueries({ queryKey: ["location-services", address.id] });
       setEditingAddress(false);
-      // The address changed — re-detect the trash provider and prompt to re-sync.
-      providerConnect.mutate({ force: true });
     }
   });
   const openEditAddress = (): void => {
@@ -1078,80 +996,6 @@ function LocationDetail({
     });
     setEditingAddress(true);
   };
-
-  const usedDays = new Set(days.map((d) => d.dayOfWeek));
-  const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
-
-  const valid =
-    days.length >= 1 &&
-    days.every(
-      (d) =>
-        d.cans.length >= 1 &&
-        d.cans.every((c) => c.count >= 1 && c.count <= 20) &&
-        (cansToCadence(d.cans) !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
-    );
-  const monthly = addressMonthlyCents(
-    days.map((d) => ({ cans: d.cans, rollIn: d.rollIn, petWasteDogs: d.petWasteDogs }))
-  );
-
-  // Enable Save only when the current config differs from what's saved.
-  const canonical = (list: EditDay[]): string =>
-    [...list]
-      .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-      .map(
-        (d) =>
-          `${d.dayOfWeek}|${JSON.stringify(d.cans)}|${d.rollIn}|${d.petWasteDogs}|${d.providerSynced}|${
-            cansToCadence(d.cans) === "BIWEEKLY" ? d.biweeklyAnchorDate : ""
-          }`
-      )
-      .join(";");
-  const dirty = canonical(days) !== canonical(initialDays);
-
-  function updateDay(idx: number, patch: Partial<EditDay>): void {
-    // Manually changing the weekday or cans opts the day out of provider sync.
-    const optsOut = patch.dayOfWeek !== undefined || patch.cans !== undefined;
-    const effective = optsOut ? { ...patch, providerSynced: false } : patch;
-    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...effective } : d)));
-  }
-  function removeDay(idx: number): void {
-    setDays((prev) => prev.filter((_, i) => i !== idx));
-  }
-  function addDay(): void {
-    if (firstAvailableDay === undefined) {
-      return;
-    }
-    setDays((prev) => [
-      ...prev,
-      {
-        dayOfWeek: firstAvailableDay,
-        cans: DEFAULT_CANS,
-        rollIn: true,
-        petWasteDogs: 0,
-        providerSynced: false,
-        biweeklyAnchorDate: ""
-      }
-    ]);
-  }
-
-  function handleSaveAll(event: FormEvent): void {
-    event.preventDefault();
-    if (!valid) {
-      return;
-    }
-    setSubmitted(true);
-    onSaveSchedule(
-      address.id,
-      days.map((d) => ({
-        dayOfWeek: d.dayOfWeek,
-        biweeklyAnchorDate:
-          cansToCadence(d.cans) === "BIWEEKLY" ? d.biweeklyAnchorDate || undefined : undefined,
-        cans: d.cans,
-        rollIn: d.rollIn,
-        petWasteDogs: d.petWasteDogs,
-        providerSynced: d.providerSynced
-      }))
-    );
-  }
 
   return (
     <div className="dash-page">
@@ -1175,16 +1019,11 @@ function LocationDetail({
             </>
           ) : null}
         </p>
-        {addressNotFound || providerNotFound ? (
+        {addressNotFound ? (
           <p className="notice">
-            ⚠️{" "}
-            {addressNotFound && providerNotFound
-              ? "We couldn't confirm this address is in an area we service, and no trash provider was found for it."
-              : addressNotFound
-                ? "We couldn't confirm this address is in an area we service yet."
-                : "No trash provider was found for this address, so pickups won't auto-follow a provider or its holiday shifts."}{" "}
-            You can keep this location and set the schedule manually — use <strong>Edit address</strong> if
-            you need to correct it, or contact us if you think this is a mistake.
+            ⚠️ We couldn't confirm this address is in an area we service yet. You can keep this
+            location and set the schedule manually — use <strong>Edit address</strong> if you need to
+            correct it, or contact us if you think this is a mistake.
           </p>
         ) : null}
       </div>
@@ -1197,7 +1036,9 @@ function LocationDetail({
               Cancel
             </button>
           </div>
-          <p className="subtext">Saving re-checks the trash provider and offers to re-sync your days.</p>
+          <p className="subtext">
+            Saving updates the address. Re-sync the trash provider from the schedule below if needed.
+          </p>
           <label>
             Line 1
             <input value={addr.line1} onChange={(e) => setAddr({ ...addr, line1: e.target.value })} />
@@ -1235,230 +1076,19 @@ function LocationDetail({
         </article>
       ) : null}
 
-      <form onSubmit={handleSaveAll}>
-        <article className="panel">
-          <div className="panel-head-row">
-            <div className="panel-head-text">
-              <h3>Pickup schedule</h3>
-              <span className="detail-total">{formatUsd(monthly)}/mo</span>
-            </div>
-            <button
-              type="button"
-              className="add-day-btn"
-              onClick={addDay}
-              disabled={firstAvailableDay === undefined}
-            >
-              + Add day
-            </button>
+      <article className="panel">
+        <div className="panel-head-row">
+          <div className="panel-head-text">
+            <h3>Pickup schedule</h3>
           </div>
-          <p className="subtext">
-            Each pickup day has its own cans, cadence, and roll-in. {days.length} pickup
-            {days.length === 1 ? "" : "s"}/week.
-          </p>
-
-          {reviewingProvider && providerResult?.matched ? (
-            <ProviderSyncReview
-              providerLabel={providerResult.providerLabel}
-              streams={providerResult.streams}
-              pickups={address.schedules.map((s) => ({
-                dayOfWeek: s.dayOfWeek,
-                cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
-                rollIn: s.rollIn,
-                petWasteDogs: s.petWasteDogs,
-                biweeklyAnchorDate: s.biweeklyAnchorDate
-              }))}
-              saving={providerApply.isPending}
-              error={providerApply.isError ? getErrorMessage(providerApply.error) : null}
-              onApply={(payload) => providerApply.mutate(payload)}
-              onSkip={() => setReviewingProvider(false)}
-            />
-          ) : (
-            <p className="subtext provider-status-line">
-              {providerConnect.isPending ? (
-                "Checking your trash provider…"
-              ) : providerResult?.matched ? (
-                <>
-                  ♻️ Trash provider: <strong>{providerResult.providerLabel}</strong>.{" "}
-                </>
-              ) : (
-                <>No trash provider connected for this address. </>
-              )}
-              {!providerConnect.isPending ? (
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => providerConnect.mutate({ force: true })}
-                >
-                  {providerResult?.matched ? "Review & sync pickups" : "Check for a trash provider"}
-                </button>
-              ) : null}
-            </p>
-          )}
-
-          <ul className="pickup-day-list">
-            {days.map((day, idx) => {
-              const dayCost = pickupDayMonthlyCents({
-                cans: day.cans,
-                rollIn: day.rollIn,
-                petWasteDogs: day.petWasteDogs
-              });
-              const dayIsBiweekly = cansToCadence(day.cans) === "BIWEEKLY";
-              return (
-                <li className="pickup-day-card" key={idx}>
-                  <div className="pickup-day-top">
-                    <span className="pickup-day-icon" aria-hidden="true">
-                      🗓️
-                    </span>
-                    <label className="pickup-day-weekday-field">
-                      <span className="pickup-day-eyebrow">Pickup day</span>
-                      <select
-                        className="pickup-day-weekday"
-                        value={day.dayOfWeek}
-                        onChange={(event) => updateDay(idx, { dayOfWeek: Number(event.target.value) })}
-                      >
-                        {WEEKDAYS.map((label, value) => (
-                          <option
-                            key={label}
-                            value={value}
-                            disabled={value !== day.dayOfWeek && usedDays.has(value)}
-                          >
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <span className="pickup-day-cost">{formatUsd(dayCost)}/mo</span>
-                    {!day.providerSynced ? (
-                      <span className="loc-chip is-none">Not synced</span>
-                    ) : null}
-                    <button
-                      type="button"
-                      className="pickup-day-remove"
-                      onClick={() => removeDay(idx)}
-                      disabled={days.length <= 1}
-                      aria-label={`Remove ${WEEKDAYS[day.dayOfWeek]}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-
-                  <div className="pickup-day-body">
-                    <div className="can-rows-field">
-                      <span className="pickup-day-eyebrow">Cans collected this day</span>
-                      <CanRowsEditor
-                        cans={day.cans}
-                        onChange={(cans) => updateDay(idx, { cans })}
-                      />
-                      <div className="price-line">
-                        <span>Service visit fee</span>
-                        <span>
-                          {formatUsd(
-                            dayVisitFeeDisplayCents({
-                              cans: day.cans,
-                              rollIn: day.rollIn,
-                              petWasteDogs: day.petWasteDogs
-                            })
-                          )}
-                          /mo
-                        </span>
-                      </div>
-                      <div className="price-line is-total">
-                        <span>This day</span>
-                        <span>{formatUsd(dayCost)}/mo</span>
-                      </div>
-                    </div>
-
-                    {dayIsBiweekly ? (
-                      <label className="field-single">
-                        First pickup date
-                        <input
-                          type="datetime-local"
-                          value={day.biweeklyAnchorDate}
-                          onChange={(event) => updateDay(idx, { biweeklyAnchorDate: event.target.value })}
-                        />
-                      </label>
-                    ) : null}
-
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={day.rollIn}
-                        onChange={(event) => updateDay(idx, { rollIn: event.target.checked })}
-                      />
-                      <span>
-                        <strong>Bring cans back the same day (roll-in)</strong>
-                        <span className="subtext">
-                          {day.rollIn
-                            ? "Included — we return the cans the same day, after the hauler collects."
-                            : `We'll only roll out — saves ${formatUsd(
-                                cansToCanCount(day.cans) * PRICING.rollInCreditMonthlyCentsPerCan
-                              )}/mo on this day.`}
-                        </span>
-                      </span>
-                    </label>
-
-                    <label className="checkbox-field">
-                      <input
-                        type="checkbox"
-                        checked={day.petWasteDogs > 0}
-                        onChange={(event) =>
-                          updateDay(idx, { petWasteDogs: event.target.checked ? 1 : 0 })
-                        }
-                      />
-                      <span>
-                        <strong>
-                          Pet waste removal (+{formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo)
-                        </strong>
-                        <span className="subtext">
-                          We&apos;ll clean up your dog&apos;s waste from the yard and put it in the
-                          trash bin before rolling out.
-                        </span>
-                      </span>
-                    </label>
-
-                    {day.petWasteDogs > 0 ? (
-                      <label className="field-inline">
-                        <span>Number of dogs</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={day.petWasteDogs}
-                          onChange={(event) =>
-                            updateDay(idx, {
-                              petWasteDogs: Math.max(1, Math.min(20, Number(event.target.value) || 1))
-                            })
-                          }
-                        />
-                        <span className="subtext">
-                          {formatUsd(petWasteMonthlyCents(day.petWasteDogs))}/mo
-                          {day.petWasteDogs > 1
-                            ? ` — ${formatUsd(PRICING.petWasteBaseMonthlyCents)} for the first dog + ${formatUsd(
-                                PRICING.petWasteExtraDogMonthlyCents
-                              )}/mo each additional`
-                            : ""}
-                        </span>
-                      </label>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </article>
-
-        <div className="detail-save-row">
-          {dirty || savingSchedule ? (
-            <button type="submit" className="cta-primary" disabled={!valid || savingSchedule}>
-              {savingSchedule ? "Saving…" : "Update pickup schedule"}
-            </button>
-          ) : null}
-          {submitted && !savingSchedule && !scheduleError && scheduleSaved && !dirty ? (
-            <span className="success-inline">All changes saved.</span>
-          ) : null}
         </div>
-        {scheduleError ? <p className="error">{scheduleError}</p> : null}
-      </form>
+        <LocationServicesEditor
+          addressId={address.id}
+          accessToken={accessToken}
+          connectProvider={connectProvider}
+          onChanged={invalidateCustomer}
+        />
+      </article>
 
       <article className="panel">
         <h3>Remove location</h3>

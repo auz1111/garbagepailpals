@@ -6185,3 +6185,258 @@ a.provider-pill:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 10px rgba(247, 168, 27, 0.35);
 }
+
+/* --- Service-first schedule editor (LocationServicesEditor) --------------- */
+.svc-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+.svc-editor-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+.svc-card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 14px);
+  background: var(--surface, #ffffff);
+  overflow: hidden;
+}
+.svc-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.7rem 1rem;
+  background: linear-gradient(135deg, #0b5f63 0%, #12857a 100%);
+  color: #ffffff;
+}
+.svc-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 800;
+}
+.svc-card-icon {
+  font-size: 1.15rem;
+}
+.svc-card-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.svc-card-price {
+  font-weight: 800;
+}
+.svc-card-controls .link-btn {
+  color: #ffffff;
+  text-decoration: underline;
+  opacity: 0.9;
+}
+.svc-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem 0;
+}
+.svc-options-notes {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate-2);
+}
+.svc-options-notes textarea {
+  font: inherit;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  resize: vertical;
+}
+.svc-sync {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  padding: 0.75rem 1rem 0;
+}
+.svc-days {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem 1rem;
+}
+.svc-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px dashed var(--line);
+}
+.svc-day:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.svc-day-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.svc-day-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 800;
+  color: var(--slate-2);
+}
+.svc-day-field select,
+.svc-day-field input {
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+.svc-rollin {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.svc-add-day {
+  align-self: flex-start;
+  border-style: dashed;
+}
+/* Service type picker (step 1 of "add a service") */
+.svc-picker {
+  flex: 1 1 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md, 14px);
+  padding: 0.85rem 1rem;
+  background: var(--surface-2, #f5f7f8);
+}
+.svc-picker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+.svc-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+.svc-picker-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--surface, #fff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.svc-picker-option:hover:not(:disabled) {
+  border-color: var(--teal-bright);
+  transform: translateY(-1px);
+}
+.svc-picker-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.svc-picker-icon {
+  font-size: 1.4rem;
+}
+.svc-picker-label {
+  font-weight: 800;
+}
+.svc-picker-desc {
+  font-size: 0.78rem;
+  color: var(--slate-2);
+}
+.svc-picker-price {
+  margin-top: 0.15rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: var(--gold-ink, #b5750a);
+}
+/* Service blocks inside a day card */
+.svc-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px dashed var(--line);
+}
+.svc-block:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.svc-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.svc-block-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 800;
+}
+.svc-block-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 700;
+  color: var(--slate-2);
+}
+.svc-block-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.svc-remove-line {
+  align-self: flex-start;
+}
+.svc-configure {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.svc-total {
+  margin-left: auto;
+  font-weight: 800;
+  color: var(--slate-2);
+}
+.svc-day-price {
+  font-weight: 800;
+  color: #ffffff;
+}
+.svc-base-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 0.6rem;
+  margin-top: 0.2rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--slate-2);
+}
