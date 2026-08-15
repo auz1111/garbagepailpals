@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { addDays, addHours, startOfDay } from "date-fns";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../src";
 
 async function seed() {
@@ -9,7 +10,7 @@ async function seed() {
     prisma.serviceHold.deleteMany(),
     prisma.subscription.deleteMany(),
     prisma.entitlement.deleteMany(),
-    prisma.serviceSchedule.deleteMany(),
+    prisma.locationService.deleteMany(),
     prisma.serviceAddress.deleteMany(),
     prisma.refreshToken.deleteMany(),
     prisma.user.deleteMany(),
@@ -159,23 +160,43 @@ async function seed() {
   ]);
 
   await Promise.all([
-    prisma.serviceSchedule.create({
+    prisma.locationService.create({
       data: {
         serviceAddressId: address1.id,
-        pickupDayOfWeek: 2,
-        cadence: "WEEKLY",
-        curbOutOffsetHours: -12,
-        curbInOffsetHours: 8
+        type: "TRASH",
+        options: {},
+        priceCents: null,
+        isActive: true,
+        days: {
+          create: {
+            dayOfWeek: 2,
+            cadence: "WEEKLY",
+            rollIn: true,
+            providerSynced: false,
+            cans: [{ type: "TRASH", cadence: "WEEKLY", count: 1 }] as unknown as Prisma.InputJsonValue
+          }
+        }
       }
     }),
-    prisma.serviceSchedule.create({
+    prisma.locationService.create({
       data: {
         serviceAddressId: address2.id,
-        pickupDayOfWeek: 4,
-        cadence: "BIWEEKLY",
-        biweeklyAnchorDate: new Date("2026-08-06T00:00:00.000Z"),
-        curbOutOffsetHours: -14,
-        curbInOffsetHours: 9
+        type: "TRASH",
+        options: {},
+        priceCents: null,
+        isActive: true,
+        days: {
+          create: {
+            dayOfWeek: 4,
+            cadence: "BIWEEKLY",
+            biweeklyAnchorDate: new Date("2026-08-06T00:00:00.000Z"),
+            rollIn: true,
+            providerSynced: false,
+            cans: [
+              { type: "TRASH", cadence: "BIWEEKLY", count: 1 }
+            ] as unknown as Prisma.InputJsonValue
+          }
+        }
       }
     })
   ]);
