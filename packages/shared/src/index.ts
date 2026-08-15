@@ -622,6 +622,42 @@ export function weekdayMonthlyCents(day: WeekdayPricing): number {
   return Math.max(0, cents);
 }
 
+// A whole location's services (as stored: each service with its day(s)).
+export type ServicePricingDay = {
+  dayOfWeek: number;
+  cadence: "WEEKLY" | "BIWEEKLY";
+  cans: ScheduleCan[];
+  rollIn: boolean;
+};
+export type ServicePricing = {
+  type: ServiceType;
+  days: ServicePricingDay[];
+};
+
+// A location's monthly total under the day-centric model: pivot every service's
+// days onto weekdays, then sum each weekday's base + service fees. For a
+// trash-only location this equals the previous per-day total exactly.
+export function locationServicesMonthlyCents(services: ServicePricing[]): number {
+  const byDay = new Map<number, WeekdayPricing>();
+  for (const s of services) {
+    for (const d of s.days) {
+      let entry = byDay.get(d.dayOfWeek);
+      if (!entry) {
+        entry = { cadence: "BIWEEKLY", flats: [] };
+        byDay.set(d.dayOfWeek, entry);
+      }
+      const isWeekly =
+        s.type === "TRASH" ? d.cans.some((c) => c.cadence === "WEEKLY") : d.cadence === "WEEKLY";
+      if (isWeekly) entry.cadence = "WEEKLY";
+      if (s.type === "TRASH") entry.trash = { cans: d.cans, rollIn: d.rollIn };
+      else entry.flats.push({ type: s.type, cadence: d.cadence });
+    }
+  }
+  let total = 0;
+  for (const entry of byDay.values()) total += weekdayMonthlyCents(entry);
+  return total;
+}
+
 // --- Compatibility projection: new service model -> legacy per-day shape ------
 // Rebuilds the old "one row per (address, weekday) with cans + petWasteDogs" view
 // from the generic service model, so existing pricing/routing/serializers keep
@@ -1261,6 +1297,13 @@ export const stopServiceVerificationItemSchema = z.object({
 });
 export type StopServiceVerificationItem = z.infer<typeof stopServiceVerificationItemSchema>;
 
+// A non-trash service snapshotted onto a route stop (its type + options).
+export const routeStopServiceSchema = z.object({
+  type: serviceTypeSchema,
+  options: z.record(z.unknown()).default({})
+});
+export type RouteStopService = z.infer<typeof routeStopServiceSchema>;
+
 export const dailyRouteStopSchema = z.object({
   order: z.number().int().nonnegative(),
   addressId: z.string(),
@@ -1278,6 +1321,9 @@ export const dailyRouteStopSchema = z.object({
   cans: z.array(scheduleCanSchema).default([]),
   // Pet-waste removal due at this stop (number of dogs; 0 = none).
   petWasteDogs: z.number().int().nonnegative().default(0),
+  // The non-trash services due at this stop (mail check, watering, pet waste),
+  // each with its type-specific options, so the operator gets a step per service.
+  services: z.array(routeStopServiceSchema).default([]),
   // The per-item verification the operator completed (checked items + photos).
   serviceVerification: z.array(stopServiceVerificationItemSchema).default([]),
   // Timestamp when the operator marked this stop serviced; null if not yet done.

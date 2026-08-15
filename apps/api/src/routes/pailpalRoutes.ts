@@ -387,7 +387,8 @@ export async function pailpalBuildRouteHandler(
           jobTypes: w.jobTypes,
           canCount: w.canCount,
           cans: w.cans as ScheduleCan[],
-          petWasteDogs: w.petWasteDogs
+          petWasteDogs: w.petWasteDogs,
+          services: w.services
         }));
 
         // Start from the stop nearest the cluster centroid; ORS orders the rest.
@@ -450,7 +451,8 @@ export async function pailpalBuildRouteHandler(
                 jobTypes: [...stop.jobTypes].sort().join(","),
                 canCount: stop.canCount,
                 cans: stop.cans as unknown as Prisma.InputJsonValue,
-                petWasteDogs: stop.petWasteDogs
+                petWasteDogs: stop.petWasteDogs,
+                services: stop.services as unknown as Prisma.InputJsonValue
               }))
             }
           }

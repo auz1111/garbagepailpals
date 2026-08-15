@@ -8,7 +8,7 @@ import type {
   StopServiceVerificationItem,
   TimeOffStatus
 } from "@gpp/shared";
-import { estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
+import { SERVICE_REGISTRY, estimatedRouteMinutes, formatMinutes } from "@gpp/shared";
 import { StopServiceVerification } from "./StopServiceVerification";
 
 type RouteStop = DailyRoute["stops"][number];
@@ -406,13 +406,19 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
                                 {stop.city}, {stop.state} {stop.postalCode} · {stop.customerName}
                               </span>
                               <span className="admin-table-sub">
-                                {stop.jobTypes
-                                  .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
-                                  .join(" + ")}{" "}
-                                ·{" "}
-                                {stop.cans.length > 0
-                                  ? formatCans(stop.cans)
-                                  : `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`}
+                                {[
+                                  stop.jobTypes
+                                    .map((t) => (t === "CURB_OUT" ? "Roll-out" : "Roll-in"))
+                                    .join(" + "),
+                                  stop.cans.length > 0
+                                    ? formatCans(stop.cans)
+                                    : stop.jobTypes.length > 0
+                                      ? `${stop.canCount} can${stop.canCount === 1 ? "" : "s"}`
+                                      : null,
+                                  ...stop.services.map((s) => SERVICE_REGISTRY[s.type].label)
+                                ]
+                                  .filter(Boolean)
+                                  .join(" · ")}
                               </span>
                               <StopServicePhotos
                                 verification={stop.serviceVerification}

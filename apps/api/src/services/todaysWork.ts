@@ -1,5 +1,5 @@
 import { prisma } from "@gpp/db";
-import type { CanType, HaulerUpcoming, PickupStream, ScheduleCan } from "@gpp/shared";
+import type { CanType, HaulerUpcoming, PickupStream, ScheduleCan, ServiceType } from "@gpp/shared";
 import { haulerUpcomingSchema, scheduleCanSchema } from "@gpp/shared";
 import { z } from "zod";
 import { biweeklyMatchesZoned, resolveZone, weekdayInZone, zonedDay } from "../lib/timezone";
@@ -32,6 +32,7 @@ function canTypeToStreamKind(type: CanType): PickupStream["kind"] {
 
 const SERVICE_ADDRESS_INCLUDE = {
   schedules: true,
+  locationServices: { include: { days: true } },
   user: { select: { id: true, name: true, managedById: true } },
   neighborhood: { select: { name: true } },
   subscriptions: { where: { status: { in: ACTIVE_SUB_STATUSES } }, take: 1 }
@@ -71,12 +72,17 @@ type ReconciledAction = {
   shiftedTo: string | null;
 };
 
+// A non-trash service due today at an address (same-day visit — no roll).
+export type DueService = { type: ServiceType; options: Record<string, unknown> };
+
 export type ReconciledWork = {
   address: AddressRow;
   subscriptionId: string;
   provider: { id: string | null; label: string | null };
   rollOut: ReconciledAction;
   rollIn: ReconciledAction;
+  // Non-trash services (mail check, watering, pet waste) due today.
+  services: DueService[];
 };
 
 async function loadServiceableAddresses(scope: WorkScope) {
@@ -267,11 +273,30 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
     const rollOut = reconcileAction(rollOutWeekday, rollOutDay, false);
     const rollIn = reconcileAction(rollInWeekday, rollInDay, true);
 
+    // Non-trash services are same-day visits: due when one of their days lands on
+    // today's weekday (biweekly aligned to its anchor).
+    const services: DueService[] = [];
+    for (const svc of a.locationServices) {
+      if (svc.type === "TRASH" || !svc.isActive) continue;
+      const due = svc.days.some(
+        (d) =>
+          d.dayOfWeek === rollInWeekday &&
+          (d.cadence === "WEEKLY" || biweeklyMatchesZoned(d.biweeklyAnchorDate, rollInDay))
+      );
+      if (due) {
+        services.push({
+          type: svc.type as ServiceType,
+          options: (svc.options as Record<string, unknown>) ?? {}
+        });
+      }
+    }
+
     if (
       rollOut.providerStatus === "NOT_SYNCED" &&
       rollIn.providerStatus === "NOT_SYNCED" &&
       !rollOut.due &&
-      !rollIn.due
+      !rollIn.due &&
+      services.length === 0
     ) {
       // Nothing today and nothing provider-relevant to report.
       continue;
@@ -282,7 +307,8 @@ export async function reconcileTodaysWork(now: Date, scope: WorkScope = {}): Pro
       subscriptionId,
       provider: { id: cached?.provider ?? null, label: providerLabel(cached?.provider ?? null) },
       rollOut,
-      rollIn
+      rollIn,
+      services
     });
   }
   return result;

@@ -11,9 +11,12 @@ import {
   cansToCanCount,
   routeCancelSchema,
   routeHistoryResponseSchema,
+  routeStopServiceSchema,
   scheduleCanSchema,
   stopServiceVerificationItemSchema,
+  type RouteStopService,
   type ScheduleCan,
+  type ServiceType,
   type StopServiceVerificationItem
 } from "@gpp/shared";
 import { z } from "zod";
@@ -21,6 +24,7 @@ import { env } from "../lib/env";
 
 const cansArraySchema = z.array(scheduleCanSchema);
 const verificationArraySchema = z.array(stopServiceVerificationItemSchema);
+const servicesArraySchema = z.array(routeStopServiceSchema);
 
 // Parse a stored cans JSON blob; fall back to empty so route building/serializing
 // never throws on a malformed or legacy value.
@@ -32,6 +36,12 @@ function parseCans(value: unknown): ScheduleCan[] {
 // Parse a stored service-verification JSON blob; empty on malformed/legacy.
 function parseVerification(value: unknown): StopServiceVerificationItem[] {
   const parsed = verificationArraySchema.safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
+
+// Parse a stored route-stop services JSON blob; empty on malformed/legacy.
+function parseServices(value: unknown): RouteStopService[] {
+  const parsed = servicesArraySchema.safeParse(value);
   return parsed.success ? parsed.data : [];
 }
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
@@ -62,6 +72,8 @@ export type ServiceWork = {
   canCount: number;
   cans: ScheduleCan[];
   petWasteDogs: number;
+  // Non-trash services due at this stop today (mail check, watering, pet waste).
+  services: { type: ServiceType; options: Record<string, unknown> }[];
 };
 
 // The cart-handling work due on the operating day `now`:
@@ -81,7 +93,8 @@ export async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promi
     const jobTypes: string[] = [];
     if (r.rollOut.due) jobTypes.push("CURB_OUT");
     if (r.rollIn.due) jobTypes.push("CURB_IN");
-    if (jobTypes.length === 0) {
+    // A stop is warranted if there's a cart roll OR a non-trash service due today.
+    if (jobTypes.length === 0 && r.services.length === 0) {
       continue;
     }
     // The cans actually collected on this day (day-accurate: weekly always,
@@ -95,7 +108,8 @@ export async function collectTodaysWork(now: Date, scope: WorkScope = {}): Promi
       jobTypes,
       canCount: cansToCanCount(cans),
       cans,
-      petWasteDogs: chosenSched?.petWasteDogs ?? 0
+      petWasteDogs: chosenSched?.petWasteDogs ?? 0,
+      services: r.services
     });
   }
   return work;
@@ -158,6 +172,7 @@ export type DailyRouteRow = {
     canCount: number;
     cans: unknown;
     petWasteDogs: number;
+    services: unknown;
     serviceVerification: unknown;
     servicedAt: Date | null;
     serviceAddress: {
@@ -208,6 +223,7 @@ export function serializeDailyRoute(route: DailyRouteRow) {
       canCount: s.canCount,
       cans: parseCans(s.cans),
       petWasteDogs: s.petWasteDogs,
+      services: parseServices(s.services),
       serviceVerification: parseVerification(s.serviceVerification),
       servicedAt: s.servicedAt ? s.servicedAt.toISOString() : null
     }))
@@ -651,6 +667,7 @@ type StopBuild = {
   canCount: number;
   cans: ScheduleCan[];
   petWasteDogs: number;
+  services: { type: ServiceType; options: Record<string, unknown> }[];
 };
 
 export async function adminTodaysRouteHandler(
@@ -711,7 +728,8 @@ export async function adminTodaysRouteHandler(
             jobTypes: w.jobTypes,
             canCount: w.canCount,
             cans: w.cans,
-            petWasteDogs: w.petWasteDogs
+            petWasteDogs: w.petWasteDogs,
+            services: w.services
           }));
 
         // Resolve operator names for labelling assigned legs.
@@ -805,7 +823,8 @@ export async function adminTodaysRouteHandler(
                     jobTypes: [...stop.jobTypes].sort(),
                     canCount: stop.canCount,
                     cans: stop.cans,
-                    petWasteDogs: stop.petWasteDogs
+                    petWasteDogs: stop.petWasteDogs,
+                    services: stop.services
                   }
                 : null;
             })
@@ -859,7 +878,8 @@ export async function adminTodaysRouteHandler(
                     jobTypes: [...stop.jobTypes].sort().join(","),
                     canCount: stop.canCount,
                     cans: stop.cans as unknown as Prisma.InputJsonValue,
-                    petWasteDogs: stop.petWasteDogs
+                    petWasteDogs: stop.petWasteDogs,
+                    services: stop.services as unknown as Prisma.InputJsonValue
                   }))
                 }
               }

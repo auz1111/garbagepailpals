@@ -1,10 +1,11 @@
 import { prisma } from "@gpp/db";
 import {
-  addressMonthlyCents,
+  locationServicesMonthlyCents,
   scheduleCanSchema,
   type BillingSummary,
-  type PricingDay,
-  type ScheduleCan
+  type ScheduleCan,
+  type ServicePricing,
+  type ServiceType
 } from "@gpp/shared";
 import { z } from "zod";
 
@@ -18,18 +19,37 @@ function parseCans(cans: unknown): ScheduleCan[] {
   return parsed.success ? parsed.data : [];
 }
 
-type ScheduleRow = {
-  rollIn: boolean;
-  petWasteDogs: number;
-  cans: unknown;
+// The generic service model as loaded from the DB (LocationService + days).
+type LocationServiceRow = {
+  type: string;
+  days: { dayOfWeek: number; cadence: string; cans: unknown; rollIn: boolean }[];
 };
 
-function toPricingDay(row: ScheduleRow): PricingDay {
-  return {
-    cans: parseCans(row.cans),
-    rollIn: row.rollIn,
-    petWasteDogs: row.petWasteDogs
-  };
+// What Prisma include to attach to a serviceAddress to price it.
+const SERVICES_INCLUDE = { locationServices: { include: { days: true } } } as const;
+
+function toServicePricing(services: LocationServiceRow[]): ServicePricing[] {
+  return services.map((s) => ({
+    type: s.type as ServiceType,
+    days: s.days.map((d) => ({
+      dayOfWeek: d.dayOfWeek,
+      cadence: d.cadence as "WEEKLY" | "BIWEEKLY",
+      cans: parseCans(d.cans),
+      rollIn: d.rollIn
+    }))
+  }));
+}
+
+// A location's monthly total from its services (the single billing source).
+function addressServiceMonthly(services: LocationServiceRow[]): number {
+  return locationServicesMonthlyCents(toServicePricing(services));
+}
+
+// Distinct weekdays that have any service (for the "pickups/week" display).
+function serviceWeekdayCount(services: LocationServiceRow[]): number {
+  const weekdays = new Set<number>();
+  for (const s of services) for (const d of s.days) weekdays.add(d.dayOfWeek);
+  return weekdays.size;
 }
 
 // Billing overview for a user: subscription status + per-address coverage,
@@ -40,7 +60,7 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
     prisma.serviceAddress.findMany({
       where: { userId, isActive: true },
       orderBy: { createdAt: "asc" },
-      include: { schedules: true }
+      include: SERVICES_INCLUDE
     }),
     prisma.subscription.findMany({ where: { userId } })
   ]);
@@ -55,8 +75,8 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
       line1: address.line1,
       city: address.city,
       canCount: address.canCount,
-      pickupsPerWeek: address.schedules.length,
-      monthlyCents: addressMonthlyCents(address.schedules.map(toPricingDay)),
+      pickupsPerWeek: serviceWeekdayCount(address.locationServices),
+      monthlyCents: addressServiceMonthly(address.locationServices),
       covered,
       serviceApproved: address.serviceApprovedAt != null,
       status: sub?.status ?? null
@@ -97,11 +117,11 @@ export async function getBillingSummary(userId: string): Promise<BillingSummary>
 export async function computeUserMonthlyCents(userId: string): Promise<number> {
   const addresses = await prisma.serviceAddress.findMany({
     where: { userId, isActive: true },
-    include: { schedules: true }
+    include: SERVICES_INCLUDE
   });
 
   return addresses.reduce(
-    (sum, address) => sum + addressMonthlyCents(address.schedules.map(toPricingDay)),
+    (sum, address) => sum + addressServiceMonthly(address.locationServices),
     0
   );
 }
@@ -122,7 +142,7 @@ export async function activateSubscriptionsForUser(
 ): Promise<void> {
   const addresses = await prisma.serviceAddress.findMany({
     where: { userId, isActive: true },
-    include: { schedules: true }
+    include: SERVICES_INCLUDE
   });
 
   const now = new Date();
@@ -130,7 +150,7 @@ export async function activateSubscriptionsForUser(
   const status = opts.status ?? "ACTIVE";
 
   for (const address of addresses) {
-    const amountCents = addressMonthlyCents(address.schedules.map(toPricingDay));
+    const amountCents = addressServiceMonthly(address.locationServices);
     await prisma.subscription.upsert({
       where: { userId_serviceAddressId: { userId, serviceAddressId: address.id } },
       create: {

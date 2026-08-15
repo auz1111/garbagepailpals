@@ -8,6 +8,7 @@ import {
   createAddressRequestSchema,
   isAdminRole,
   pickupScheduleSuggestionSchema,
+  SERVICE_FLAT_PRICING_CENTS,
   scheduleUpdateSchema,
   serviceAddressInputSchema,
   serviceAddressSchema,
@@ -194,6 +195,52 @@ export async function createAddressHandler(
                 providerSynced: input.providerSynced ?? false,
                 cans: firstCans as unknown as Prisma.InputJsonValue
               }
+            },
+            // Seed the generic service model too (billing reads this): a TRASH
+            // service for the first day, plus PET_WASTE if dogs were requested.
+            locationServices: {
+              create: [
+                {
+                  type: "TRASH" as const,
+                  options: {},
+                  priceCents: null,
+                  isActive: true,
+                  days: {
+                    create: {
+                      dayOfWeek: input.pickupDayOfWeek ?? 5,
+                      cadence: cansToCadence(firstCans),
+                      biweeklyAnchorDate: input.biweeklyAnchorDate
+                        ? new Date(input.biweeklyAnchorDate)
+                        : null,
+                      rollIn: input.rollIn ?? true,
+                      providerSynced: input.providerSynced ?? false,
+                      cans: firstCans as unknown as Prisma.InputJsonValue
+                    }
+                  }
+                },
+                ...(input.petWasteDogs && input.petWasteDogs > 0
+                  ? [
+                      {
+                        type: "PET_WASTE" as const,
+                        options: { dogs: input.petWasteDogs } as unknown as Prisma.InputJsonValue,
+                        priceCents: SERVICE_FLAT_PRICING_CENTS.PET_WASTE,
+                        isActive: true,
+                        days: {
+                          create: {
+                            dayOfWeek: input.pickupDayOfWeek ?? 5,
+                            cadence: cansToCadence(firstCans),
+                            biweeklyAnchorDate: input.biweeklyAnchorDate
+                              ? new Date(input.biweeklyAnchorDate)
+                              : null,
+                            rollIn: false,
+                            providerSynced: false,
+                            cans: [] as unknown as Prisma.InputJsonValue
+                          }
+                        }
+                      }
+                    ]
+                  : [])
+              ]
             }
           },
           include: { schedules: true }

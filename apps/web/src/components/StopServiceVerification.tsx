@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import type { DailyRoute, StopServiceVerificationItem } from "@gpp/shared";
+import type { DailyRoute, RouteStopService, StopServiceVerificationItem } from "@gpp/shared";
+import { SERVICE_REGISTRY } from "@gpp/shared";
 import { uploadServicePhoto } from "../lib/api";
 import { CAN_LABELS } from "./CanRowsEditor";
 
@@ -24,6 +25,25 @@ function rollLabel(jobTypes: RouteStop["jobTypes"]): string {
   return "Service";
 }
 
+// A checklist step for one non-trash service, labelled from its options.
+function serviceStepDef(svc: RouteStopService): StepDef {
+  const reg = SERVICE_REGISTRY[svc.type];
+  const opts = svc.options ?? {};
+  let label = reg.label;
+  if (svc.type === "PET_WASTE") {
+    const dogs = typeof opts.dogs === "number" ? opts.dogs : 1;
+    label = `Pet waste removal (${dogs} dog${dogs === 1 ? "" : "s"})`;
+  } else if (svc.type === "PLANT_WATERING") {
+    const coverage = typeof opts.coverage === "string" ? opts.coverage.toLowerCase() : "outdoor";
+    label = `Plant watering (${coverage})`;
+  }
+  const sub =
+    typeof opts.instructions === "string" && opts.instructions.trim().length > 0
+      ? opts.instructions
+      : reg.description;
+  return { key: `service:${svc.type}`, label, sub };
+}
+
 function buildSteps(stop: RouteStop): StepDef[] {
   const steps: StepDef[] = [];
   const roll = rollLabel(stop.jobTypes);
@@ -39,7 +59,14 @@ function buildSteps(stop: RouteStop): StepDef[] {
       sub: roll
     });
   }
-  if (stop.petWasteDogs > 0) {
+  // Non-trash services (mail check, watering, pet waste) each get a step.
+  const services = stop.services ?? [];
+  for (const svc of services) {
+    steps.push(serviceStepDef(svc));
+  }
+  // Legacy fallback: a route built before `services` existed carries pet waste
+  // only as petWasteDogs. Skip if a PET_WASTE service already covered it.
+  if (stop.petWasteDogs > 0 && !services.some((s) => s.type === "PET_WASTE")) {
     steps.push({
       key: "service:PET_WASTE",
       label: `Pet waste removal (${stop.petWasteDogs} dog${stop.petWasteDogs === 1 ? "" : "s"})`,
