@@ -6440,3 +6440,32 @@ a.provider-pill:hover {
   font-weight: 700;
   color: var(--slate-2);
 }
+
+/* --- PailPal customer map (dashboard) ------------------------------------- */
+.pailpal-customers-map {
+  height: 380px;
+  width: 100%;
+  border-radius: var(--r-md, 14px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+.pailpal-map-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.pailpal-map-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate-2);
+}
+.pailpal-map-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 1px var(--line-2, #d7dde0);
+}

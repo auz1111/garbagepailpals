@@ -1430,6 +1430,8 @@ export const pailpalCustomerLocationSchema = z.object({
   city: z.string(),
   state: z.string(),
   postalCode: z.string(),
+  lat: z.number(),
+  lng: z.number(),
   isActive: z.boolean(),
   serviceApproved: z.boolean(),
   pickupDays: z.array(z.number().int()),

@@ -5,21 +5,10 @@ import type {
   CurrentUser,
   ServiceAddress,
   PickupDay,
-  PickupDayInput,
-  PickupScheduleSuggestion,
   PricingDay,
   ScheduleCan
 } from "@gpp/shared";
-import {
-  addressMonthlyCents,
-  cansToCadence,
-  cansToCanCount,
-  dayVisitFeeDisplayCents,
-  formatUsd,
-  petWasteMonthlyCents,
-  pickupDayMonthlyCents,
-  PRICING
-} from "@gpp/shared";
+import { addressMonthlyCents, formatUsd, PRICING } from "@gpp/shared";
 import {
   ApiError,
   checkServiceArea,
@@ -35,9 +24,7 @@ import {
   deleteAddress,
   updateAddress
 } from "../lib/api";
-import { ProviderSyncReview } from "./ProviderSyncReview";
 import { AddLocationWizard } from "./AddLocationWizard";
-import { CanRowsEditor } from "./CanRowsEditor";
 import { LocationServicesEditor } from "./LocationServicesEditor";
 import { CustomerHistory } from "./CustomerHistory";
 

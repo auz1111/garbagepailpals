@@ -6,21 +6,10 @@ import type {
   AdminUserUpdate,
   AdminUserWithLocations,
   CurrentUser,
-  PickupDayInput,
-  PickupScheduleSuggestion,
   Role,
   ScheduleCan
 } from "@gpp/shared";
-import {
-  addressMonthlyCents,
-  cansToCadence,
-  cansToCanCount,
-  formatUsd,
-  isSuperAdminRole,
-  petWasteMonthlyCents,
-  pickupDayMonthlyCents,
-  PRICING
-} from "@gpp/shared";
+import { formatUsd, isSuperAdminRole } from "@gpp/shared";
 import {
   acknowledgeAdminIncident,
   assignAdminIncident,
@@ -49,8 +38,6 @@ import { RouteHistory } from "./RouteHistory";
 import { ZonesAdmin } from "./ZonesAdmin";
 import { AdminLocations } from "./AdminLocations";
 import { AdminHaulerCoverage } from "./AdminHaulerCoverage";
-import { ProviderSyncReview } from "./ProviderSyncReview";
-import { CanRowsEditor } from "./CanRowsEditor";
 import { LocationServicesEditor } from "./LocationServicesEditor";
 import { AddLocationWizard } from "./AddLocationWizard";
 import { OperatorDashboard } from "./OperatorDashboard";
@@ -1080,9 +1067,6 @@ function AdminLocationCard({
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [editingAddress, setEditingAddress] = useState(false);
-  const [connectResult, setConnectResult] = useState<PickupScheduleSuggestion | null>(null);
-  // Whether the connect sync-review is open.
-  const [reviewing, setReviewing] = useState(false);
 
   // When arrived at via a map-popup link (…#address-<id>), scroll this card into
   // view and briefly highlight it.
@@ -1376,249 +1360,6 @@ function AdminAddressEditorForm({
       <div className="admin-loc-actions">
         <button type="submit" className="cta-primary" disabled={!valid || !dirty || saving}>
           {saving ? "Saving…" : "Update address"}
-        </button>
-        <button type="button" className="ghost-btn" onClick={onCancel} disabled={saving}>
-          Cancel
-        </button>
-      </div>
-      {error ? <p className="error">{error}</p> : null}
-    </form>
-  );
-}
-
-function AdminScheduleEditorForm({
-  loc,
-  saving,
-  error,
-  onCancel,
-  onSave
-}: {
-  loc: AdminLocation;
-  saving: boolean;
-  error: string | null;
-  onCancel: () => void;
-  onSave: (days: PickupDayInput[]) => void;
-}): JSX.Element {
-  const initialDays: EditDay[] =
-    loc.pickups.length > 0
-      ? [...loc.pickups]
-          .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
-          .map((s) => ({
-            dayOfWeek: s.dayOfWeek,
-            cans: s.cans.length > 0 ? s.cans : DEFAULT_CANS,
-            rollIn: s.rollIn,
-            petWasteDogs: s.petWasteDogs,
-            providerSynced: s.providerSynced,
-            biweeklyAnchorDate: s.biweeklyAnchorDate?.slice(0, 16) ?? ""
-          }))
-      : [
-          {
-            dayOfWeek: 5,
-            cans: DEFAULT_CANS,
-            rollIn: true,
-            petWasteDogs: 0,
-            providerSynced: false,
-            biweeklyAnchorDate: ""
-          }
-        ];
-  const [days, setDays] = useState<EditDay[]>(initialDays);
-
-  const usedDays = new Set(days.map((d) => d.dayOfWeek));
-  const firstAvailableDay = [0, 1, 2, 3, 4, 5, 6].find((d) => !usedDays.has(d));
-
-  const valid =
-    days.length >= 1 &&
-    days.every(
-      (d) =>
-        d.cans.length >= 1 &&
-        d.cans.every((c) => c.count >= 1 && c.count <= 20) &&
-        (cansToCadence(d.cans) !== "BIWEEKLY" || d.biweeklyAnchorDate.length > 0)
-    );
-  const monthly = addressMonthlyCents(
-    days.map((d) => ({ cans: d.cans, rollIn: d.rollIn, petWasteDogs: d.petWasteDogs }))
-  );
-
-  function updateDay(idx: number, patch: Partial<EditDay>): void {
-    // Manually changing the weekday or cans opts the day out of provider sync.
-    const optsOut = patch.dayOfWeek !== undefined || patch.cans !== undefined;
-    const effective = optsOut ? { ...patch, providerSynced: false } : patch;
-    setDays((prev) => prev.map((d, i) => (i === idx ? { ...d, ...effective } : d)));
-  }
-  function removeDay(idx: number): void {
-    setDays((prev) => prev.filter((_, i) => i !== idx));
-  }
-  function addDay(): void {
-    if (firstAvailableDay === undefined) return;
-    setDays((prev) => [
-      ...prev,
-      {
-        dayOfWeek: firstAvailableDay,
-        cans: DEFAULT_CANS,
-        rollIn: true,
-        petWasteDogs: 0,
-        providerSynced: false,
-        biweeklyAnchorDate: ""
-      }
-    ]);
-  }
-
-  function handleSubmit(event: FormEvent): void {
-    event.preventDefault();
-    if (!valid) return;
-    onSave(
-      days.map((d) => ({
-        dayOfWeek: d.dayOfWeek,
-        cans: d.cans,
-        // The API expects a full ISO-8601 datetime; the datetime-local input
-        // gives "YYYY-MM-DDTHH:mm", so normalize it before sending.
-        biweeklyAnchorDate:
-          cansToCadence(d.cans) === "BIWEEKLY" && d.biweeklyAnchorDate
-            ? new Date(d.biweeklyAnchorDate).toISOString()
-            : undefined,
-        rollIn: d.rollIn,
-        petWasteDogs: d.petWasteDogs,
-        providerSynced: d.providerSynced
-      }))
-    );
-  }
-
-  return (
-    <form className="admin-schedule-editor" onSubmit={handleSubmit}>
-      <div className="panel-head-row">
-        <span className="detail-total">{formatUsd(monthly)}/mo</span>
-        <button
-          type="button"
-          className="add-day-btn"
-          onClick={addDay}
-          disabled={firstAvailableDay === undefined}
-        >
-          + Add day
-        </button>
-      </div>
-
-      <ul className="pickup-day-list">
-        {days.map((day, idx) => {
-          const dayCost = pickupDayMonthlyCents({
-            cans: day.cans,
-            rollIn: day.rollIn,
-            petWasteDogs: day.petWasteDogs
-          });
-          const dayIsBiweekly = cansToCadence(day.cans) === "BIWEEKLY";
-          return (
-            <li className="pickup-day-card" key={idx}>
-              <div className="pickup-day-top">
-                <span className="pickup-day-icon" aria-hidden="true">
-                  🗓️
-                </span>
-                <label className="pickup-day-weekday-field">
-                  <span className="pickup-day-eyebrow">Pickup day</span>
-                  <select
-                    className="pickup-day-weekday"
-                    value={day.dayOfWeek}
-                    onChange={(event) => updateDay(idx, { dayOfWeek: Number(event.target.value) })}
-                  >
-                    {WEEKDAYS.map((label, value) => (
-                      <option
-                        key={label}
-                        value={value}
-                        disabled={value !== day.dayOfWeek && usedDays.has(value)}
-                      >
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <span className="pickup-day-cost">{formatUsd(dayCost)}/mo</span>
-                <button
-                  type="button"
-                  className="pickup-day-remove"
-                  onClick={() => removeDay(idx)}
-                  disabled={days.length <= 1}
-                  aria-label={`Remove ${WEEKDAYS[day.dayOfWeek]}`}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="pickup-day-body">
-                <div className="can-rows-field">
-                  <span className="pickup-day-eyebrow">Cans collected this day</span>
-                  <CanRowsEditor cans={day.cans} onChange={(cans) => updateDay(idx, { cans })} />
-                </div>
-
-                {dayIsBiweekly ? (
-                  <label className="field-single">
-                    First pickup date
-                    <input
-                      type="datetime-local"
-                      value={day.biweeklyAnchorDate}
-                      onChange={(event) => updateDay(idx, { biweeklyAnchorDate: event.target.value })}
-                    />
-                  </label>
-                ) : null}
-
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={day.rollIn}
-                    onChange={(event) => updateDay(idx, { rollIn: event.target.checked })}
-                  />
-                  <span>
-                    <strong>Bring cans back the same day (roll-in)</strong>
-                    <span className="subtext">
-                      {day.rollIn
-                        ? "Included — we return the cans the same day, after the hauler collects."
-                        : `Roll-out only — saves ${formatUsd(
-                            cansToCanCount(day.cans) * PRICING.rollInCreditMonthlyCentsPerCan
-                          )}/mo on this day.`}
-                    </span>
-                  </span>
-                </label>
-
-                <label className="checkbox-field">
-                  <input
-                    type="checkbox"
-                    checked={day.petWasteDogs > 0}
-                    onChange={(event) =>
-                      updateDay(idx, { petWasteDogs: event.target.checked ? 1 : 0 })
-                    }
-                  />
-                  <span>
-                    <strong>
-                      Pet waste removal (+{formatUsd(PRICING.petWasteBaseMonthlyCents)}/mo)
-                    </strong>
-                    <span className="subtext">
-                      Clean up the dog&apos;s waste from the yard into the trash bin before roll-out.
-                    </span>
-                  </span>
-                </label>
-
-                {day.petWasteDogs > 0 ? (
-                  <label className="field-inline">
-                    <span>Number of dogs</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={day.petWasteDogs}
-                      onChange={(event) =>
-                        updateDay(idx, {
-                          petWasteDogs: Math.max(1, Math.min(20, Number(event.target.value) || 1))
-                        })
-                      }
-                    />
-                    <span className="subtext">{formatUsd(petWasteMonthlyCents(day.petWasteDogs))}/mo</span>
-                  </label>
-                ) : null}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-
-      <div className="admin-loc-actions">
-        <button type="submit" className="cta-primary" disabled={!valid || saving}>
-          {saving ? "Saving…" : "Update pickup schedule"}
         </button>
         <button type="button" className="ghost-btn" onClick={onCancel} disabled={saving}>
           Cancel

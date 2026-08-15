@@ -1,14 +1,9 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type {
-  CurrentUser,
-  PailpalCustomerLocation,
-  PailpalLocationDay,
-  PickupDayInput,
-  PickupScheduleSuggestion,
-  ScheduleCan
-} from "@gpp/shared";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import type { CurrentUser, PailpalCustomer, PailpalCustomerLocation } from "@gpp/shared";
 import {
   approvePailpalLocation,
   buildPailpalRoute,
@@ -19,10 +14,8 @@ import {
   getPailpalRouteHistory,
   listPailpalCustomers
 } from "../lib/api";
-import { CanRowsEditor } from "./CanRowsEditor";
 import { LocationServicesEditor } from "./LocationServicesEditor";
 import { OperatorDashboard } from "./OperatorDashboard";
-import { ProviderSyncReview } from "./ProviderSyncReview";
 import { RouteHistory } from "./RouteHistory";
 
 export const PAILPAL_NAV = [
@@ -450,6 +443,73 @@ function PailpalRoutes({ user, accessToken }: PailPalWorkspaceProps): JSX.Elemen
 }
 
 // --- Dashboard (hero + stats) ---------------------------------------------
+// A customer location's status, driving its map colour and legend.
+type LocStatus = "on-route" | "pending" | "setup";
+const LOC_STATUS: Record<LocStatus, { color: string; label: string }> = {
+  "on-route": { color: "#16a34a", label: "On route" },
+  pending: { color: "#f7a81b", label: "Pending approval" },
+  setup: { color: "#94a3b8", label: "Needs setup" }
+};
+function locStatus(loc: PailpalCustomerLocation): LocStatus {
+  if (loc.serviceApproved) return "on-route";
+  if (loc.days.length > 0) return "pending";
+  return "setup";
+}
+
+// A map of all of a PailPal's customer locations, each pin coloured by status.
+function CustomersMap({ customers }: { customers: PailpalCustomer[] }): JSX.Element {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: false,
+      zoomControl: true,
+      attributionControl: false
+    });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19 }).addTo(map);
+    layerRef.current = L.layerGroup().addTo(map);
+    mapRef.current = map;
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+
+    const bounds: Array<[number, number]> = [];
+    customers.forEach((c) => {
+      c.locations.forEach((loc) => {
+        const st = LOC_STATUS[locStatus(loc)];
+        L.circleMarker([loc.lat, loc.lng], {
+          radius: 9,
+          color: "#ffffff",
+          weight: 2,
+          fillColor: st.color,
+          fillOpacity: 1
+        })
+          .bindPopup(
+            `<strong>${c.name}</strong><br/>${loc.line1}, ${loc.city}<br/><span style="color:${st.color};font-weight:700">${st.label}</span>`
+          )
+          .addTo(layer);
+        bounds.push([loc.lat, loc.lng]);
+      });
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(L.latLngBounds(bounds), { padding: [28, 28], maxZoom: 15 });
+    } else {
+      map.setView([44.0582, -121.3153], 11); // Bend, OR fallback
+    }
+    setTimeout(() => map.invalidateSize(), 0);
+  }, [customers]);
+
+  return <div className="pailpal-customers-map" ref={containerRef} />;
+}
+
 function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Element {
   const customersQuery = useQuery({
     queryKey: ["pailpal-customers"],
@@ -517,6 +577,25 @@ function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Ele
           <span>Serviced today</span>
         </div>
       </div>
+
+      <article className="panel">
+        <div className="pailpal-list-head">
+          <h3>Customer map</h3>
+          <div className="pailpal-map-legend">
+            {(Object.keys(LOC_STATUS) as LocStatus[]).map((k) => (
+              <span key={k} className="pailpal-map-legend-item">
+                <span className="pailpal-map-dot" style={{ background: LOC_STATUS[k].color }} />
+                {LOC_STATUS[k].label}
+              </span>
+            ))}
+          </div>
+        </div>
+        {locations.length > 0 ? (
+          <CustomersMap customers={customers} />
+        ) : (
+          <p className="subtext">No customer locations yet — add a customer to see them on the map.</p>
+        )}
+      </article>
     </div>
   );
 }

@@ -57,6 +57,8 @@ function serializeCustomer(user: {
     city: string;
     state: string;
     postalCode: string;
+    lat: { toNumber: () => number };
+    lng: { toNumber: () => number };
     isActive: boolean;
     serviceApprovedAt: Date | null;
     updatedAt: Date;
@@ -90,6 +92,8 @@ function serializeCustomer(user: {
         city: a.city,
         state: a.state,
         postalCode: a.postalCode,
+        lat: a.lat.toNumber(),
+        lng: a.lng.toNumber(),
         isActive: a.isActive,
         serviceApproved: a.serviceApprovedAt != null,
         pickupDays: schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
