@@ -23,6 +23,16 @@ enum Cadence {
   BIWEEKLY
 }
 
+// Every kind of work a location can subscribe to. TRASH keeps its per-day cans
+// (on ServiceDay.cans); the rest are flat-priced services with service-level
+// options (on LocationService.options).
+enum ServiceType {
+  TRASH
+  PET_WASTE
+  PLANT_WATERING
+  MAIL_CHECK
+}
+
 enum SubscriptionStatus {
   TRIALING
   ACTIVE
@@ -155,6 +165,7 @@ model ServiceAddress {
   user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   neighborhood     Neighborhood?     @relation(fields: [neighborhoodId], references: [id], onDelete: SetNull)
   schedules        ServiceSchedule[]
+  locationServices LocationService[]
   subscriptions    Subscription[]
   holds            ServiceHold[]
   routeStops       RouteStop[]
@@ -276,6 +287,49 @@ model ServiceSchedule {
 
   @@unique([serviceAddressId, pickupDayOfWeek])
   @@index([serviceAddressId])
+}
+
+// One service a location subscribes to (trash, pet-waste, watering, mail check).
+// Generic model that will replace the trash-only ServiceSchedule. TRASH prices
+// from its days' cans; other types are flat-priced (priceCents).
+model LocationService {
+  id               String         @id @default(cuid())
+  serviceAddressId String
+  type             ServiceType
+  // Service-level options, per type (e.g. pet-waste { dogs, instructions }).
+  // Trash has none here — its cans live per-day on ServiceDay.
+  options          Json           @default("{}")
+  // Flat monthly price in cents for flat-priced services; null = derived (trash).
+  priceCents       Int?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  serviceAddress   ServiceAddress @relation(fields: [serviceAddressId], references: [id], onDelete: Cascade)
+  days             ServiceDay[]
+
+  @@index([serviceAddressId])
+  @@index([type])
+}
+
+// A day (with cadence) that a LocationService runs. Multiple days per service.
+// Trash-specific fields (rollIn, providerSynced, cans) are unused/empty for
+// non-trash services.
+model ServiceDay {
+  id                 String          @id @default(cuid())
+  locationServiceId  String
+  dayOfWeek          Int
+  cadence            Cadence         @default(WEEKLY)
+  biweeklyAnchorDate DateTime?
+  rollIn             Boolean         @default(true)
+  providerSynced     Boolean         @default(false)
+  // Trash only: [{ type, cadence, count }] carts serviced this day.
+  cans               Json            @default("[]")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  locationService    LocationService @relation(fields: [locationServiceId], references: [id], onDelete: Cascade)
+
+  @@index([locationServiceId])
+  @@index([dayOfWeek])
 }
 
 model Subscription {

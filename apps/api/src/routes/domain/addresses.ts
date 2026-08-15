@@ -12,13 +12,15 @@ import {
   serviceAddressInputSchema,
   serviceAddressSchema,
   serviceHoldInputSchema,
-  serviceHoldSchema
+  serviceHoldSchema,
+  servicesUpdateSchema
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../../lib/http";
 import { withAuth } from "../../lib/withAuth";
 import { canActForAddress, canActForUser } from "../../lib/ownership";
 import { geocodeAddressParts } from "../../services/geocoding";
 import { lookupPickupSchedule } from "../../services/haulerSchedule";
+import { applyLocationServices, getLocationServices } from "../../services/locationServices";
 import { timezoneForCoords } from "../../lib/timezone";
 
 type ScheduleRow = {
@@ -420,6 +422,78 @@ export async function upsertScheduleHandler(
             .sort((a, b) => a.pickupDayOfWeek - b.pickupDayOfWeek)
             .map(toScheduleResponse)
         });
+      },
+      { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// Read all services for a location (generic service model).
+export async function getServicesHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const addressId = req.params.addressId;
+        if (!addressId) return jsonResponse(400, { message: "addressId is required" });
+        const address = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
+        if (!address) return jsonResponse(404, { message: "Address not found" });
+        if (!(await canActForAddress(auth, address.userId))) {
+          return jsonResponse(403, { message: "Forbidden" });
+        }
+        return jsonResponse(200, { services: await getLocationServices(addressId) });
+      },
+      { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// Replace the whole set of services for a location (service-first model). Writes
+// the new model and dual-writes the legacy ServiceSchedule via projection.
+export async function upsertServicesHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const addressId = req.params.addressId;
+        if (!addressId) return jsonResponse(400, { message: "addressId is required" });
+        const address = await prisma.serviceAddress.findUnique({ where: { id: addressId } });
+        if (!address) return jsonResponse(404, { message: "Address not found" });
+        if (!(await canActForAddress(auth, address.userId))) {
+          return jsonResponse(403, { message: "Forbidden" });
+        }
+
+        const { services } = await parseJson(req, servicesUpdateSchema);
+        // A biweekly day needs a first-visit anchor. Trash cadence derives from
+        // its cans; other services use the day's explicit cadence.
+        const biweeklyMissingAnchor = services.some((s) =>
+          s.days.some((d) => {
+            const cans = d.cans ?? [];
+            const biweekly =
+              s.type === "TRASH"
+                ? cans.length > 0 && cansToCadence(cans) === "BIWEEKLY"
+                : d.cadence === "BIWEEKLY";
+            return biweekly && !d.biweeklyAnchorDate;
+          })
+        );
+        if (biweeklyMissingAnchor) {
+          return jsonResponse(400, {
+            message: "A first visit date is required for every biweekly day"
+          });
+        }
+
+        const saved = await applyLocationServices(addressId, services);
+        return jsonResponse(200, { services: saved });
       },
       { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
     )(request, context)

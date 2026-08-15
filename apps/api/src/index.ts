@@ -12,7 +12,9 @@ import {
   addressHoldsHandler,
   addressesRootHandler,
   connectProviderHandler,
-  upsertScheduleHandler
+  getServicesHandler,
+  upsertScheduleHandler,
+  upsertServicesHandler
 } from "./routes/domain/addresses";
 import { historyJobsHandler, upcomingJobsHandler } from "./routes/domain/jobs";
 import { reminderSweepHandler } from "./timers/reminders";
@@ -451,6 +453,16 @@ app.http("address-schedule-upsert", {
   methods: ["PUT", "OPTIONS"],
   authLevel: "anonymous",
   handler: upsertScheduleHandler
+});
+
+app.http("address-services", {
+  route: "addresses/{addressId}/services",
+  methods: ["GET", "PUT", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: async (request, context) =>
+    request.method === "GET"
+      ? getServicesHandler(request, context)
+      : upsertServicesHandler(request, context)
 });
 
 app.http("address-connect-provider", {

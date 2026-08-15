@@ -435,6 +435,283 @@ export function formatUsd(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
+// --- Services (generic model) ---------------------------------------------
+// Every kind of work a location can subscribe to. TRASH keeps its per-day cans
+// model (cans live on each ServiceDay); the others are flat-priced concierge
+// services with service-level options and their own day(s)/cadence.
+export const SERVICE_TYPES = ["TRASH", "PET_WASTE", "PLANT_WATERING", "MAIL_CHECK"] as const;
+export const serviceTypeSchema = z.enum(SERVICE_TYPES);
+export type ServiceType = z.infer<typeof serviceTypeSchema>;
+
+// Service-level options, per type. TRASH has none here — its per-day cans are
+// carried on each ServiceDay. The others are the same on every visit.
+export const trashServiceOptionsSchema = z.object({}).strict();
+export const petWasteServiceOptionsSchema = z.object({
+  // Number of dogs — informational for the operator; price is flat (see below).
+  dogs: z.number().int().min(1).max(20).default(1),
+  instructions: z.string().max(500).optional()
+});
+export const wateringCoverageSchema = z.enum(["INDOOR", "OUTDOOR", "BOTH"]);
+export const plantWateringServiceOptionsSchema = z.object({
+  coverage: wateringCoverageSchema.default("OUTDOOR"),
+  instructions: z.string().max(500).optional()
+});
+export const mailCheckServiceOptionsSchema = z.object({
+  instructions: z.string().max(500).default("Bring the mail from the mailbox to the front door.")
+});
+
+export type PetWasteServiceOptions = z.infer<typeof petWasteServiceOptionsSchema>;
+export type PlantWateringServiceOptions = z.infer<typeof plantWateringServiceOptionsSchema>;
+export type MailCheckServiceOptions = z.infer<typeof mailCheckServiceOptionsSchema>;
+
+// The zod schema for a given service type's service-level options.
+export function serviceOptionsSchemaFor(type: ServiceType): z.ZodTypeAny {
+  switch (type) {
+    case "PET_WASTE":
+      return petWasteServiceOptionsSchema;
+    case "PLANT_WATERING":
+      return plantWateringServiceOptionsSchema;
+    case "MAIL_CHECK":
+      return mailCheckServiceOptionsSchema;
+    case "TRASH":
+    default:
+      return trashServiceOptionsSchema;
+  }
+}
+
+// Flat monthly price per service (cents), or null when derived from cans (TRASH).
+export const SERVICE_FLAT_PRICING_CENTS: Record<ServiceType, number | null> = {
+  TRASH: null,
+  PET_WASTE: 6000, // $60/mo, flat (independent of dog count)
+  PLANT_WATERING: 4000, // $40/mo
+  MAIL_CHECK: 2500 // $25/mo
+};
+
+export type ServiceRegistryEntry = {
+  type: ServiceType;
+  label: string;
+  icon: string;
+  description: string;
+  // TRASH connects/syncs to a hauler and edits per-day cans; the rest don't.
+  syncs: boolean;
+  // TRASH prices from its cans; the rest are flat (SERVICE_FLAT_PRICING_CENTS).
+  flatPriceCents: number | null;
+  // Whether customers can self-add this service (vs operator/PailPal/admin only).
+  // Flip to false to make a service operator-added-only.
+  selfServe: boolean;
+  optionsSchema: z.ZodTypeAny;
+};
+
+// Single source of truth for the service catalog: the wizard, schedule list,
+// pricing, routing snapshot, and operator checklist all read this. Adding a new
+// service later is one entry here (plus its option schema above).
+export const SERVICE_REGISTRY: Record<ServiceType, ServiceRegistryEntry> = {
+  TRASH: {
+    type: "TRASH",
+    label: "Trash & recycling",
+    icon: "🗑️",
+    description: "Roll carts to the curb and back on collection day, synced to the hauler.",
+    syncs: true,
+    flatPriceCents: null,
+    selfServe: true,
+    optionsSchema: trashServiceOptionsSchema
+  },
+  PET_WASTE: {
+    type: "PET_WASTE",
+    label: "Pet waste removal",
+    icon: "🐾",
+    description: "Scoop the yard and bag pet waste into the trash bin.",
+    syncs: false,
+    flatPriceCents: SERVICE_FLAT_PRICING_CENTS.PET_WASTE,
+    selfServe: true,
+    optionsSchema: petWasteServiceOptionsSchema
+  },
+  PLANT_WATERING: {
+    type: "PLANT_WATERING",
+    label: "Plant & flower watering",
+    icon: "🪴",
+    description: "Water indoor and/or outdoor plants on a set schedule.",
+    syncs: false,
+    flatPriceCents: SERVICE_FLAT_PRICING_CENTS.PLANT_WATERING,
+    selfServe: true,
+    optionsSchema: plantWateringServiceOptionsSchema
+  },
+  MAIL_CHECK: {
+    type: "MAIL_CHECK",
+    label: "Mail check",
+    icon: "📬",
+    description: "Bring the mail from the mailbox to the front door.",
+    syncs: false,
+    flatPriceCents: SERVICE_FLAT_PRICING_CENTS.MAIL_CHECK,
+    selfServe: true,
+    optionsSchema: mailCheckServiceOptionsSchema
+  }
+};
+
+// Display order for the "add a service" picker (TRASH first / default).
+export const SERVICE_TYPES_ORDER: ServiceType[] = [
+  "TRASH",
+  "PET_WASTE",
+  "PLANT_WATERING",
+  "MAIL_CHECK"
+];
+
+// Pricing input for one service: its type and its days (trash days carry cans).
+export type PricingServiceDay = {
+  cans?: ScheduleCan[];
+  rollIn?: boolean;
+};
+export type PricingService = {
+  type: ServiceType;
+  days: PricingServiceDay[];
+};
+
+// The authoritative monthly total for one service. TRASH sums its days' can
+// pricing (visit fee + cans + roll-in credit, reusing pickupDayMonthlyCents);
+// every other service is a flat monthly fee regardless of how many days it runs.
+export function serviceMonthlyCents(service: PricingService): number {
+  if (service.type === "TRASH") {
+    return service.days.reduce(
+      (sum, d) => sum + pickupDayMonthlyCents({ cans: d.cans ?? [], rollIn: d.rollIn }),
+      0
+    );
+  }
+  return SERVICE_FLAT_PRICING_CENTS[service.type] ?? 0;
+}
+
+// A location's monthly total under the service model: the sum across its services.
+export function addressServicesMonthlyCents(services: PricingService[]): number {
+  return services.reduce((sum, service) => sum + serviceMonthlyCents(service), 0);
+}
+
+// --- Compatibility projection: new service model -> legacy per-day shape ------
+// Rebuilds the old "one row per (address, weekday) with cans + petWasteDogs" view
+// from the generic service model, so existing pricing/routing/serializers keep
+// working during cutover — and so the backfill can be proven lossless (projected
+// legacy days must price identically to the original ServiceSchedule rows).
+export type ProjectionServiceDay = {
+  dayOfWeek: number;
+  cadence: "WEEKLY" | "BIWEEKLY";
+  biweeklyAnchorDate?: string | null;
+  rollIn: boolean;
+  providerSynced: boolean;
+  cans: ScheduleCan[];
+};
+export type ProjectionService = {
+  type: ServiceType;
+  options: Record<string, unknown>;
+  days: ProjectionServiceDay[];
+};
+export type LegacyDay = {
+  dayOfWeek: number;
+  cans: ScheduleCan[];
+  cadence: "WEEKLY" | "BIWEEKLY";
+  biweeklyAnchorDate: string | null;
+  rollIn: boolean;
+  providerSynced: boolean;
+  petWasteDogs: number;
+};
+
+// --- Service read/write I/O shapes ----------------------------------------
+// One day of a service (input). Trash carries cans + rollIn + providerSynced;
+// other services leave those at defaults.
+export const serviceDayInputSchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]).default("WEEKLY"),
+  biweeklyAnchorDate: z.string().datetime().optional(),
+  rollIn: z.boolean().default(true),
+  providerSynced: z.boolean().default(false),
+  cans: z.array(scheduleCanSchema).default([])
+});
+
+// One service on a location (input). `options` is validated per-type server-side.
+export const locationServiceInputSchema = z.object({
+  type: serviceTypeSchema,
+  options: z.record(z.unknown()).default({}),
+  days: z
+    .array(serviceDayInputSchema)
+    .min(1)
+    .max(7)
+    .refine((days) => new Set(days.map((d) => d.dayOfWeek)).size === days.length, {
+      message: "Each weekday can only appear once per service"
+    })
+});
+
+// Replace-all write of a location's services.
+export const servicesUpdateSchema = z.object({
+  services: z.array(locationServiceInputSchema).max(20)
+});
+
+export const serviceDaySchema = z.object({
+  id: z.string(),
+  dayOfWeek: z.number().int().min(0).max(6),
+  cadence: z.enum(["WEEKLY", "BIWEEKLY"]),
+  biweeklyAnchorDate: z.string().nullable(),
+  rollIn: z.boolean(),
+  providerSynced: z.boolean(),
+  cans: z.array(scheduleCanSchema)
+});
+
+export const locationServiceSchema = z.object({
+  id: z.string(),
+  type: serviceTypeSchema,
+  options: z.record(z.unknown()),
+  priceCents: z.number().int().nullable(),
+  isActive: z.boolean(),
+  // Server-computed monthly total for this service (trash: from cans; else flat).
+  monthlyCents: z.number().int().nonnegative(),
+  days: z.array(serviceDaySchema)
+});
+
+export const locationServicesResponseSchema = z.object({
+  services: z.array(locationServiceSchema)
+});
+
+export type ServiceDayInput = z.infer<typeof serviceDayInputSchema>;
+export type LocationServiceInput = z.infer<typeof locationServiceInputSchema>;
+export type ServiceDayView = z.infer<typeof serviceDaySchema>;
+export type LocationServiceView = z.infer<typeof locationServiceSchema>;
+export type LocationServicesResponse = z.infer<typeof locationServicesResponseSchema>;
+
+export function projectToLegacyDays(services: ProjectionService[]): LegacyDay[] {
+  const byDay = new Map<number, LegacyDay>();
+  const ensure = (d: ProjectionServiceDay): LegacyDay => {
+    let day = byDay.get(d.dayOfWeek);
+    if (!day) {
+      day = {
+        dayOfWeek: d.dayOfWeek,
+        cans: [],
+        cadence: d.cadence,
+        biweeklyAnchorDate: d.biweeklyAnchorDate ?? null,
+        rollIn: d.rollIn,
+        providerSynced: d.providerSynced,
+        petWasteDogs: 0
+      };
+      byDay.set(d.dayOfWeek, day);
+    }
+    return day;
+  };
+  // Trash defines the legacy cans/roll-in/provider-sync/cadence for a weekday.
+  for (const svc of services.filter((s) => s.type === "TRASH")) {
+    for (const d of svc.days) {
+      const day = ensure(d);
+      day.cans = d.cans;
+      day.cadence = d.cadence;
+      day.biweeklyAnchorDate = d.biweeklyAnchorDate ?? null;
+      day.rollIn = d.rollIn;
+      day.providerSynced = d.providerSynced;
+    }
+  }
+  // Pet waste folds its dog count onto the matching weekday (as it did before).
+  for (const svc of services.filter((s) => s.type === "PET_WASTE")) {
+    const dogs = typeof svc.options.dogs === "number" ? svc.options.dogs : 0;
+    for (const d of svc.days) {
+      ensure(d).petWasteDogs = dogs;
+    }
+  }
+  return [...byDay.values()].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+}
+
 // Estimated on-site service time per cart: finding the location + cans, rolling
 // them, and recording the job. ~2 min/can (a 2-can stop ≈ 4 min).
 export const SERVICE_MINUTES_PER_CAN = 2;

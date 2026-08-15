@@ -131,6 +131,9 @@ importers:
         specifier: ^3.6.0
         version: 3.6.0
     devDependencies:
+      '@gpp/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@types/bcryptjs':
         specifier: ^2.4.6
         version: 2.4.6
