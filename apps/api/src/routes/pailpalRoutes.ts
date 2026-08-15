@@ -10,12 +10,14 @@ import {
   pailpalCustomerResponseSchema,
   pailpalCustomersResponseSchema,
   pailpalLocationCreateSchema,
+  pickupScheduleSuggestionSchema,
   type ScheduleCan
 } from "@gpp/shared";
 import { HttpError, handleOptions, jsonResponse, parseJson, withErrorBoundary } from "../lib/http";
 import { withAuth } from "../lib/withAuth";
 import { canActForUser } from "../lib/ownership";
 import { geocodeAddressParts } from "../services/geocoding";
+import { lookupPickupSchedule } from "../services/haulerSchedule";
 import { timezoneForCoords } from "../lib/timezone";
 import {
   DAILY_ROUTE_INCLUDE,
@@ -268,6 +270,57 @@ export async function pailpalApproveLocationHandler(
           }
         });
         return jsonResponse(200, { approved });
+      },
+      { roles: ["PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// Sync a managed customer's location with its trash provider: re-run the
+// provider lookup (bypassing the cache) and return the matched pickup streams.
+// The PailPal then reviews the suggestion and applies it via the normal
+// schedule update (which persists the per-day providerSynced flags).
+export async function pailpalSyncLocationProviderHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const addressId = req.params.addressId;
+        if (!addressId) throw new HttpError(400, "addressId is required");
+
+        const address = await prisma.serviceAddress.findUnique({
+          where: { id: addressId },
+          select: { id: true, userId: true, line1: true, city: true, state: true, postalCode: true }
+        });
+        if (!address) throw new HttpError(404, "Location not found");
+        if (!(await canActForUser(auth, address.userId))) {
+          throw new HttpError(403, "You can only sync your own customers' locations");
+        }
+
+        const suggestion = await lookupPickupSchedule(
+          {
+            line1: address.line1,
+            city: address.city,
+            state: address.state,
+            postalCode: address.postalCode
+          },
+          { force: true }
+        );
+        await prisma.auditLog.create({
+          data: {
+            actorUserId: auth.sub,
+            action: "pailpal.location.provider_synced",
+            entityType: "ServiceAddress",
+            entityId: addressId,
+            metadata: { matched: suggestion.matched, provider: suggestion.provider ?? null }
+          }
+        });
+        return jsonResponse(200, pickupScheduleSuggestionSchema.parse(suggestion));
       },
       { roles: ["PAILPAL"] }
     )(request, context)

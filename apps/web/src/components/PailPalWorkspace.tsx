@@ -1,10 +1,18 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CurrentUser, PailpalLocationDay, ScheduleCan } from "@gpp/shared";
+import type {
+  CurrentUser,
+  PailpalCustomerLocation,
+  PailpalLocationDay,
+  PickupDayInput,
+  PickupScheduleSuggestion,
+  ScheduleCan
+} from "@gpp/shared";
 import {
   approvePailpalLocation,
   buildPailpalRoute,
+  connectPailpalProvider,
   createPailpalCustomer,
   createPailpalLocation,
   getOperatorRoutes,
@@ -14,6 +22,7 @@ import {
 } from "../lib/api";
 import { CanRowsEditor } from "./CanRowsEditor";
 import { OperatorDashboard } from "./OperatorDashboard";
+import { ProviderSyncReview } from "./ProviderSyncReview";
 import { RouteHistory } from "./RouteHistory";
 
 export const PAILPAL_NAV = [
@@ -98,6 +107,8 @@ type EditableDay = {
   cans: ScheduleCan[];
   rollIn: boolean;
   biweeklyAnchorDate: string | null;
+  // Preserved so a manual edit/save doesn't drop an existing provider sync.
+  providerSynced: boolean;
 };
 
 function LocationScheduleEditor({
@@ -116,7 +127,8 @@ function LocationScheduleEditor({
       dayOfWeek: d.dayOfWeek,
       cans: d.cans,
       rollIn: d.rollIn,
-      biweeklyAnchorDate: d.biweeklyAnchorDate
+      biweeklyAnchorDate: d.biweeklyAnchorDate,
+      providerSynced: d.providerSynced
     }))
   );
 
@@ -132,7 +144,7 @@ function LocationScheduleEditor({
               cans: d.cans,
               rollIn: d.rollIn,
               petWasteDogs: 0,
-              providerSynced: false,
+              providerSynced: d.providerSynced,
               // Biweekly needs a first-pickup anchor; default to today if unset.
               ...(isBiweekly
                 ? { biweeklyAnchorDate: d.biweeklyAnchorDate ?? new Date().toISOString() }
@@ -162,7 +174,8 @@ function LocationScheduleEditor({
           dayOfWeek: d.dayOfWeek,
           cans: d.cans,
           rollIn: d.rollIn,
-          biweeklyAnchorDate: d.biweeklyAnchorDate
+          biweeklyAnchorDate: d.biweeklyAnchorDate,
+          providerSynced: d.providerSynced
         }))
       ),
     [initialDays]
@@ -175,7 +188,7 @@ function LocationScheduleEditor({
     if (free === undefined) return;
     setDays([
       ...days,
-      { dayOfWeek: free, cans: [{ type: "TRASH", cadence: "WEEKLY", count: 1 }], rollIn: true, biweeklyAnchorDate: null }
+      { dayOfWeek: free, cans: [{ type: "TRASH", cadence: "WEEKLY", count: 1 }], rollIn: true, biweeklyAnchorDate: null, providerSynced: false }
     ]);
   };
   const updateDay = (i: number, patch: Partial<EditableDay>): void =>
@@ -208,6 +221,14 @@ function LocationScheduleEditor({
               </select>
             </div>
             <div className="pailpal-day-controls">
+              {day.providerSynced ? (
+                <span
+                  className="pailpal-day-synced"
+                  title="This day is synced to the trash provider's collection schedule"
+                >
+                  ✓ Synced to provider
+                </span>
+              ) : null}
               <button type="button" className="link-btn" onClick={() => removeDay(i)}>
                 Remove
               </button>
@@ -415,6 +436,124 @@ function PailpalNewCustomer({ accessToken }: { accessToken: string }): JSX.Eleme
 }
 
 // --- Customer detail (manage locations) -----------------------------------
+// One customer location: route-approval, trash-provider sync (verify pickups),
+// and the days-of-service editor. Owns its own mutations so each location's
+// actions and errors stay independent inside the list.
+function PailpalLocationBlock({
+  loc,
+  accessToken,
+  onChanged
+}: {
+  loc: PailpalCustomerLocation;
+  accessToken: string;
+  onChanged: () => void;
+}): JSX.Element {
+  const [providerResult, setProviderResult] = useState<PickupScheduleSuggestion | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+
+  const approveMutation = useMutation({
+    mutationFn: (approved: boolean) => approvePailpalLocation(loc.id, approved, accessToken),
+    onSuccess: onChanged
+  });
+
+  // Re-run the provider lookup; open the verify-pickups review when it matches.
+  const syncMutation = useMutation({
+    mutationFn: () => connectPailpalProvider(loc.id, accessToken),
+    onSuccess: (result) => {
+      setProviderResult(result);
+      setReviewing(result.matched);
+    }
+  });
+
+  // Persist the reviewed pickup days (carries per-day providerSynced flags).
+  const applyMutation = useMutation({
+    mutationFn: (payload: PickupDayInput[]) =>
+      updateAddressSchedule(loc.id, { days: payload }, accessToken),
+    onSuccess: () => {
+      setReviewing(false);
+      setProviderResult(null);
+      onChanged();
+    }
+  });
+
+  const providerSynced = loc.days.some((d) => d.providerSynced);
+  const noMatch =
+    syncMutation.isSuccess && providerResult !== null && !providerResult.matched && !reviewing;
+
+  return (
+    <li className="pailpal-loc-block">
+      <div className="pailpal-loc-head">
+        <div>
+          <strong>{loc.line1}</strong>
+          <span className="admin-table-sub">
+            {loc.city}, {loc.state} {loc.postalCode}
+          </span>
+        </div>
+        <div className="pailpal-loc-actions">
+          <span className={`coverage-badge ${loc.serviceApproved ? "covered" : "uncovered"}`}>
+            {loc.serviceApproved ? "On route" : "Not approved"}
+          </span>
+          {providerSynced ? <span className="coverage-badge covered">Provider synced</span> : null}
+          <button
+            type="button"
+            className="cta-secondary"
+            disabled={syncMutation.isPending}
+            onClick={() => syncMutation.mutate()}
+          >
+            {syncMutation.isPending ? "Syncing…" : providerSynced ? "Re-sync provider" : "Sync provider"}
+          </button>
+          <button
+            type="button"
+            className="cta-secondary"
+            disabled={approveMutation.isPending || loc.days.length === 0}
+            title={loc.days.length === 0 ? "Add days of service first" : undefined}
+            onClick={() => approveMutation.mutate(!loc.serviceApproved)}
+          >
+            {loc.serviceApproved ? "Remove from route" : "Approve for route"}
+          </button>
+        </div>
+      </div>
+
+      {syncMutation.isError ? (
+        <p className="error">{getErrorMessage(syncMutation.error)}</p>
+      ) : null}
+      {approveMutation.isError ? (
+        <p className="error">{getErrorMessage(approveMutation.error)}</p>
+      ) : null}
+      {noMatch ? (
+        <p className="subtext">No trash provider matched this address.</p>
+      ) : null}
+
+      {reviewing && providerResult?.matched ? (
+        <ProviderSyncReview
+          providerLabel={providerResult.providerLabel}
+          streams={providerResult.streams}
+          pickups={loc.days.map((d) => ({
+            dayOfWeek: d.dayOfWeek,
+            cans: d.cans.length > 0 ? d.cans : [{ type: "TRASH", cadence: "WEEKLY", count: 1 }],
+            rollIn: d.rollIn,
+            petWasteDogs: d.petWasteDogs,
+            biweeklyAnchorDate: d.biweeklyAnchorDate ?? undefined
+          }))}
+          saving={applyMutation.isPending}
+          error={applyMutation.isError ? getErrorMessage(applyMutation.error) : null}
+          onApply={(payload) => applyMutation.mutate(payload)}
+          onSkip={() => setReviewing(false)}
+        />
+      ) : null}
+
+      <div className="pailpal-days-label">Days of service</div>
+      <LocationScheduleEditor
+        key={`${loc.id}:${loc.days.map((d) => d.dayOfWeek).join(",")}`}
+        addressId={loc.id}
+        initialDays={loc.days}
+        accessToken={accessToken}
+        onSaved={onChanged}
+      />
+    </li>
+  );
+}
+
 function PailpalCustomerDetail({ accessToken }: { accessToken: string }): JSX.Element {
   const { id } = useParams();
   const queryClient = useQueryClient();
@@ -429,12 +568,6 @@ function PailpalCustomerDetail({ accessToken }: { accessToken: string }): JSX.El
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ["pailpal-customers"] });
   };
-
-  const approveMutation = useMutation({
-    mutationFn: ({ addressId, approved }: { addressId: string; approved: boolean }) =>
-      approvePailpalLocation(addressId, approved, accessToken),
-    onSuccess: invalidate
-  });
 
   if (customersQuery.isLoading) {
     return (
@@ -481,52 +614,17 @@ function PailpalCustomerDetail({ accessToken }: { accessToken: string }): JSX.El
         {customer.locations.length > 0 ? (
           <ul className="pailpal-loc-list">
             {customer.locations.map((loc) => (
-              <li className="pailpal-loc-block" key={loc.id}>
-                <div className="pailpal-loc-head">
-                  <div>
-                    <strong>{loc.line1}</strong>
-                    <span className="admin-table-sub">
-                      {loc.city}, {loc.state} {loc.postalCode}
-                    </span>
-                  </div>
-                  <div className="pailpal-loc-actions">
-                    <span
-                      className={`coverage-badge ${loc.serviceApproved ? "covered" : "uncovered"}`}
-                    >
-                      {loc.serviceApproved ? "On route" : "Not approved"}
-                    </span>
-                    <button
-                      type="button"
-                      className="cta-secondary"
-                      disabled={approveMutation.isPending || loc.days.length === 0}
-                      title={loc.days.length === 0 ? "Add days of service first" : undefined}
-                      onClick={() =>
-                        approveMutation.mutate({ addressId: loc.id, approved: !loc.serviceApproved })
-                      }
-                    >
-                      {loc.serviceApproved ? "Remove from route" : "Approve for route"}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="pailpal-days-label">Days of service</div>
-                <LocationScheduleEditor
-                  key={`${loc.id}:${loc.days.map((d) => d.dayOfWeek).join(",")}`}
-                  addressId={loc.id}
-                  initialDays={loc.days}
-                  accessToken={accessToken}
-                  onSaved={invalidate}
-                />
-              </li>
+              <PailpalLocationBlock
+                key={loc.id}
+                loc={loc}
+                accessToken={accessToken}
+                onChanged={invalidate}
+              />
             ))}
           </ul>
         ) : (
           <p className="subtext">No locations yet. Add the first one, then set its days of service.</p>
         )}
-
-        {approveMutation.isError ? (
-          <p className="error">{getErrorMessage(approveMutation.error)}</p>
-        ) : null}
 
         {adding ? (
           <AddLocationForm

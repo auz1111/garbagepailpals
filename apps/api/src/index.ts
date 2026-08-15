@@ -53,7 +53,8 @@ import {
   pailpalBuildRouteHandler,
   pailpalCreateLocationHandler,
   pailpalCustomersHandler,
-  pailpalRouteHistoryHandler
+  pailpalRouteHistoryHandler,
+  pailpalSyncLocationProviderHandler
 } from "./routes/pailpalRoutes";
 import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
 import { dayStatusHandler, refreshSchedulesHandler } from "./routes/dayStatus";
@@ -499,6 +500,13 @@ app.http("pailpal-location-approve", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: pailpalApproveLocationHandler
+});
+
+app.http("pailpal-location-connect-provider", {
+  route: "pailpal/locations/{addressId}/connect-provider",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalSyncLocationProviderHandler
 });
 
 app.http("pailpal-routes-build", {

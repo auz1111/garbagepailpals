@@ -858,6 +858,20 @@ export function connectProvider(
   );
 }
 
+// PailPal-scoped variant: sync a managed customer's location with its trash
+// provider. Same lookup, gated to the PailPal's own customers on the server.
+export function connectPailpalProvider(
+  addressId: string,
+  accessToken: string
+): Promise<PickupScheduleSuggestion> {
+  return request<undefined, PickupScheduleSuggestion>(
+    `/pailpal/locations/${addressId}/connect-provider`,
+    "POST",
+    undefined,
+    accessToken
+  );
+}
+
 export function listUpcomingJobs(accessToken: string): Promise<ServiceJobsResponse> {
   return request<undefined, ServiceJobsResponse>("/jobs/upcoming", "GET", undefined, accessToken);
 }

@@ -2864,19 +2864,15 @@ a {
   flex: 0 0 auto;
   width: auto;
   padding: 0.4rem 0.95rem;
-  font-weight: 800;
-  border: 1px solid transparent;
-  background: linear-gradient(120deg, var(--gold), var(--gold-2));
-  color: var(--teal-deep);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
-  transition: box-shadow 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+  font-weight: 700;
+  border: 1.5px dashed var(--brand-teal, #12857a);
+  background: transparent;
+  color: var(--brand-teal, #0b5f63);
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 .can-add-btn:hover {
-  border-color: transparent;
-  background: linear-gradient(120deg, var(--gold), var(--gold-2));
-  filter: brightness(1.03);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(247, 168, 27, 0.35);
+  border-color: var(--brand-teal, #0b5f63);
+  background: var(--teal-bright-wash, #e8fafb);
 }
 .can-row {
   display: flex;
@@ -6092,6 +6088,22 @@ a.provider-pill:hover {
   gap: 1.1rem;
   flex-wrap: wrap;
 }
+/* Badge on a service day whose cans are synced to the trash provider. */
+.pailpal-day-synced {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--pill);
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
 .pailpal-day-controls .pailpal-rollin {
   flex-direction: row;
   align-items: center;
@@ -6161,8 +6173,15 @@ a.provider-pill:hover {
 }
 /* Make "add a day" read as a clear, inviting affordance. */
 .pailpal-days-actions .cta-secondary {
-  border: 1.5px dashed var(--brand-teal, #12857a);
-  color: var(--brand-teal, #0b5f63);
-  background: transparent;
-  font-weight: 700;
+  border: 1px solid transparent;
+  color: var(--teal-deep);
+  background: linear-gradient(120deg, var(--gold), var(--gold-2));
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  font-weight: 800;
+}
+.pailpal-days-actions .cta-secondary:hover {
+  border-color: transparent;
+  filter: brightness(1.03);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(247, 168, 27, 0.35);
 }
