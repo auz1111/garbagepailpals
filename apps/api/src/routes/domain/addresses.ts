@@ -310,7 +310,8 @@ export async function updateAddressHandler(
           return jsonResponse(404, { message: "Address not found" });
         }
 
-        if (!isAdminRole(auth.role) && existing.userId !== auth.sub) {
+        // Self, an admin, or the PailPal who manages this customer may edit it.
+        if (!(await canActForAddress(auth, existing.userId))) {
           return jsonResponse(403, { message: "Forbidden" });
         }
 
@@ -352,7 +353,7 @@ export async function updateAddressHandler(
 
         return jsonResponse(200, { address: toAddressResponse(updated) });
       },
-      { roles: ["CUSTOMER", "ADMIN"] }
+      { roles: ["CUSTOMER", "ADMIN", "PAILPAL"] }
     )(request, context)
   );
 }

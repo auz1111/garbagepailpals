@@ -62,7 +62,8 @@ import {
   pailpalCustomersHandler,
   pailpalRouteHistoryHandler,
   pailpalSyncLocationProviderHandler,
-  pailpalTodaySummaryHandler
+  pailpalTodaySummaryHandler,
+  pailpalUpdateCustomerHandler
 } from "./routes/pailpalRoutes";
 import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
 import { dayStatusHandler, refreshSchedulesHandler } from "./routes/dayStatus";
@@ -525,6 +526,13 @@ app.http("pailpal-customers", {
   methods: ["GET", "POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: pailpalCustomersHandler
+});
+
+app.http("pailpal-customer-update", {
+  route: "pailpal/customers/{customerId}",
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalUpdateCustomerHandler
 });
 
 app.http("pailpal-locations-create", {

@@ -1430,6 +1430,16 @@ export const pailpalCustomerCreateSchema = z
     path: ["password"]
   });
 
+// PailPal edits a managed customer's contact info (name/email/phone). An empty
+// email clears it (unless the customer has a login).
+export const pailpalCustomerUpdateSchema = z.object({
+  name: z.string().min(1).max(120),
+  // A valid email, or "" to clear it.
+  email: z.union([z.string().email().max(200), z.literal("")]).optional(),
+  phone: z.string().max(40).optional()
+});
+export type PailpalCustomerUpdate = z.infer<typeof pailpalCustomerUpdateSchema>;
+
 // A managed customer as their PailPal sees them, with a summary of their
 // locations (full location/schedule editing reuses the normal address flow).
 // One day of service on a managed location, in the shape the days editor uses.
@@ -1452,6 +1462,9 @@ export const pailpalCustomerLocationSchema = z.object({
   lng: z.number(),
   isActive: z.boolean(),
   serviceApproved: z.boolean(),
+  // Total services on this location (trash + flat services like mail/watering).
+  // `days` only reflects trash/pet-waste, so use this to tell "has any service".
+  serviceCount: z.number().int().nonnegative().default(0),
   pickupDays: z.array(z.number().int()),
   days: z.array(pailpalLocationDaySchema).default([])
 });

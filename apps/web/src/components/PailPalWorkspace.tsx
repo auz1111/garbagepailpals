@@ -13,8 +13,11 @@ import {
   getOperatorRoutes,
   getPailpalRouteHistory,
   getPailpalTodaySummary,
-  listPailpalCustomers
+  listPailpalCustomers,
+  updateAddress,
+  updatePailpalCustomer
 } from "../lib/api";
+import { DashboardRoutes } from "./DashboardRoutes";
 import { LocationServicesEditor } from "./LocationServicesEditor";
 import { OperatorDashboard } from "./OperatorDashboard";
 import { RouteHistory } from "./RouteHistory";
@@ -253,6 +256,142 @@ function PailpalNewCustomer({ accessToken }: { accessToken: string }): JSX.Eleme
 // --- Customer detail (manage locations) -----------------------------------
 // One customer location: route-approval + the day-based schedule editor
 // (LocationServicesEditor). Trash provider sync lives inside the editor.
+// Edit a managed customer's contact info (name / email / phone).
+function EditCustomerForm({
+  customer,
+  accessToken,
+  onDone,
+  onCancel
+}: {
+  customer: PailpalCustomer;
+  accessToken: string;
+  onDone: () => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const [name, setName] = useState(customer.name);
+  const [email, setEmail] = useState(customer.email ?? "");
+  const [phone, setPhone] = useState(customer.phone ?? "");
+  const save = useMutation({
+    mutationFn: () =>
+      updatePailpalCustomer(
+        customer.id,
+        { name: name.trim(), email: email.trim(), phone: phone.trim() },
+        accessToken
+      ),
+    onSuccess: onDone
+  });
+  return (
+    <article className="panel">
+      <div className="pailpal-list-head">
+        <h3>Edit customer</h3>
+        <button type="button" className="link-btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      <form
+        className="pailpal-cust-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <label>
+          Name
+          <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />
+        </label>
+        <label>
+          Email (optional)
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        <label>
+          Phone (optional)
+          <input value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} />
+        </label>
+        <button type="submit" className="cta-primary" disabled={save.isPending}>
+          {save.isPending ? "Saving…" : "Save changes"}
+        </button>
+        {save.isError ? <p className="error">{getErrorMessage(save.error)}</p> : null}
+      </form>
+    </article>
+  );
+}
+
+// Edit a location's street address (re-geocodes + re-derives timezone server-side).
+function EditLocationForm({
+  loc,
+  accessToken,
+  onDone,
+  onCancel
+}: {
+  loc: PailpalCustomerLocation;
+  accessToken: string;
+  onDone: () => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const queryClient = useQueryClient();
+  const [line1, setLine1] = useState(loc.line1);
+  const [city, setCity] = useState(loc.city);
+  const [state, setState] = useState(loc.state);
+  const [postalCode, setPostalCode] = useState(loc.postalCode);
+  const save = useMutation({
+    mutationFn: () =>
+      updateAddress(
+        loc.id,
+        {
+          line1: line1.trim(),
+          city: city.trim(),
+          state: state.trim(),
+          postalCode: postalCode.trim()
+        },
+        accessToken
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["pailpal-customers"] });
+      void queryClient.invalidateQueries({ queryKey: ["location-services", loc.id] });
+      onDone();
+    }
+  });
+  return (
+    <div className="pailpal-edit-address">
+      <form
+        className="pailpal-cust-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save.mutate();
+        }}
+      >
+        <label>
+          Street address
+          <input value={line1} onChange={(e) => setLine1(e.target.value)} required />
+        </label>
+        <div className="field-row">
+          <label>
+            City
+            <input value={city} onChange={(e) => setCity(e.target.value)} required />
+          </label>
+          <label>
+            State
+            <input value={state} onChange={(e) => setState(e.target.value)} required maxLength={2} />
+          </label>
+        </div>
+        <label>
+          Postal code
+          <input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} required />
+        </label>
+        <div className="button-row">
+          <button type="button" className="ghost-btn" onClick={onCancel} disabled={save.isPending}>
+            Cancel
+          </button>
+          <button type="submit" className="cta-primary" disabled={save.isPending}>
+            {save.isPending ? "Saving…" : "Save address"}
+          </button>
+        </div>
+        {save.isError ? <p className="error">{getErrorMessage(save.error)}</p> : null}
+      </form>
+    </div>
+  );
+}
+
 function PailpalLocationBlock({
   loc,
   accessToken,
@@ -262,14 +401,15 @@ function PailpalLocationBlock({
   accessToken: string;
   onChanged: () => void;
 }): JSX.Element {
+  const [editingAddress, setEditingAddress] = useState(false);
   const approveMutation = useMutation({
     mutationFn: (approved: boolean) => approvePailpalLocation(loc.id, approved, accessToken),
     onSuccess: onChanged
   });
 
-  // `loc.days` reflects the dual-written ServiceSchedule — a valid proxy for
-  // "this location has a schedule" (gates route approval).
-  const hasSchedule = loc.days.length > 0;
+  // Any service (trash OR a flat service like mail check) makes the location
+  // approvable. `loc.days` only covers trash/pet-waste, so use serviceCount.
+  const hasSchedule = loc.serviceCount > 0;
 
   return (
     <li className="pailpal-loc-block">
@@ -286,6 +426,13 @@ function PailpalLocationBlock({
           </span>
           <button
             type="button"
+            className="link-btn"
+            onClick={() => setEditingAddress((x) => !x)}
+          >
+            {editingAddress ? "Close" : "Edit address"}
+          </button>
+          <button
+            type="button"
             className="cta-secondary"
             disabled={approveMutation.isPending || !hasSchedule}
             title={!hasSchedule ? "Add a service first" : undefined}
@@ -298,6 +445,18 @@ function PailpalLocationBlock({
 
       {approveMutation.isError ? (
         <p className="error">{getErrorMessage(approveMutation.error)}</p>
+      ) : null}
+
+      {editingAddress ? (
+        <EditLocationForm
+          loc={loc}
+          accessToken={accessToken}
+          onDone={() => {
+            setEditingAddress(false);
+            onChanged();
+          }}
+          onCancel={() => setEditingAddress(false)}
+        />
       ) : null}
 
       <div className="pailpal-days-label">Days of service</div>
@@ -315,6 +474,7 @@ function PailpalCustomerDetail({ accessToken }: { accessToken: string }): JSX.El
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState(false);
 
   const customersQuery = useQuery({
     queryKey: ["pailpal-customers"],
@@ -349,14 +509,37 @@ function PailpalCustomerDetail({ accessToken }: { accessToken: string }): JSX.El
       <Link to="/pailpal/customers" className="back-link">
         ← Back to customers
       </Link>
-      <div className="dash-page-head">
-        <h2>{customer.name}</h2>
-        <p className="subtext">
-          {customer.email ?? "No email"}
-          {customer.hasLogin ? " · Login enabled" : " · No login"}
-          {customer.phone ? ` · ${customer.phone}` : ""}
-        </p>
+      <div className="dash-page-head pailpal-detail-head">
+        <div>
+          <h2>{customer.name}</h2>
+          <p className="subtext">
+            {customer.email ?? "No email"}
+            {customer.hasLogin ? " · Login enabled" : " · No login"}
+            {customer.phone ? ` · ${customer.phone}` : ""}
+          </p>
+        </div>
+        {!editingCustomer ? (
+          <button
+            type="button"
+            className="cta-secondary"
+            onClick={() => setEditingCustomer(true)}
+          >
+            Edit customer
+          </button>
+        ) : null}
       </div>
+
+      {editingCustomer ? (
+        <EditCustomerForm
+          customer={customer}
+          accessToken={accessToken}
+          onDone={() => {
+            setEditingCustomer(false);
+            invalidate();
+          }}
+          onCancel={() => setEditingCustomer(false)}
+        />
+      ) : null}
 
       <article className="panel">
         <div className="pailpal-list-head">
@@ -453,7 +636,7 @@ const LOC_STATUS: Record<LocStatus, { color: string; label: string }> = {
 };
 function locStatus(loc: PailpalCustomerLocation): LocStatus {
   if (loc.serviceApproved) return "on-route";
-  if (loc.days.length > 0) return "pending";
+  if (loc.serviceCount > 0) return "pending";
   return "setup";
 }
 
@@ -542,7 +725,8 @@ function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Ele
   const customers = customersQuery.data?.customers ?? [];
   const locations = customers.flatMap((c) => c.locations);
   const approved = locations.filter((l) => l.serviceApproved).length;
-  const stops = (routesQuery.data?.routes ?? []).flatMap((r) => r.stops);
+  const routes = routesQuery.data?.routes ?? [];
+  const stops = routes.flatMap((r) => r.stops);
   const serviced = stops.filter((s) => s.servicedAt).length;
   const totalStops = stops.length;
 
@@ -618,6 +802,8 @@ function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Ele
           <span>Serviced today</span>
         </div>
       </div>
+
+      {routes.length > 0 ? <DashboardRoutes routes={routes} accessToken={accessToken} /> : null}
 
       <article className="panel">
         <div className="pailpal-list-head">

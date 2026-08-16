@@ -8,6 +8,7 @@ import {
   locationApprovalSchema,
   pailpalCustomerCreateSchema,
   pailpalCustomerResponseSchema,
+  pailpalCustomerUpdateSchema,
   pailpalCustomersResponseSchema,
   pailpalLocationCreateSchema,
   pailpalTodaySummarySchema,
@@ -97,6 +98,7 @@ function serializeCustomer(user: {
         lng: a.lng.toNumber(),
         isActive: a.isActive,
         serviceApproved: a.serviceApprovedAt != null,
+        serviceCount: a.locationServices.length,
         pickupDays: schedules.map((s) => s.pickupDayOfWeek).sort((x, y) => x - y),
         days: schedules.map((s) => ({
           dayOfWeek: s.pickupDayOfWeek,
@@ -181,6 +183,84 @@ export async function pailpalCustomersHandler(
           pailpalCustomersResponseSchema.parse({
             customers: rows.map((r) => serializeCustomer(r as any))
           })
+        );
+      },
+      { roles: ["PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// Edit a managed customer's contact info (name / email / phone).
+export async function pailpalUpdateCustomerHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (req, _ctx, auth) => {
+        const customerId = req.params.customerId;
+        if (!customerId) throw new HttpError(400, "customerId is required");
+
+        const target = await prisma.user.findUnique({
+          where: { id: customerId },
+          select: { id: true, email: true, passwordHash: true, managedById: true }
+        });
+        if (!target || target.managedById !== auth.sub) {
+          throw new HttpError(404, "Customer not found");
+        }
+
+        const input = await parseJson(req, pailpalCustomerUpdateSchema);
+        const providedEmail = input.email?.trim() || null;
+        const hasLogin = target.passwordHash != null;
+
+        let email: string;
+        if (providedEmail) {
+          if (providedEmail !== target.email) {
+            const clash = await prisma.user.findUnique({ where: { email: providedEmail } });
+            if (clash && clash.id !== target.id) {
+              throw new HttpError(409, "That email is already in use by another account.");
+            }
+          }
+          email = providedEmail;
+        } else {
+          if (hasLogin) {
+            throw new HttpError(400, "A customer with a login must keep an email.");
+          }
+          // Keep the existing placeholder, or mint one so the unique email holds.
+          email = target.email.endsWith(`@${NO_LOGIN_DOMAIN}`)
+            ? target.email
+            : `managed-${randomUUID()}@${NO_LOGIN_DOMAIN}`;
+        }
+
+        await prisma.user.update({
+          where: { id: customerId },
+          data: {
+            name: input.name.trim(),
+            email,
+            phone: input.phone?.trim() || null,
+            ...(hasLogin ? { authProviderId: `local:${email}` } : {})
+          }
+        });
+        await prisma.auditLog.create({
+          data: {
+            actorUserId: auth.sub,
+            action: "pailpal.customer.updated",
+            entityType: "User",
+            entityId: customerId,
+            metadata: {}
+          }
+        });
+
+        const row = await prisma.user.findUnique({
+          where: { id: customerId },
+          include: CUSTOMER_INCLUDE
+        });
+        return jsonResponse(
+          200,
+          pailpalCustomerResponseSchema.parse({ customer: serializeCustomer(row as any) })
         );
       },
       { roles: ["PAILPAL"] }

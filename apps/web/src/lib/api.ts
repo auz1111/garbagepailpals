@@ -59,6 +59,7 @@ import type {
   CreateAddressRequest,
   PailpalCustomersResponse,
   PailpalCustomerResponse,
+  PailpalCustomerUpdate,
   PailpalTodaySummary,
   PailpalCustomerCreate,
   PailpalLocationCreate,
@@ -817,6 +818,19 @@ export function createPailpalCustomer(
   return request<PailpalCustomerCreate, PailpalCustomerResponse>(
     "/pailpal/customers",
     "POST",
+    input,
+    accessToken
+  );
+}
+
+export function updatePailpalCustomer(
+  customerId: string,
+  input: PailpalCustomerUpdate,
+  accessToken: string
+): Promise<PailpalCustomerResponse> {
+  return request<PailpalCustomerUpdate, PailpalCustomerResponse>(
+    `/pailpal/customers/${customerId}`,
+    "PATCH",
     input,
     accessToken
   );

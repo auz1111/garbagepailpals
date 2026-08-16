@@ -56,7 +56,7 @@ function decodePolyline(encoded: string): Array<[number, number]> {
 
 // A small read-only map of one route: numbered stops, optional start/end pins,
 // and the driving polyline.
-function RouteMiniMap({ route }: { route: DailyRoute }): JSX.Element {
+export function RouteMiniMap({ route }: { route: DailyRoute }): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -120,7 +120,7 @@ function RouteMiniMap({ route }: { route: DailyRoute }): JSX.Element {
   return <div className="route-mini-map" ref={containerRef} />;
 }
 
-function routeMapsUrl(route: DailyRoute): string {
+export function routeMapsUrl(route: DailyRoute): string {
   const points = [
     ...(route.start ? [`${route.start.lat},${route.start.lng}`] : []),
     ...route.stops.map((s) => `${s.lat},${s.lng}`),
@@ -129,7 +129,7 @@ function routeMapsUrl(route: DailyRoute): string {
   return `https://www.google.com/maps/dir/${points.map(encodeURIComponent).join("/")}`;
 }
 
-function formatMiles(meters: number): string {
+export function formatMiles(meters: number): string {
   return `${(meters / 1609.34).toFixed(1)} mi`;
 }
 
