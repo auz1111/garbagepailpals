@@ -562,7 +562,11 @@ function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Ele
           <p className="routes-hero-sub">
             {totalStops > 0
               ? `${serviced}/${totalStops} stop${totalStops === 1 ? "" : "s"} serviced on today's route.`
-              : "No route built for today yet — build one from Today's Routes."}
+              : summaryQuery.isLoading
+                ? "Checking today's service…"
+                : pendingStops > 0
+                  ? `${pendingStops} location${pendingStops === 1 ? "" : "s"} need a route today — build one below.`
+                  : "No locations need service today — nothing to route right now."}
           </p>
           <div className="pailpal-hero-cta">
             {pendingStops > 0 ? (

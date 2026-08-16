@@ -290,7 +290,9 @@ a {
 .drawer-root {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  /* Above Leaflet's map panes/controls (which reach z-index ~1000) so the nav
+     drawer always covers the customer map and any other embedded map. */
+  z-index: 2000;
 }
 
 .drawer-backdrop {
@@ -6448,6 +6450,9 @@ a.provider-pill:hover {
   border-radius: var(--r-md, 14px);
   overflow: hidden;
   border: 1px solid var(--line);
+  /* Contain Leaflet's internal z-indexes so the map never overlaps other UI. */
+  position: relative;
+  isolation: isolate;
 }
 .pailpal-map-legend {
   display: flex;
