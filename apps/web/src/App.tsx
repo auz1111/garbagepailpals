@@ -29,6 +29,7 @@ import {
   register
 } from "./lib/api";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { AccountPage } from "./components/AccountPage";
 import { ServiceAreaGate } from "./components/ServiceAreaGate";
 import { CustomerWorkspace, CUSTOMER_NAV } from "./components/CustomerWorkspace";
 import { OperatorDashboard } from "./components/OperatorDashboard";
@@ -357,7 +358,11 @@ export function App() {
                 </button>
               </div>
               {user ? (
-                <div className="drawer-profile">
+                <Link
+                  to="/account"
+                  className="drawer-profile drawer-profile-link"
+                  onClick={() => setMenuOpen(false)}
+                >
                   <span className="drawer-avatar" aria-hidden="true">
                     {initials(user.name)}
                   </span>
@@ -365,7 +370,10 @@ export function App() {
                     <strong className="drawer-profile-name">{user.name}</strong>
                     <span className="drawer-profile-role">{roleLabel(user.role)}</span>
                   </span>
-                </div>
+                  <span className="drawer-profile-chevron" aria-hidden="true">
+                    ›
+                  </span>
+                </Link>
               ) : null}
               <nav className="drawer-nav">
                 {dashboardNav.map((item, idx) => {
@@ -740,6 +748,24 @@ export function App() {
               </section>
             )}
           />
+
+          <Route
+            element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["CUSTOMER", ...STAFF_ROLES]} />}
+          >
+            <Route
+              path="/account"
+              element={
+                user && accessToken ? (
+                  <AccountPage
+                    user={user}
+                    accessToken={accessToken}
+                    refreshUser={refreshUser}
+                    onLogout={logout}
+                  />
+                ) : null
+              }
+            />
+          </Route>
 
           <Route
             element={<ProtectedRoute isAuthenticated={isAuthenticated} userRole={user?.role} allowedRoles={["CUSTOMER", ...ADMIN_ROLES]} />}

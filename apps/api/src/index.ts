@@ -3,6 +3,11 @@ import { healthHandler } from "./routes/health";
 import { loginHandler, refreshHandler, registerHandler } from "./routes/auth";
 import { meHandler } from "./routes/protected";
 import {
+  changePasswordHandler,
+  signOutAllHandler,
+  updateProfileHandler
+} from "./routes/account";
+import {
   pickupScheduleLookupHandler,
   requestServiceAreaHandler,
   serviceAreaCheckHandler
@@ -56,7 +61,8 @@ import {
   pailpalCreateLocationHandler,
   pailpalCustomersHandler,
   pailpalRouteHistoryHandler,
-  pailpalSyncLocationProviderHandler
+  pailpalSyncLocationProviderHandler,
+  pailpalTodaySummaryHandler
 } from "./routes/pailpalRoutes";
 import { getServicePhotoHandler, uploadServicePhotoHandler } from "./routes/uploads";
 import { dayStatusHandler, refreshSchedulesHandler } from "./routes/dayStatus";
@@ -117,6 +123,27 @@ app.http("auth-me", {
   methods: ["GET", "OPTIONS"],
   authLevel: "anonymous",
   handler: meHandler
+});
+
+app.http("account-profile", {
+  route: "account/profile",
+  methods: ["PATCH", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: updateProfileHandler
+});
+
+app.http("account-password", {
+  route: "account/password",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: changePasswordHandler
+});
+
+app.http("account-sign-out-all", {
+  route: "account/sign-out-all",
+  methods: ["POST", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: signOutAllHandler
 });
 
 app.http("admin-dashboard", {
@@ -526,6 +553,13 @@ app.http("pailpal-routes-build", {
   methods: ["POST", "OPTIONS"],
   authLevel: "anonymous",
   handler: pailpalBuildRouteHandler
+});
+
+app.http("pailpal-today-summary", {
+  route: "pailpal/routes/today/summary",
+  methods: ["GET", "OPTIONS"],
+  authLevel: "anonymous",
+  handler: pailpalTodaySummaryHandler
 });
 
 app.http("pailpal-routes-history", {

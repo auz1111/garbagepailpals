@@ -15,17 +15,28 @@ export async function meHandler(
 
   return withErrorBoundary(context, async () =>
     withAuth(async (_req, _ctx, auth) => {
+      // Read name/email/phone from the DB (not the JWT) so profile edits show
+      // up immediately, before a new token is minted on refresh.
       const dbUser = await prisma.user.findUnique({
         where: { id: auth.sub },
-        select: { requestedServiceArea: true, operatorAccess: true }
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+          createdAt: true,
+          requestedServiceArea: true,
+          operatorAccess: true
+        }
       });
 
       const response = meResponseSchema.parse({
         user: {
           id: auth.sub,
-          email: auth.email,
-          name: auth.name,
+          email: dbUser?.email ?? auth.email,
+          name: dbUser?.name ?? auth.name,
           role: auth.role,
+          phone: dbUser?.phone ?? null,
+          createdAt: dbUser?.createdAt?.toISOString(),
           requestedServiceArea: dbUser?.requestedServiceArea ?? null,
           operatorAccess: dbUser?.operatorAccess ?? false
         }

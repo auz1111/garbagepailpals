@@ -55,6 +55,10 @@ export const authResponseSchema = z.object({
     email: z.string().email(),
     name: z.string(),
     role: roleSchema,
+    // Contact phone (null/absent if not set).
+    phone: z.string().nullable().optional(),
+    // Account creation date (ISO), shown on the account page.
+    createdAt: z.string().optional(),
     // Postal code the user requested service in when we don't operate there yet.
     // null/absent means no outstanding out-of-area request.
     requestedServiceArea: z.string().nullable().optional(),
@@ -68,6 +72,20 @@ export const currentUserSchema = authResponseSchema.shape.user;
 export const meResponseSchema = z.object({
   user: currentUserSchema
 });
+
+// Self-service profile edit (any logged-in user): name/email/phone only.
+export const profileUpdateSchema = z.object({
+  name: z.string().min(1).max(120),
+  email: z.string().email().max(200),
+  phone: z.string().max(40).nullable().optional()
+});
+export type ProfileUpdate = z.infer<typeof profileUpdateSchema>;
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: z.string().min(8).max(128)
+});
+export type ChangePassword = z.infer<typeof changePasswordSchema>;
 
 export const protectedMessageSchema = z.object({
   message: z.string(),
@@ -1453,6 +1471,12 @@ export const pailpalCustomerSchema = z.object({
 export const pailpalCustomersResponseSchema = z.object({
   customers: z.array(pailpalCustomerSchema)
 });
+
+// How many of a PailPal's due stops today aren't on a route yet — drives the
+// dashboard's conditional "build a route" button.
+export const pailpalTodaySummarySchema = z.object({
+  pendingStops: z.number().int().nonnegative()
+});
 export const pailpalCustomerResponseSchema = z.object({ customer: pailpalCustomerSchema });
 
 // PailPal: create a location for a managed customer — address only. The days of
@@ -1726,6 +1750,7 @@ export type PailpalCustomerLocation = z.infer<typeof pailpalCustomerLocationSche
 export type PailpalLocationDay = z.infer<typeof pailpalLocationDaySchema>;
 export type PailpalCustomer = z.infer<typeof pailpalCustomerSchema>;
 export type PailpalCustomersResponse = z.infer<typeof pailpalCustomersResponseSchema>;
+export type PailpalTodaySummary = z.infer<typeof pailpalTodaySummarySchema>;
 export type PailpalCustomerResponse = z.infer<typeof pailpalCustomerResponseSchema>;
 export type PailpalLocationCreate = z.infer<typeof pailpalLocationCreateSchema>;
 export type AssignedRoutesResponse = z.infer<typeof assignedRoutesResponseSchema>;

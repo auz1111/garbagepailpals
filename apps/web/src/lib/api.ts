@@ -49,6 +49,8 @@ import type {
   BillingSummary,
   SubscriptionUpdateResponse,
   MeResponse,
+  ProfileUpdate,
+  ChangePassword,
   ProtectedMessage,
   RefreshInput,
   RegisterInput,
@@ -57,6 +59,7 @@ import type {
   CreateAddressRequest,
   PailpalCustomersResponse,
   PailpalCustomerResponse,
+  PailpalTodaySummary,
   PailpalCustomerCreate,
   PailpalLocationCreate,
   ServiceAreaCheckResponse,
@@ -146,6 +149,24 @@ export function refresh(input: RefreshInput): Promise<AuthResponse> {
 
 export function getMe(accessToken: string): Promise<MeResponse> {
   return request<undefined, MeResponse>("/auth/me", "GET", undefined, accessToken);
+}
+
+// Self-service account actions (any logged-in user, editing their own record).
+export function updateProfile(input: ProfileUpdate, accessToken: string): Promise<MeResponse> {
+  return request<ProfileUpdate, MeResponse>("/account/profile", "PATCH", input, accessToken);
+}
+
+export function changePassword(input: ChangePassword, accessToken: string): Promise<{ ok: boolean }> {
+  return request<ChangePassword, { ok: boolean }>("/account/password", "POST", input, accessToken);
+}
+
+export function signOutAllDevices(accessToken: string): Promise<{ ok: boolean }> {
+  return request<undefined, { ok: boolean }>(
+    "/account/sign-out-all",
+    "POST",
+    undefined,
+    accessToken
+  );
 }
 
 export function getAdminRoute(accessToken: string): Promise<ProtectedMessage> {
@@ -828,6 +849,16 @@ export function approvePailpalLocation(
 
 export function buildPailpalRoute(accessToken: string): Promise<AdminRouteResponse> {
   return request<undefined, AdminRouteResponse>("/pailpal/routes/build", "POST", undefined, accessToken);
+}
+
+// How many due stops today aren't on a route yet (drives the dashboard button).
+export function getPailpalTodaySummary(accessToken: string): Promise<PailpalTodaySummary> {
+  return request<undefined, PailpalTodaySummary>(
+    "/pailpal/routes/today/summary",
+    "GET",
+    undefined,
+    accessToken
+  );
 }
 
 export function updateAddress(

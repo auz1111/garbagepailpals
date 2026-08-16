@@ -10,6 +10,7 @@ import {
   pailpalCustomerResponseSchema,
   pailpalCustomersResponseSchema,
   pailpalLocationCreateSchema,
+  pailpalTodaySummarySchema,
   pickupScheduleSuggestionSchema,
   type ScheduleCan
 } from "@gpp/shared";
@@ -334,6 +335,38 @@ export async function pailpalSyncLocationProviderHandler(
           }
         });
         return jsonResponse(200, pickupScheduleSuggestionSchema.parse(suggestion));
+      },
+      { roles: ["PAILPAL"] }
+    )(request, context)
+  );
+}
+
+// Read-only: how many of the PailPal's due stops today aren't on a route yet.
+// Lets the dashboard show a "build a route" button only when there's work.
+export async function pailpalTodaySummaryHandler(
+  request: HttpRequest,
+  context: InvocationContext
+): Promise<HttpResponseInit> {
+  const optionsResponse = handleOptions(request);
+  if (optionsResponse) return optionsResponse;
+
+  return withErrorBoundary(context, async () =>
+    withAuth(
+      async (_req, _ctx, auth) => {
+        const now = new Date();
+        const serviceDate = todayServiceDate(now);
+        const routedAddressIds = new Set(
+          (
+            await prisma.routeStop.findMany({
+              where: { route: { serviceDate } },
+              select: { serviceAddressId: true }
+            })
+          ).map((r) => r.serviceAddressId)
+        );
+        const pending = (await collectTodaysWork(now, { ownerId: auth.sub })).filter(
+          (w) => !routedAddressIds.has(w.address.id)
+        ).length;
+        return jsonResponse(200, pailpalTodaySummarySchema.parse({ pendingStops: pending }));
       },
       { roles: ["PAILPAL"] }
     )(request, context)

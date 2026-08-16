@@ -12,6 +12,7 @@ import {
   createPailpalLocation,
   getOperatorRoutes,
   getPailpalRouteHistory,
+  getPailpalTodaySummary,
   listPailpalCustomers
 } from "../lib/api";
 import { LocationServicesEditor } from "./LocationServicesEditor";
@@ -519,6 +520,24 @@ function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Ele
     queryKey: ["operator-routes"],
     queryFn: async () => getOperatorRoutes(accessToken)
   });
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  // How many due stops today aren't on a route yet — gates the build button.
+  const summaryQuery = useQuery({
+    queryKey: ["pailpal-today-summary"],
+    queryFn: async () => getPailpalTodaySummary(accessToken)
+  });
+  const pendingStops = summaryQuery.data?.pendingStops ?? 0;
+
+  const buildMutation = useMutation({
+    mutationFn: () => buildPailpalRoute(accessToken),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["operator-routes"] });
+      void queryClient.invalidateQueries({ queryKey: ["pailpal-today-summary"] });
+      navigate("/pailpal/routes");
+    }
+  });
 
   const customers = customersQuery.data?.customers ?? [];
   const locations = customers.flatMap((c) => c.locations);
@@ -546,13 +565,31 @@ function PailpalDashboard({ user, accessToken }: PailPalWorkspaceProps): JSX.Ele
               : "No route built for today yet — build one from Today's Routes."}
           </p>
           <div className="pailpal-hero-cta">
-            <Link to="/pailpal/routes" className="cta-primary">
+            {pendingStops > 0 ? (
+              <button
+                type="button"
+                className="cta-primary"
+                onClick={() => buildMutation.mutate()}
+                disabled={buildMutation.isPending}
+              >
+                {buildMutation.isPending
+                  ? "Building…"
+                  : `Build today's route (${pendingStops})`}
+              </button>
+            ) : null}
+            <Link
+              to="/pailpal/routes"
+              className={pendingStops > 0 ? "cta-secondary" : "cta-primary"}
+            >
               Today's Routes →
             </Link>
             <Link to="/pailpal/customers" className="cta-secondary">
               Manage customers
             </Link>
           </div>
+          {buildMutation.isError ? (
+            <p className="pailpal-hero-error">Couldn't build the route — please try again.</p>
+          ) : null}
         </div>
       </article>
 

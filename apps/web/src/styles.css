@@ -6469,3 +6469,133 @@ a.provider-pill:hover {
   border: 2px solid #ffffff;
   box-shadow: 0 0 0 1px var(--line-2, #d7dde0);
 }
+
+.pailpal-hero-error {
+  margin-top: 0.6rem;
+  color: #ffd7d0;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* --- My Account page ------------------------------------------------------ */
+.account-page {
+  max-width: 720px;
+}
+.account-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+.account-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.6rem 0.9rem;
+  font: inherit;
+  font-weight: 700;
+  color: var(--slate-2);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.account-tab:hover {
+  color: var(--ink);
+}
+.account-tab.is-active {
+  color: var(--teal-bright, #34a6ab);
+  border-bottom-color: var(--teal-bright, #34a6ab);
+}
+.account-panels {
+  display: grid;
+  gap: 1rem;
+}
+.account-avatar-lg {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1rem;
+  background: linear-gradient(135deg, #0b5f63 0%, #12857a 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 1.4rem;
+}
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.account-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--slate-2);
+}
+.account-form input {
+  font: inherit;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+.account-form .cta-primary {
+  align-self: flex-start;
+}
+.account-facts {
+  display: grid;
+  gap: 0.1rem;
+  margin: 0;
+}
+.account-facts > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.account-facts > div:last-child {
+  border-bottom: none;
+}
+.account-facts dt {
+  font-weight: 700;
+  color: var(--slate-2);
+  margin: 0;
+}
+.account-facts dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+.account-role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: var(--pill);
+  background: var(--teal-bright-wash, #e8fafb);
+  color: var(--teal-deep, #0b5f63);
+  font-weight: 800;
+  font-size: 0.78rem;
+}
+.account-plan-link {
+  display: inline-block;
+  margin-top: 1rem;
+}
+/* Clickable profile block in the nav drawer */
+.drawer-profile-link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 12px;
+  transition: background 0.15s ease;
+}
+.drawer-profile-link:hover {
+  background: var(--surface-2, #f5f7f8);
+}
+.drawer-profile-chevron {
+  margin-left: auto;
+  font-size: 1.3rem;
+  color: var(--slate-2);
+}
