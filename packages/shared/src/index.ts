@@ -1487,9 +1487,11 @@ export const pailpalCustomersResponseSchema = z.object({
   customers: z.array(pailpalCustomerSchema)
 });
 
-// How many of a PailPal's due stops today aren't on a route yet — drives the
-// dashboard's conditional "build a route" button.
+// A PailPal's route-building state for today. `dueStops` is everything due
+// (routed or not); `pendingStops` is what still needs a route. Drives whether
+// the "build a route" button shows, and which "nothing to build" message.
 export const pailpalTodaySummarySchema = z.object({
+  dueStops: z.number().int().nonnegative(),
   pendingStops: z.number().int().nonnegative()
 });
 export const pailpalCustomerResponseSchema = z.object({ customer: pailpalCustomerSchema });

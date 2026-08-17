@@ -586,6 +586,13 @@ function PailpalRoutes({ user, accessToken }: PailPalWorkspaceProps): JSX.Elemen
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
 
+  const summaryQuery = useQuery({
+    queryKey: ["pailpal-today-summary"],
+    queryFn: async () => getPailpalTodaySummary(accessToken)
+  });
+  const pendingStops = summaryQuery.data?.pendingStops ?? 0;
+  const dueStops = summaryQuery.data?.dueStops ?? 0;
+
   const buildMutation = useMutation({
     mutationFn: () => buildPailpalRoute(accessToken),
     onSuccess: (data) => {
@@ -596,6 +603,7 @@ function PailpalRoutes({ user, accessToken }: PailPalWorkspaceProps): JSX.Elemen
           : "Nothing due today for your customers."
       );
       void queryClient.invalidateQueries({ queryKey: ["operator-routes"] });
+      void queryClient.invalidateQueries({ queryKey: ["pailpal-today-summary"] });
     }
   });
 
@@ -607,15 +615,29 @@ function PailpalRoutes({ user, accessToken }: PailPalWorkspaceProps): JSX.Elemen
       </div>
 
       <article className="panel pailpal-build">
-        <button
-          type="button"
-          className="cta-primary"
-          onClick={() => buildMutation.mutate()}
-          disabled={buildMutation.isPending}
-        >
-          {buildMutation.isPending ? "Building…" : "Build today's route"}
-        </button>
-        {message ? <span className="subtext">{message}</span> : null}
+        {summaryQuery.isLoading ? (
+          <span className="subtext">Checking today's service…</span>
+        ) : pendingStops > 0 ? (
+          <>
+            <button
+              type="button"
+              className="cta-primary"
+              onClick={() => buildMutation.mutate()}
+              disabled={buildMutation.isPending}
+            >
+              {buildMutation.isPending
+                ? "Building…"
+                : `Build today's route (${pendingStops})`}
+            </button>
+            {message ? <span className="subtext">{message}</span> : null}
+          </>
+        ) : (
+          <span className="subtext">
+            {dueStops > 0
+              ? "All of today's stops are already assigned to routes."
+              : "No serviceable locations need service today."}
+          </span>
+        )}
         {buildMutation.isError ? (
           <p className="error">{getErrorMessage(buildMutation.error)}</p>
         ) : null}

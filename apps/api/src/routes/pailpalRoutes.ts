@@ -443,10 +443,12 @@ export async function pailpalTodaySummaryHandler(
             })
           ).map((r) => r.serviceAddressId)
         );
-        const pending = (await collectTodaysWork(now, { ownerId: auth.sub })).filter(
-          (w) => !routedAddressIds.has(w.address.id)
-        ).length;
-        return jsonResponse(200, pailpalTodaySummarySchema.parse({ pendingStops: pending }));
+        const allWork = await collectTodaysWork(now, { ownerId: auth.sub });
+        const pending = allWork.filter((w) => !routedAddressIds.has(w.address.id)).length;
+        return jsonResponse(
+          200,
+          pailpalTodaySummarySchema.parse({ dueStops: allWork.length, pendingStops: pending })
+        );
       },
       { roles: ["PAILPAL"] }
     )(request, context)
