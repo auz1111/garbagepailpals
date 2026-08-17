@@ -235,8 +235,10 @@ export const serviceAddressInputSchema = z.object({
   // Optional operator notes (gate code, where the cans are kept, etc.).
   accessNotes: z.string().max(500).default(""),
   gateCode: z.string().max(40).optional(),
-  canCount: z.number().int().min(1).max(20),
-  pickupsPerWeek: z.number().int().min(1).max(7),
+  // Legacy rollup fields (real per-day cans live on the service model). Allow 0
+  // for locations with no trash cans (e.g. a mail-check-only location).
+  canCount: z.number().int().min(0).max(140),
+  pickupsPerWeek: z.number().int().min(0).max(7),
   // When true (default) we bring the cans back in the day after pickup. Turning
   // it off drops that trip and earns a per-can credit on the monthly price.
   rollIn: z.boolean().default(true),
