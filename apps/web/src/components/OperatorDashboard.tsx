@@ -136,6 +136,8 @@ export function formatMiles(meters: number): string {
 type OperatorDashboardProps = {
   user: CurrentUser;
   accessToken: string;
+  // Hide the "My schedule" section — it lives on its own page for PailPals.
+  showSchedule?: boolean;
 };
 
 function getErrorMessage(error: unknown): string {
@@ -153,7 +155,96 @@ const NEXT_30_DAYS: Date[] = Array.from({ length: 30 }, (_, i) => {
   return d;
 });
 
-export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps): JSX.Element {
+// The operator's next-30-days availability calendar (request/cancel time off).
+// Its own component so it can live on a dedicated "My Schedule" page too.
+export function OperatorSchedule({ accessToken }: { accessToken: string }): JSX.Element {
+  const queryClient = useQueryClient();
+  const timeOffQuery = useQuery({
+    queryKey: ["operator-timeoff"],
+    queryFn: async () => getOperatorTimeOff(accessToken)
+  });
+  const timeOffByDate = new Map<string, TimeOffStatus>(
+    (timeOffQuery.data?.days ?? []).map((d) => [d.date, d.status])
+  );
+  const requestTimeOff = useMutation({
+    mutationFn: (date: string) => requestOperatorTimeOff(date, accessToken),
+    onSuccess: (data) => queryClient.setQueryData(["operator-timeoff"], data)
+  });
+
+  return (
+    <article className="panel">
+      <h3>My schedule</h3>
+      <p className="subtext">
+        You're available by default. Tap a day to request it off — an admin approves time off. Tap a
+        pending request again to cancel it.
+      </p>
+      {timeOffQuery.isLoading ? (
+        <p className="subtext">Loading…</p>
+      ) : (
+        <div className="availability-grid">
+          {NEXT_30_DAYS.map((d) => {
+            const key = dayKey(d);
+            const status = timeOffByDate.get(key);
+            const cls =
+              status === "APPROVED"
+                ? " is-off-approved"
+                : status === "PENDING"
+                  ? " is-off-pending"
+                  : status === "DENIED"
+                    ? " is-off-denied"
+                    : "";
+            const title =
+              status === "APPROVED"
+                ? "Approved day off — tap to ask an admin to change"
+                : status === "PENDING"
+                  ? "Requested off (awaiting approval) — tap to cancel"
+                  : status === "DENIED"
+                    ? "Request denied — tap to request again"
+                    : "Available — tap to request off";
+            return (
+              <button
+                type="button"
+                key={key}
+                className={`availability-day${cls}`}
+                title={title}
+                onClick={() => requestTimeOff.mutate(key)}
+                disabled={requestTimeOff.isPending}
+              >
+                <span className="availability-dow">
+                  {d.toLocaleDateString(undefined, { weekday: "short" })}
+                </span>
+                <span className="availability-num">{d.getDate()}</span>
+                <span className="availability-mon">
+                  {d.toLocaleDateString(undefined, { month: "short" })}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="map-legend timeoff-legend">
+        <span>
+          <span className="legend-dot legend-available" /> Available
+        </span>
+        <span>
+          <span className="legend-dot legend-pending" /> Requested off
+        </span>
+        <span>
+          <span className="legend-dot legend-approved" /> Approved off
+        </span>
+      </div>
+      {requestTimeOff.isError ? (
+        <p className="error">{getErrorMessage(requestTimeOff.error)}</p>
+      ) : null}
+    </article>
+  );
+}
+
+export function OperatorDashboard({
+  user,
+  accessToken,
+  showSchedule = true
+}: OperatorDashboardProps): JSX.Element {
   const queryClient = useQueryClient();
 
   const routesQuery = useQuery({
@@ -199,21 +290,6 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
   // The stop currently being verified in the step-by-step modal (null = closed).
   const [verifyStop, setVerifyStop] = useState<{ routeId: string; stop: RouteStop } | null>(null);
 
-  const timeOffQuery = useQuery({
-    queryKey: ["operator-timeoff"],
-    queryFn: async () => getOperatorTimeOff(accessToken)
-  });
-  const timeOffByDate = new Map<string, TimeOffStatus>(
-    (timeOffQuery.data?.days ?? []).map((d) => [d.date, d.status])
-  );
-
-  const requestTimeOff = useMutation({
-    mutationFn: (date: string) => requestOperatorTimeOff(date, accessToken),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["operator-timeoff"], data);
-    }
-  });
-
   // The zones this operator serves. Only plain operators self-manage these;
   // pro-operators' zones are set by an admin.
   const canManageZones = user.role === "OPERATOR";
@@ -235,69 +311,7 @@ export function OperatorDashboard({ user, accessToken }: OperatorDashboardProps)
         <p className="subtext">Signed in as {user.name}. Request time off and run today's routes.</p>
       </div>
 
-      <article className="panel">
-        <h3>My schedule</h3>
-        <p className="subtext">
-          You're available by default. Tap a day to request it off — an admin approves time off. Tap a
-          pending request again to cancel it.
-        </p>
-        {timeOffQuery.isLoading ? (
-          <p className="subtext">Loading…</p>
-        ) : (
-          <div className="availability-grid">
-            {NEXT_30_DAYS.map((d) => {
-              const key = dayKey(d);
-              const status = timeOffByDate.get(key);
-              const cls =
-                status === "APPROVED"
-                  ? " is-off-approved"
-                  : status === "PENDING"
-                    ? " is-off-pending"
-                    : status === "DENIED"
-                      ? " is-off-denied"
-                      : "";
-              const title =
-                status === "APPROVED"
-                  ? "Approved day off — tap to ask an admin to change"
-                  : status === "PENDING"
-                    ? "Requested off (awaiting approval) — tap to cancel"
-                    : status === "DENIED"
-                      ? "Request denied — tap to request again"
-                      : "Available — tap to request off";
-              return (
-                <button
-                  type="button"
-                  key={key}
-                  className={`availability-day${cls}`}
-                  title={title}
-                  onClick={() => requestTimeOff.mutate(key)}
-                  disabled={requestTimeOff.isPending}
-                >
-                  <span className="availability-dow">
-                    {d.toLocaleDateString(undefined, { weekday: "short" })}
-                  </span>
-                  <span className="availability-num">{d.getDate()}</span>
-                  <span className="availability-mon">
-                    {d.toLocaleDateString(undefined, { month: "short" })}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className="map-legend timeoff-legend">
-          <span>
-            <span className="legend-dot legend-available" /> Available
-          </span>
-          <span>
-            <span className="legend-dot legend-pending" /> Requested off
-          </span>
-          <span>
-            <span className="legend-dot legend-approved" /> Approved off
-          </span>
-        </div>
-        {requestTimeOff.isError ? <p className="error">{getErrorMessage(requestTimeOff.error)}</p> : null}
-      </article>
+      {showSchedule ? <OperatorSchedule accessToken={accessToken} /> : null}
 
       {canManageZones ? (
         <article className="panel">

@@ -19,12 +19,13 @@ import {
 } from "../lib/api";
 import { DashboardRoutes } from "./DashboardRoutes";
 import { LocationServicesEditor } from "./LocationServicesEditor";
-import { OperatorDashboard } from "./OperatorDashboard";
+import { OperatorDashboard, OperatorSchedule } from "./OperatorDashboard";
 import { RouteHistory } from "./RouteHistory";
 
 export const PAILPAL_NAV = [
   { to: "/pailpal", label: "Dashboard", icon: "📊", end: true },
   { to: "/pailpal/routes", label: "Today's Routes", icon: "🚛" },
+  { to: "/pailpal/schedule", label: "My Schedule", icon: "🗓️" },
   { to: "/pailpal/history", label: "History", icon: "🕓" },
   { to: "/pailpal/customers", label: "Customers", icon: "👥" }
 ] as const;
@@ -643,7 +644,22 @@ function PailpalRoutes({ user, accessToken }: PailPalWorkspaceProps): JSX.Elemen
         ) : null}
       </article>
 
-      <OperatorDashboard user={user} accessToken={accessToken} />
+      <OperatorDashboard user={user} accessToken={accessToken} showSchedule={false} />
+    </div>
+  );
+}
+
+// --- My Schedule (availability / time off) --------------------------------
+function PailpalSchedule({ accessToken }: { accessToken: string }): JSX.Element {
+  return (
+    <div className="dash-page">
+      <div className="dash-page-head">
+        <h2>My Schedule</h2>
+        <p className="subtext">
+          You're available by default. Request days off — an admin approves time off.
+        </p>
+      </div>
+      <OperatorSchedule accessToken={accessToken} />
     </div>
   );
 }
@@ -868,6 +884,7 @@ export function PailPalWorkspace({ user, accessToken }: PailPalWorkspaceProps): 
       <Routes>
         <Route index element={<PailpalDashboard user={user} accessToken={accessToken} />} />
         <Route path="routes" element={<PailpalRoutes user={user} accessToken={accessToken} />} />
+        <Route path="schedule" element={<PailpalSchedule accessToken={accessToken} />} />
         <Route path="history" element={<PailpalHistory accessToken={accessToken} />} />
         <Route path="customers" element={<PailpalCustomers accessToken={accessToken} />} />
         <Route path="customers/new" element={<PailpalNewCustomer accessToken={accessToken} />} />
